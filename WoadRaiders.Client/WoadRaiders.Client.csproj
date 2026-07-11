@@ -1,0 +1,27 @@
+<Project Sdk="Godot.NET.Sdk/4.7.0">
+
+  <!--
+    The Godot game client. The Godot.NET.Sdk version above is pinned to 4.7.0 to
+    match the installed editor (Godot 4.7 .NET). Keep it in lockstep with Godot.
+    Open this folder once in the Godot editor so it generates the .godot/ import
+    cache before running.
+
+    It references Core (shared simulation types, for future client-side prediction)
+    and Shared (the wire protocol). It renders state and sends input — nothing else.
+  -->
+  <PropertyGroup>
+    <!--
+      Stays on net8.0 on purpose: Godot 4.x embeds the .NET 8 runtime and cannot
+      load a net10 assembly. Core/Shared multi-target net8.0 so this can consume
+      them. Flip to net10.0 only once your Godot build runs on .NET 10.
+    -->
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WoadRaiders.Core\WoadRaiders.Core.csproj" />
+    <ProjectReference Include="..\WoadRaiders.Shared\WoadRaiders.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

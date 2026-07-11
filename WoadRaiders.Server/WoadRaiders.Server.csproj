@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <!--
+    The dedicated authoritative server. A plain console app with NO engine
+    dependency, so it containerizes cheaply and can be allocated per-match by a
+    hosting/matchmaking service later. It references Core (the simulation) and
+    Shared (the wire protocol).
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\WoadRaiders.Core\WoadRaiders.Core.csproj" />
+    <ProjectReference Include="..\WoadRaiders.Shared\WoadRaiders.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

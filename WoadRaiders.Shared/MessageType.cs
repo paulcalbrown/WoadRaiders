@@ -1,0 +1,33 @@
+namespace WoadRaiders.Shared;
+
+/// <summary>
+/// The first byte of every packet identifies its type. We frame packets manually
+/// (a leading byte + the payload) rather than leaning on reflection helpers, so
+/// the protocol is explicit and easy to reason about.
+/// </summary>
+public enum MessageType : byte
+{
+    /// <summary>Client → server: request to join, carries the chosen name.</summary>
+    JoinRequest = 1,
+
+    /// <summary>Server → client: you are in; here is your assigned player id.</summary>
+    Welcome = 2,
+
+    /// <summary>Client → server: one frame of input (sent every client tick).</summary>
+    Input = 3,
+
+    /// <summary>Server → clients: authoritative snapshot of the whole world.</summary>
+    WorldSnapshot = 4,
+
+    /// <summary>Server → one client: you just collected this item.</summary>
+    ItemPickedUp = 5,
+
+    /// <summary>Client → server: equip the item with this id from my inventory.</summary>
+    EquipRequest = 6,
+
+    /// <summary>Server → one client: your current equipped item ids per slot.</summary>
+    EquipmentUpdate = 7,
+
+    /// <summary>Server → client: the generated dungeon tile grid (sent once on join).</summary>
+    DungeonMap = 8,
+}

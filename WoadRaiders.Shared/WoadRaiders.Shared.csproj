@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Multi-targeted: net10.0 for the server/tests, net8.0 so the Godot client can consume it. -->
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+  </PropertyGroup>
+
+  <!--
+    Shared owns the wire protocol: the message types and (de)serialization the
+    client and server both speak. It references Core (for the simulation types)
+    and LiteNetLib (for the low-level writer/reader). LiteNetLib is added via
+    'dotnet add package' so the version resolves to whatever is current.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\WoadRaiders.Core\WoadRaiders.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="LiteNetLib" Version="2.1.4" />
+  </ItemGroup>
+
+</Project>

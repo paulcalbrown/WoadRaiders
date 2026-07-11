@@ -1,0 +1,15 @@
+; Engine configuration file.
+; Generated/edited by hand for the WoadRaiders scaffold. Godot will normalise it
+; and create the .godot/ cache the first time you open this folder in the editor.
+
+config_version=5
+
+[application]
+
+config/name="WoadRaiders"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+
+[dotnet]
+
+project/assembly_name="WoadRaiders.Client"

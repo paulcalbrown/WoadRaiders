@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/game/">
+    <Project Path="WoadRaiders.Core/WoadRaiders.Core.csproj" />
+    <Project Path="WoadRaiders.Shared/WoadRaiders.Shared.csproj" />
+    <Project Path="WoadRaiders.Server/WoadRaiders.Server.csproj" />
+    <Project Path="WoadRaiders.Client/WoadRaiders.Client.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="WoadRaiders.Core.Tests/WoadRaiders.Core.Tests.csproj" />
+  </Folder>
+</Solution>
