@@ -21,14 +21,19 @@ public sealed class GameServer
     private readonly GameWorld _world = new();
     private readonly Random _rng = new();
     private readonly Dictionary<int, NetPeer> _peers = new();
-    private DungeonMap _dungeon = null!;
+    private readonly string? _mapPath;
+    private DungeonGeometry _dungeon = null!;
     private volatile bool _running;
 
     // Enemy population policy — a "keep the sandbox lively" concern, not simulation.
     private const int TargetEnemyCount = 12;
     private static readonly TimeSpan EnemyRespawnInterval = TimeSpan.FromSeconds(2);
 
-    public GameServer() => _net = new NetManager(_listener);
+    public GameServer(string? mapPath = null)
+    {
+        _mapPath = mapPath;
+        _net = new NetManager(_listener);
+    }
 
     public void Run(int port = NetConfig.DefaultPort)
     {
@@ -47,10 +52,19 @@ public sealed class GameServer
             $"WoadRaiders dedicated server listening on udp/{port} " +
             $"(sim {SimConstants.TickRate}Hz, snapshots {NetConfig.SnapshotsPerSecond}Hz). Ctrl+C to stop.");
 
-        var seed = _rng.Next();
-        _dungeon = DungeonGenerator.Generate(seed);
-        _world.Map = _dungeon;
-        Console.WriteLine($"Generated dungeon (seed {seed}, {_dungeon.FloorCount} floor tiles).");
+        if (_mapPath is not null)
+        {
+            _dungeon = DungeonGeometryFile.Load(_mapPath);
+            Console.WriteLine($"Loaded hand-crafted map '{_mapPath}' " +
+                              $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns).");
+        }
+        else
+        {
+            var seed = _rng.Next();
+            _dungeon = DungeonGenerator.Generate(seed);
+            Console.WriteLine($"Generated dungeon (seed {seed}, {_dungeon.Solids.Count} solids).");
+        }
+        _world.Geometry = _dungeon;
 
         SpawnInitialEnemies();
 
@@ -78,7 +92,7 @@ public sealed class GameServer
             Console.WriteLine($"[+] Player {peer.Id} joined  ({_net.ConnectedPeersCount} online)");
 
             // Send the dungeon first, then the welcome (both reliable-ordered on the same channel).
-            peer.Send(NetProtocol.Frame(MessageType.DungeonMap, BuildMapPacket()), Channel, DeliveryMethod.ReliableOrdered);
+            peer.Send(NetProtocol.Frame(MessageType.DungeonGeometry, BuildGeometryPacket()), Channel, DeliveryMethod.ReliableOrdered);
             var welcome = new WelcomePacket { PlayerId = peer.Id, ServerTick = _world.Tick };
             peer.Send(NetProtocol.Frame(MessageType.Welcome, welcome), Channel, DeliveryMethod.ReliableOrdered);
         };
@@ -115,7 +129,7 @@ public sealed class GameServer
                 _world.SetInput(peer.Id, new PlayerInput
                 {
                     MoveX = input.MoveX,
-                    MoveY = input.MoveY,
+                    MoveZ = input.MoveZ,
                     Sequence = input.Sequence,
                     Attack = input.Attack,
                 });
@@ -189,6 +203,7 @@ public sealed class GameServer
                 Id = p.Id,
                 X = p.Position.X,
                 Y = p.Position.Y,
+                Z = p.Position.Z,
                 Health = p.Health,
                 LastProcessedInput = p.LastProcessedInput,
             }).ToArray(),
@@ -197,6 +212,7 @@ public sealed class GameServer
                 Id = e.Id,
                 X = e.Position.X,
                 Y = e.Position.Y,
+                Z = e.Position.Z,
                 Health = e.Health,
             }).ToArray(),
             GroundItems = _world.GroundItems.Values.Select(g => new GroundItemSnapshot
@@ -204,6 +220,7 @@ public sealed class GameServer
                 Id = g.Id,
                 X = g.Position.X,
                 Y = g.Position.Y,
+                Z = g.Position.Z,
                 Rarity = (byte)g.Item.Rarity,
             }).ToArray(),
         };
@@ -257,34 +274,39 @@ public sealed class GameServer
         Console.WriteLine($"Spawned {TargetEnemyCount} enemies.");
     }
 
-    private Vector2 RandomEnemySpawn()
+    private Vector3 RandomEnemySpawn()
     {
-        // A random floor tile, but not right on top of the player spawn.
+        // A random spawn marker, but not right on top of the player spawn.
         const float minDistanceSq = 200f * 200f;
         for (var attempt = 0; attempt < 20; attempt++)
         {
-            var pos = _dungeon.RandomFloorPosition(_rng);
-            if (Vector2.DistanceSquared(pos, _dungeon.SpawnPoint) > minDistanceSq)
+            var pos = _dungeon.RandomSpawnPosition(_rng);
+            if (Vector3.DistanceSquared(pos, _dungeon.SpawnPoint) > minDistanceSq)
                 return pos;
         }
-        return _dungeon.RandomFloorPosition(_rng);
+        return _dungeon.RandomSpawnPosition(_rng);
     }
 
-    private DungeonMapPacket BuildMapPacket()
+    private DungeonGeometryPacket BuildGeometryPacket()
     {
-        var floor = new byte[_dungeon.Width * _dungeon.Height];
-        for (var y = 0; y < _dungeon.Height; y++)
-        for (var x = 0; x < _dungeon.Width; x++)
-            floor[y * _dungeon.Width + x] = (byte)(_dungeon.IsFloorTile(x, y) ? 1 : 0);
-
-        return new DungeonMapPacket
+        var boxes = new float[_dungeon.Solids.Count * 6];
+        for (var i = 0; i < _dungeon.Solids.Count; i++)
         {
-            Width = _dungeon.Width,
-            Height = _dungeon.Height,
-            TileSize = _dungeon.TileSize,
+            var s = _dungeon.Solids[i];
+            boxes[i * 6 + 0] = s.Min.X;
+            boxes[i * 6 + 1] = s.Min.Y;
+            boxes[i * 6 + 2] = s.Min.Z;
+            boxes[i * 6 + 3] = s.Max.X;
+            boxes[i * 6 + 4] = s.Max.Y;
+            boxes[i * 6 + 5] = s.Max.Z;
+        }
+
+        return new DungeonGeometryPacket
+        {
             SpawnX = _dungeon.SpawnPoint.X,
             SpawnY = _dungeon.SpawnPoint.Y,
-            Floor = floor,
+            SpawnZ = _dungeon.SpawnPoint.Z,
+            Boxes = boxes,
         };
     }
 }

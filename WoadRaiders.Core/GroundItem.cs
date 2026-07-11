@@ -7,9 +7,9 @@ public sealed class GroundItem
 {
     public int Id { get; }
     public Item Item { get; }
-    public Vector2 Position;
+    public Vector3 Position;
 
-    public GroundItem(Item item, Vector2 position)
+    public GroundItem(Item item, Vector3 position)
     {
         Id = item.Id;
         Item = item;

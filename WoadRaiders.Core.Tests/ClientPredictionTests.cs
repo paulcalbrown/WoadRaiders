@@ -12,7 +12,7 @@ public class ClientPredictionTests
     {
         var inputs = RightInputs(10);
 
-        var prediction = new ClientPrediction(1, Vector2.Zero);
+        var prediction = new ClientPrediction(1, Vector3.Zero);
         foreach (var input in inputs)
             prediction.Predict(input);
 
@@ -24,7 +24,7 @@ public class ClientPredictionTests
     public void Reconcile_with_matching_server_state_keeps_prediction()
     {
         var inputs = RightInputs(6);
-        var prediction = new ClientPrediction(1, Vector2.Zero);
+        var prediction = new ClientPrediction(1, Vector3.Zero);
         foreach (var input in inputs)
             prediction.Predict(input);
 
@@ -40,11 +40,11 @@ public class ClientPredictionTests
     [Fact]
     public void Reconcile_snaps_to_server_when_all_inputs_acked()
     {
-        var prediction = new ClientPrediction(1, Vector2.Zero);
+        var prediction = new ClientPrediction(1, Vector3.Zero);
         foreach (var input in RightInputs(5))
             prediction.Predict(input);
 
-        var serverPosition = new Vector2(123f, -45f);
+        var serverPosition = new Vector3(123f, 0f, -45f);
         var corrected = prediction.Reconcile(serverPosition, lastProcessedInput: 5);
 
         // Nothing in flight → we simply trust the server exactly.
@@ -68,11 +68,11 @@ public class ClientPredictionTests
     {
         var list = new List<PlayerInput>();
         for (uint seq = 1; seq <= count; seq++)
-            list.Add(new PlayerInput { MoveX = 1f, MoveY = 0f, Sequence = seq });
+            list.Add(new PlayerInput { MoveX = 1f, MoveZ = 0f, Sequence = seq });
         return list;
     }
 
-    private static Vector2 ReferenceSim(IEnumerable<PlayerInput> inputs)
+    private static Vector3 ReferenceSim(IEnumerable<PlayerInput> inputs)
     {
         var world = new GameWorld();
         world.AddPlayer(1, "ref");

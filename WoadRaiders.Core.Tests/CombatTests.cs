@@ -11,7 +11,7 @@ public class CombatTests
     {
         var world = new GameWorld();
         world.AddPlayer(1, "A"); // at the origin
-        var enemy = world.SpawnEnemy(new Vector2(50, 0)); // inside PlayerAttackRange (96)
+        var enemy = world.SpawnEnemy(new Vector3(50, 0, 0)); // inside PlayerAttackRange (96)
 
         world.SetInput(1, new PlayerInput { Attack = true });
         world.Step();
@@ -24,7 +24,7 @@ public class CombatTests
     {
         var world = new GameWorld();
         world.AddPlayer(1, "A");
-        var enemy = world.SpawnEnemy(new Vector2(500, 0)); // well beyond range
+        var enemy = world.SpawnEnemy(new Vector3(500, 0, 0)); // well beyond range
 
         world.SetInput(1, new PlayerInput { Attack = true });
         world.Step();
@@ -37,7 +37,7 @@ public class CombatTests
     {
         var world = new GameWorld();
         world.AddPlayer(1, "A");
-        var enemy = world.SpawnEnemy(new Vector2(40, 0));
+        var enemy = world.SpawnEnemy(new Vector3(40, 0, 0));
 
         world.SetInput(1, new PlayerInput { Attack = true });
         world.Step();
@@ -52,7 +52,7 @@ public class CombatTests
     {
         var world = new GameWorld();
         world.AddPlayer(1, "A");
-        world.SpawnEnemy(new Vector2(40, 0));
+        world.SpawnEnemy(new Vector3(40, 0, 0));
 
         var cooldownTicks = (int)Math.Ceiling(SimConstants.PlayerAttackCooldown / SimConstants.TickDelta) + 1;
         var hitsNeeded = (int)Math.Ceiling(SimConstants.EnemyMaxHealth / SimConstants.PlayerAttackDamage);
@@ -74,7 +74,7 @@ public class CombatTests
     {
         var world = new GameWorld();
         var player = world.AddPlayer(1, "A"); // origin, no input → stands still
-        var enemy = world.SpawnEnemy(new Vector2(60, 0)); // just outside attack range (44)
+        var enemy = world.SpawnEnemy(new Vector3(60, 0, 0)); // just outside attack range (44)
 
         var maxTicks = SimConstants.TickRate * 3;
         for (var t = 0; t < maxTicks && player.Health >= SimConstants.PlayerMaxHealth; t++)
@@ -96,6 +96,6 @@ public class CombatTests
 
         Assert.True(player.IsAlive);
         Assert.Equal(SimConstants.PlayerMaxHealth, player.Health, 3);
-        Assert.Equal(Vector2.Zero, player.Position);
+        Assert.Equal(Vector3.Zero, player.Position);
     }
 }

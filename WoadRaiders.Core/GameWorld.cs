@@ -4,8 +4,10 @@ namespace WoadRaiders.Core;
 
 /// <summary>
 /// The authoritative game simulation — pure C#, no engine, no networking.
-/// The dedicated server owns one instance and advances it in fixed steps via
-/// <see cref="Step"/>. The client keeps its own single-player copy for prediction.
+/// Simulates in full 3D world space (Y-up); dungeon shape is abstracted behind
+/// <see cref="IDungeonGeometry"/>. The dedicated server owns one instance and
+/// advances it in fixed steps via <see cref="Step"/>. The client keeps its own
+/// single-player copy for prediction.
 /// </summary>
 public sealed class GameWorld
 {
@@ -29,8 +31,8 @@ public sealed class GameWorld
     public IReadOnlyDictionary<int, EnemyState> Enemies => _enemies;
     public IReadOnlyDictionary<int, GroundItem> GroundItems => _groundItems;
 
-    /// <summary>The dungeon layout for collision and spawns. Null → open arena (rectangle bounds).</summary>
-    public DungeonMap? Map { get; set; }
+    /// <summary>Dungeon geometry for collision and spawns. Null → open flat arena.</summary>
+    public IDungeonGeometry? Geometry { get; set; }
 
     /// <summary>How many fixed steps have been simulated since the world began.</summary>
     public int Tick { get; private set; }
@@ -60,7 +62,7 @@ public sealed class GameWorld
 
     // --- enemies ---
 
-    public EnemyState SpawnEnemy(Vector2 position)
+    public EnemyState SpawnEnemy(Vector3 position)
     {
         var enemy = new EnemyState(_nextEnemyId++) { Position = position };
         _enemies[enemy.Id] = enemy;
@@ -70,7 +72,7 @@ public sealed class GameWorld
     // --- loot ---
 
     /// <summary>Place an item in the world (assigns it a fresh id).</summary>
-    public GroundItem DropItem(Item item, Vector2 position)
+    public GroundItem DropItem(Item item, Vector3 position)
     {
         var grounded = new GroundItem(item with { Id = _nextItemId++ }, position);
         _groundItems[grounded.Id] = grounded;
@@ -124,13 +126,14 @@ public sealed class GameWorld
             var input = _inputs.TryGetValue(player.Id, out var i) ? i : default;
             player.LastProcessedInput = input.Sequence;
 
-            var move = new Vector2(input.MoveX, input.MoveY);
+            // Intent is on the ground plane; the geometry decides the resulting height.
+            var move = new Vector3(input.MoveX, 0f, input.MoveZ);
             // Guard the zero vector (Normalize → NaN) and cap diagonal speed.
             if (move.LengthSquared() > 1f)
-                move = Vector2.Normalize(move);
+                move = Vector3.Normalize(move);
 
             player.Velocity = move * SimConstants.PlayerMoveSpeed;
-            player.Position = MoveWithCollision(player.Position, player.Velocity * dt);
+            player.Position = ResolveMove(player.Position, player.Velocity * dt);
         }
     }
 
@@ -153,7 +156,7 @@ public sealed class GameWorld
             foreach (var enemy in _enemies.Values)
             {
                 if (enemy.IsAlive &&
-                    Vector2.DistanceSquared(player.Position, enemy.Position) <= rangeSq)
+                    Vector3.DistanceSquared(player.Position, enemy.Position) <= rangeSq)
                     enemy.TakeDamage(player.AttackDamage);
             }
         }
@@ -169,7 +172,7 @@ public sealed class GameWorld
             var target = NearestAlivePlayer(enemy.Position);
             if (target is null)
             {
-                enemy.Velocity = Vector2.Zero;
+                enemy.Velocity = Vector3.Zero;
                 continue;
             }
 
@@ -178,13 +181,13 @@ public sealed class GameWorld
 
             if (distance > SimConstants.EnemyAttackRange)
             {
-                var dir = distance > 0.0001f ? toTarget / distance : Vector2.Zero;
+                var dir = distance > 0.0001f ? toTarget / distance : Vector3.Zero;
                 enemy.Velocity = dir * SimConstants.EnemyMoveSpeed;
-                enemy.Position = MoveWithCollision(enemy.Position, enemy.Velocity * dt);
+                enemy.Position = ResolveMove(enemy.Position, enemy.Velocity * dt);
             }
             else
             {
-                enemy.Velocity = Vector2.Zero;
+                enemy.Velocity = Vector3.Zero;
                 if (enemy.AttackCooldown <= 0f)
                 {
                     // Armor soaks part of the hit, but every hit lands for at least 1.
@@ -244,7 +247,7 @@ public sealed class GameWorld
             _groundItems.Remove(id);
     }
 
-    private PlayerState? NearestAlivePlayer(Vector2 from)
+    private PlayerState? NearestAlivePlayer(Vector3 from)
     {
         PlayerState? nearest = null;
         var bestSq = float.MaxValue;
@@ -252,7 +255,7 @@ public sealed class GameWorld
         {
             if (!player.IsAlive)
                 continue;
-            var d = Vector2.DistanceSquared(from, player.Position);
+            var d = Vector3.DistanceSquared(from, player.Position);
             if (d < bestSq)
             {
                 bestSq = d;
@@ -262,7 +265,7 @@ public sealed class GameWorld
         return nearest;
     }
 
-    private PlayerState? NearestAlivePlayerWithin(Vector2 pos, float radiusSq)
+    private PlayerState? NearestAlivePlayerWithin(Vector3 pos, float radiusSq)
     {
         PlayerState? nearest = null;
         var bestSq = radiusSq;
@@ -270,7 +273,7 @@ public sealed class GameWorld
         {
             if (!player.IsAlive)
                 continue;
-            var d = Vector2.DistanceSquared(pos, player.Position);
+            var d = Vector3.DistanceSquared(pos, player.Position);
             if (d <= bestSq)
             {
                 bestSq = d;
@@ -288,33 +291,18 @@ public sealed class GameWorld
                 continue;
 
             // Simple immediate respawn at the dungeon start. TODO: respawn delay.
-            player.Position = Map?.SpawnPoint ?? Vector2.Zero;
-            player.Velocity = Vector2.Zero;
+            player.Position = Geometry?.SpawnPoint ?? Vector3.Zero;
+            player.Velocity = Vector3.Zero;
             player.Health = player.MaxHealth;
             player.AttackCooldown = 0f;
         }
     }
 
-    private Vector2 MoveWithCollision(Vector2 pos, Vector2 delta)
-    {
-        if (Map is null)
-            return ClampToWorld(pos + delta);
+    private Vector3 ResolveMove(Vector3 pos, Vector3 delta) =>
+        Geometry?.Move(pos, delta) ?? ClampToArena(pos + delta);
 
-        // Axis-separated so movement slides along walls instead of sticking on them.
-        var result = pos;
-
-        var tryX = new Vector2(result.X + delta.X, result.Y);
-        if (Map.IsWalkable(tryX))
-            result = tryX;
-
-        var tryY = new Vector2(result.X, result.Y + delta.Y);
-        if (Map.IsWalkable(tryY))
-            result = tryY;
-
-        return result;
-    }
-
-    private static Vector2 ClampToWorld(Vector2 p) => new(
+    private static Vector3 ClampToArena(Vector3 p) => new(
         Math.Clamp(p.X, -SimConstants.WorldHalfWidth, SimConstants.WorldHalfWidth),
-        Math.Clamp(p.Y, -SimConstants.WorldHalfHeight, SimConstants.WorldHalfHeight));
+        0f,
+        Math.Clamp(p.Z, -SimConstants.WorldHalfHeight, SimConstants.WorldHalfHeight));
 }

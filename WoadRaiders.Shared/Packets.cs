@@ -30,18 +30,18 @@ public sealed class WelcomePacket : INetSerializable
     }
 }
 
-/// <summary>Client → server. One frame of movement + attack intent.</summary>
+/// <summary>Client → server. One frame of movement (ground-plane intent) + attack.</summary>
 public sealed class InputPacket : INetSerializable
 {
     public float MoveX;
-    public float MoveY;
+    public float MoveZ;
     public uint Sequence;
     public bool Attack;
 
     public void Serialize(NetDataWriter w)
     {
         w.Put(MoveX);
-        w.Put(MoveY);
+        w.Put(MoveZ);
         w.Put(Sequence);
         w.Put((byte)(Attack ? 1 : 0));
     }
@@ -49,18 +49,19 @@ public sealed class InputPacket : INetSerializable
     public void Deserialize(NetDataReader r)
     {
         MoveX = r.GetFloat();
-        MoveY = r.GetFloat();
+        MoveZ = r.GetFloat();
         Sequence = r.GetUInt();
         Attack = r.GetByte() != 0;
     }
 }
 
-/// <summary>One player's state inside a <see cref="WorldSnapshotPacket"/>.</summary>
+/// <summary>One player's state inside a <see cref="WorldSnapshotPacket"/>. Positions are 3D, Y-up.</summary>
 public struct PlayerSnapshot : INetSerializable
 {
     public int Id;
     public float X;
     public float Y;
+    public float Z;
     public float Health;
     public uint LastProcessedInput;
 
@@ -69,6 +70,7 @@ public struct PlayerSnapshot : INetSerializable
         w.Put(Id);
         w.Put(X);
         w.Put(Y);
+        w.Put(Z);
         w.Put(Health);
         w.Put(LastProcessedInput);
     }
@@ -78,17 +80,19 @@ public struct PlayerSnapshot : INetSerializable
         Id = r.GetInt();
         X = r.GetFloat();
         Y = r.GetFloat();
+        Z = r.GetFloat();
         Health = r.GetFloat();
         LastProcessedInput = r.GetUInt();
     }
 }
 
-/// <summary>One enemy's state inside a <see cref="WorldSnapshotPacket"/>.</summary>
+/// <summary>One enemy's state inside a <see cref="WorldSnapshotPacket"/>. Positions are 3D, Y-up.</summary>
 public struct EnemySnapshot : INetSerializable
 {
     public int Id;
     public float X;
     public float Y;
+    public float Z;
     public float Health;
 
     public void Serialize(NetDataWriter w)
@@ -96,6 +100,7 @@ public struct EnemySnapshot : INetSerializable
         w.Put(Id);
         w.Put(X);
         w.Put(Y);
+        w.Put(Z);
         w.Put(Health);
     }
 
@@ -104,6 +109,7 @@ public struct EnemySnapshot : INetSerializable
         Id = r.GetInt();
         X = r.GetFloat();
         Y = r.GetFloat();
+        Z = r.GetFloat();
         Health = r.GetFloat();
     }
 }
@@ -114,6 +120,7 @@ public struct GroundItemSnapshot : INetSerializable
     public int Id;
     public float X;
     public float Y;
+    public float Z;
     public byte Rarity;
 
     public void Serialize(NetDataWriter w)
@@ -121,6 +128,7 @@ public struct GroundItemSnapshot : INetSerializable
         w.Put(Id);
         w.Put(X);
         w.Put(Y);
+        w.Put(Z);
         w.Put(Rarity);
     }
 
@@ -129,6 +137,7 @@ public struct GroundItemSnapshot : INetSerializable
         Id = r.GetInt();
         X = r.GetFloat();
         Y = r.GetFloat();
+        Z = r.GetFloat();
         Rarity = r.GetByte();
     }
 }
@@ -250,39 +259,39 @@ public sealed class EquipmentUpdatePacket : INetSerializable
     }
 }
 
-/// <summary>Server → client. The full dungeon tile grid (1 = floor, 0 = wall), sent once on join.</summary>
-public sealed class DungeonMapPacket : INetSerializable
+/// <summary>
+/// Server → client. The dungeon's 3D collision geometry (solid boxes + spawn),
+/// sent once on join. The client rebuilds a <c>DungeonGeometry</c> from it so
+/// prediction collides against exactly what the server does.
+/// </summary>
+public sealed class DungeonGeometryPacket : INetSerializable
 {
-    public int Width;
-    public int Height;
-    public float TileSize;
     public float SpawnX;
     public float SpawnY;
-    public byte[] Floor = System.Array.Empty<byte>();
+    public float SpawnZ;
+
+    /// <summary>Flattened boxes: 6 floats each (minX minY minZ maxX maxY maxZ).</summary>
+    public float[] Boxes = System.Array.Empty<float>();
 
     public void Serialize(NetDataWriter w)
     {
-        w.Put(Width);
-        w.Put(Height);
-        w.Put(TileSize);
         w.Put(SpawnX);
         w.Put(SpawnY);
-        w.Put(Floor.Length);
-        foreach (var b in Floor)
-            w.Put(b);
+        w.Put(SpawnZ);
+        w.Put((ushort)(Boxes.Length / 6));
+        foreach (var f in Boxes)
+            w.Put(f);
     }
 
     public void Deserialize(NetDataReader r)
     {
-        Width = r.GetInt();
-        Height = r.GetInt();
-        TileSize = r.GetFloat();
         SpawnX = r.GetFloat();
         SpawnY = r.GetFloat();
-        var length = r.GetInt();
-        Floor = new byte[length];
-        for (var i = 0; i < length; i++)
-            Floor[i] = r.GetByte();
+        SpawnZ = r.GetFloat();
+        int count = r.GetUShort();
+        Boxes = new float[count * 6];
+        for (var i = 0; i < Boxes.Length; i++)
+            Boxes[i] = r.GetFloat();
     }
 }
 

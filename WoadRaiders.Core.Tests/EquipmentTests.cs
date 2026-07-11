@@ -26,7 +26,7 @@ public class EquipmentTests
     {
         var world = new GameWorld(new Random(1));
         var player = world.AddPlayer(1, "A");
-        var enemy = world.SpawnEnemy(new Vector2(40, 0));
+        var enemy = world.SpawnEnemy(new Vector3(40, 0, 0));
 
         var blade = Make(10, ItemType.Blade, 20);
         player.Inventory.Add(blade);
@@ -44,7 +44,7 @@ public class EquipmentTests
     {
         var world = new GameWorld(new Random(1));
         var player = world.AddPlayer(1, "A"); // origin
-        world.SpawnEnemy(new Vector2(SimConstants.EnemyAttackRange - 5, 0)); // already in strike range
+        world.SpawnEnemy(new Vector3(SimConstants.EnemyAttackRange - 5, 0, 0)); // already in strike range
 
         var shield = Make(10, ItemType.Shield, 30);
         player.Inventory.Add(shield);

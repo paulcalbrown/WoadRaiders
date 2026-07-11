@@ -10,13 +10,13 @@ public class GameWorldTests
     {
         var world = new GameWorld();
         var player = world.AddPlayer(1, "A");
-        world.SetInput(1, new PlayerInput { MoveX = 1f, MoveY = 0f });
+        world.SetInput(1, new PlayerInput { MoveX = 1f, MoveZ = 0f });
 
         world.Step();
 
         var expected = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
         Assert.Equal(expected, player.Position.X, 3);
-        Assert.Equal(0f, player.Position.Y, 3);
+        Assert.Equal(0f, player.Position.Z, 3);
         Assert.Equal(1, world.Tick);
     }
 
@@ -25,7 +25,7 @@ public class GameWorldTests
     {
         var world = new GameWorld();
         var player = world.AddPlayer(1, "A");
-        world.SetInput(1, new PlayerInput { MoveX = 1f, MoveY = 1f });
+        world.SetInput(1, new PlayerInput { MoveX = 1f, MoveZ = 1f });
 
         world.Step();
 
@@ -35,7 +35,7 @@ public class GameWorldTests
     }
 
     [Fact]
-    public void Player_is_clamped_to_world_bounds()
+    public void Player_is_clamped_to_arena_bounds()
     {
         var world = new GameWorld();
         var player = world.AddPlayer(1, "A");
@@ -55,17 +55,17 @@ public class GameWorldTests
 
         world.Step();
 
-        Assert.Equal(Vector2.Zero, player.Position);
+        Assert.Equal(Vector3.Zero, player.Position);
     }
 
     [Fact]
     public void Simulation_is_deterministic()
     {
-        static Vector2 Run()
+        static Vector3 Run()
         {
             var world = new GameWorld();
             world.AddPlayer(1, "A");
-            world.SetInput(1, new PlayerInput { MoveX = 0.3f, MoveY = -0.7f });
+            world.SetInput(1, new PlayerInput { MoveX = 0.3f, MoveZ = -0.7f });
             for (var i = 0; i < 100; i++)
                 world.Step();
             return world.Players[1].Position;

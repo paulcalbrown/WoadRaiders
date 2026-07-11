@@ -5,14 +5,14 @@ namespace WoadRaiders.Core;
 /// <summary>
 /// Anything that can move, take damage, and attack — the shared base for players
 /// and enemies. Keeping health/targeting here means combat resolution works the
-/// same regardless of who is hitting whom.
+/// same regardless of who is hitting whom. Positions are world-space, Y-up.
 /// </summary>
 public abstract class Combatant
 {
     public int Id { get; }
 
-    public Vector2 Position;
-    public Vector2 Velocity;
+    public Vector3 Position;
+    public Vector3 Velocity;
     public float Health;
     public float MaxHealth { get; }
 

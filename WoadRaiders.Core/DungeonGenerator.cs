@@ -3,29 +3,32 @@ using System.Numerics;
 namespace WoadRaiders.Core;
 
 /// <summary>
-/// Room-and-corridor dungeon generation (Gauntlet-style): distinct rectangular
-/// chambers — large and open, for horde fights — linked by wide corridors, with a
-/// few extra links so the level loops back on itself. Deterministic for a given
-/// seed; always a single connected region surrounded by rock.
+/// Procedural room-and-corridor generation (Gauntlet-style), emitting the same
+/// <see cref="DungeonGeometry"/> a hand-crafted Godot scene exports to — so
+/// authored and generated maps are interchangeable everywhere downstream.
+/// Internally it still carves a grid, then converts wall tiles into merged
+/// world-space boxes. Deterministic for a given seed.
 /// </summary>
 public static class DungeonGenerator
 {
     public const int Width = 44;
     public const int Height = 26;
     public const float TileSize = 40f;
+    public const float WallHeight = 70f;
 
     private const int MinRoomSize = 5;
     private const int MaxRoomSize = 10;
     private const int MaxRooms = 10;
     private const int RoomAttempts = 80;
-    private const int CorridorWidth = 2; // wide halls so hordes and the party can move through
+    private const int CorridorWidth = 2;   // wide halls so hordes and the party can move through
+    private const int ExtraEnemySpawns = 16;
 
     private readonly record struct Room(int X, int Y, int W, int H)
     {
         public (int X, int Y) Center => (X + W / 2, Y + H / 2);
     }
 
-    public static DungeonMap Generate(int seed)
+    public static DungeonGeometry Generate(int seed)
     {
         var rng = new Random(seed);
         var floor = new bool[Width * Height];
@@ -81,9 +84,60 @@ public static class DungeonGenerator
                 CarveCorridor(floor, rooms[a].Center, rooms[b].Center, rng);
         }
 
+        // Spawn in the first room; enemies in the other rooms + random floor tiles.
         var (cx, cy) = rooms[0].Center;
-        return new DungeonMap(Width, Height, TileSize, floor, TileCenter(cx, cy));
+        var spawn = TileCenter(cx, cy);
+
+        var enemySpawns = new List<Vector3>();
+        for (var i = 1; i < rooms.Count; i++)
+        {
+            var (ex, ey) = rooms[i].Center;
+            enemySpawns.Add(TileCenter(ex, ey));
+        }
+
+        var floorTiles = new List<(int X, int Y)>();
+        for (var y = 0; y < Height; y++)
+        for (var x = 0; x < Width; x++)
+            if (floor[y * Width + x])
+                floorTiles.Add((x, y));
+        for (var i = 0; i < ExtraEnemySpawns && floorTiles.Count > 0; i++)
+        {
+            var (tx, ty) = floorTiles[rng.Next(floorTiles.Count)];
+            enemySpawns.Add(TileCenter(tx, ty));
+        }
+
+        return new DungeonGeometry(spawn, BuildWallBoxes(floor), enemySpawns);
     }
+
+    /// <summary>Convert wall tiles into world-space boxes, greedily merging runs per row.</summary>
+    private static List<Aabb> BuildWallBoxes(bool[] floor)
+    {
+        var boxes = new List<Aabb>();
+        for (var y = 0; y < Height; y++)
+        {
+            var x = 0;
+            while (x < Width)
+            {
+                if (floor[y * Width + x]) { x++; continue; }
+
+                var runStart = x;
+                while (x < Width && !floor[y * Width + x])
+                    x++;
+
+                boxes.Add(new Aabb(
+                    new Vector3(TileEdge(runStart, Width), 0f, TileEdge(y, Height)),
+                    new Vector3(TileEdge(x, Width), WallHeight, TileEdge(y + 1, Height))));
+            }
+        }
+        return boxes;
+    }
+
+    private static float TileEdge(int t, int gridExtent) => (t - gridExtent / 2f) * TileSize;
+
+    private static Vector3 TileCenter(int tx, int ty) => new(
+        (tx - Width / 2f + 0.5f) * TileSize,
+        0f,
+        (ty - Height / 2f + 0.5f) * TileSize);
 
     private static bool Overlaps(Room a, Room b) =>
         a.X - 1 < b.X + b.W && a.X + a.W + 1 > b.X &&
@@ -137,8 +191,4 @@ public static class DungeonGenerator
         if (x >= 1 && y >= 1 && x < Width - 1 && y < Height - 1)
             floor[y * Width + x] = true;
     }
-
-    private static Vector2 TileCenter(int tx, int ty) => new(
-        (tx - Width / 2f + 0.5f) * TileSize,
-        (ty - Height / 2f + 0.5f) * TileSize);
 }

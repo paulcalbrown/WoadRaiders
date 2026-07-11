@@ -100,12 +100,23 @@ core loop earns it.
       the attack intent; the client predicts movement, never damage.
 - [ ] **Combat polish** — directional/aimed attacks, on-screen health bars, downed state + revive,
       more enemy types, attack telegraphs. (Currently: radius cleave, immediate respawn at origin.)
-- [x] **Procedural dungeons** — deterministic **room-and-corridor** generation in `Core`
-      (Gauntlet-style: large open chambers linked by wide halls, with extra links for loops; always a
-      single connected region); the server generates one and ships the tile grid on join; tile
-      collision (with wall-sliding) is shared by the server *and* client prediction; players/enemies
-      spawn on floor. Rendered with **procedural stone textures** (noise albedo + normal map, world
-      triplanar), shadows, and an ambient/fog `WorldEnvironment`. Unit-tested + verified over the wire.
+- [x] **3D simulation** — `Core` simulates in full 3D world space (`System.Numerics.Vector3`,
+      **Y-up**, matching Godot and glTF conventions, so the client maps sim positions 1:1). Dungeon
+      shape sits behind the `IDungeonGeometry` seam. Movement input stays 2D ground-plane intent
+      (`MoveX`/`MoveZ`); the geometry decides height.
+- [x] **Fully 3D dungeon geometry (`DungeonGeometry`)** — dungeons are sets of **world-space solid
+      boxes** + spawn markers, exactly what a Godot-editor scene reduces to. Collision is a vertical
+      **cylinder-vs-box** test that is 3D-aware (walls block; beams above head height don't), sliding
+      and shared verbatim by server and client prediction. Ships over the wire on join.
+- [x] **Hand-crafted maps from the Godot editor** — author any scene with `CollisionShape3D`/
+      `BoxShape3D` solids, a `Marker3D` named `PlayerSpawn`, and `EnemySpawn*` markers, then export
+      it with `tools/export_dungeon.gd` (runs headless) to JSON; serve it with
+      `dotnet run --project WoadRaiders.Server -- --map maps/YourMap.json`. `maps/TestArena.tscn` is
+      a working example. The **procedural generator emits the same structure** (merged wall boxes),
+      so generated and authored maps are interchangeable everywhere.
+- [ ] **Dungeon art pass** — render authored scenes' own meshes on the client (glTF module kits)
+      instead of the placeholder textured boxes; later: BepuPhysics for non-box collision, DotRecast
+      navmesh for smarter AI pathing. All behind `IDungeonGeometry`, no gameplay changes.
 - [ ] **Gauntlet-style dungeons** — enemy generators (destroy to stop the horde), an exit/portal to
       descend to the next level, health-drain + food pickups, keys/doors/gates, themed realms.
 - [x] **Loot (first pass)** — enemies drop themed items on death (rarity-weighted, Celtic/Pict

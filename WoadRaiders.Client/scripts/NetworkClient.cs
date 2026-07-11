@@ -3,16 +3,17 @@ using Godot;
 using LiteNetLib;
 using WoadRaiders.Core;
 using WoadRaiders.Shared;
-using SysVec2 = System.Numerics.Vector2; // Core positions; mapped to the 3D ground plane (X, 0, Y).
+using SysVec3 = System.Numerics.Vector3; // Core simulates in 3D (Y-up), same convention as Godot.
+using CoreAabb = WoadRaiders.Core.Aabb;  // disambiguate from Godot.Aabb
 
 /// <summary>
 /// 3D isometric client with prediction, combat, loot, and equipment.
 ///
-/// The simulation is 2D-on-a-plane; this renderer maps each sim Vector2(X, Y) to
-/// the ground plane Vector3(X, 0, Y) and views it through an orthographic camera
-/// at a fixed isometric angle that eases after the local player. Characters are
-/// capsules, the dungeon is MultiMesh floor/walls with shadows, loot gems spin,
-/// and enemies carry billboard health bars.
+/// The simulation is fully 3D (System.Numerics, Y-up) — the same convention as
+/// Godot, so sim positions map to the scene 1:1. An orthographic camera at a
+/// fixed isometric angle eases after the local player. Characters are capsules,
+/// the dungeon is MultiMesh floor/walls with shadows, loot gems spin, and
+/// enemies carry billboard health bars.
 ///
 /// Arrows move · Space attacks · walk over loot · I = inventory · 1-9 = equip.
 /// </summary>
@@ -25,7 +26,6 @@ public partial class NetworkClient : Node3D
     // 3D layout (world units == sim units).
     private const float EntityY = 22f;     // half the capsule height, so feet rest on the floor
     private const float LootY = 14f;
-    private const float WallHeight = 70f;
     private static readonly Vector3 CameraOffset = new(600f, 700f, 600f); // 45° yaw, ~40° pitch
     private const float CameraOrthoSize = 720f;
 
@@ -43,11 +43,11 @@ public partial class NetworkClient : Node3D
     private double _tickAccumulator;
     private double _elapsed;
     private float _localHealth = SimConstants.PlayerMaxHealth;
-    private DungeonMap? _map;
+    private DungeonGeometry? _geometry;
     private Vector3 _cameraTarget;
     private bool _cameraInitialised;
-    private SysVec2 _prevTickPos;   // predicted position at the previous fixed tick
-    private SysVec2 _localRenderPos; // interpolated position actually drawn this frame
+    private SysVec3 _prevTickPos;    // predicted position at the previous fixed tick
+    private SysVec3 _localRenderPos; // interpolated position actually drawn this frame
 
     private Camera3D _camera = null!;
     private CapsuleMesh _entityMesh = null!;
@@ -55,13 +55,15 @@ public partial class NetworkClient : Node3D
     private QuadMesh _barMesh = null!;
 
     private MultiMesh? _wallMulti;
-    private Vector3[] _wallPositions = System.Array.Empty<Vector3>();
+    private Vector3[] _wallMins = System.Array.Empty<Vector3>();
+    private Vector3[] _wallMaxs = System.Array.Empty<Vector3>();
 
     private readonly Dictionary<int, MeshInstance3D> _playerViews = new();
     private readonly Dictionary<int, Vector3> _remoteTargets = new();
     private readonly Dictionary<int, MeshInstance3D> _enemyViews = new();
     private readonly Dictionary<int, Vector3> _enemyTargets = new();
     private readonly Dictionary<int, MeshInstance3D> _lootViews = new();
+    private readonly Dictionary<int, Vector3> _lootBase = new(); // ground point each gem bobs above
 
     private readonly List<Item> _inventory = new();
     private int _equippedWeaponId;
@@ -194,9 +196,10 @@ public partial class NetworkClient : Node3D
         if (_server is null || _prediction is null)
             return;
 
+        // Screen up/down keys steer along world Z (the ground plane).
         var move = Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down");
         var attack = Input.IsActionPressed("ui_accept"); // Space / Enter
-        var input = new PlayerInput { MoveX = move.X, MoveY = move.Y, Attack = attack, Sequence = ++_inputSequence };
+        var input = new PlayerInput { MoveX = move.X, MoveZ = move.Y, Attack = attack, Sequence = ++_inputSequence };
 
         // Movement is predicted; damage, loot, and equipment stay server-authoritative.
         _prediction.Predict(input);
@@ -204,7 +207,7 @@ public partial class NetworkClient : Node3D
         _server.Send(
             NetProtocol.Frame(MessageType.Input, new InputPacket
             {
-                MoveX = move.X, MoveY = move.Y, Attack = attack, Sequence = input.Sequence,
+                MoveX = move.X, MoveZ = move.Y, Attack = attack, Sequence = input.Sequence,
             }),
             Channel, DeliveryMethod.Sequenced);
     }
@@ -214,14 +217,17 @@ public partial class NetworkClient : Node3D
         var type = (MessageType)reader.GetByte();
         switch (type)
         {
-            case MessageType.DungeonMap:
-                var mapPacket = new DungeonMapPacket();
-                mapPacket.Deserialize(reader);
-                var floor = new bool[mapPacket.Floor.Length];
-                for (var i = 0; i < floor.Length; i++)
-                    floor[i] = mapPacket.Floor[i] != 0;
-                _map = new DungeonMap(mapPacket.Width, mapPacket.Height, mapPacket.TileSize, floor,
-                                      new SysVec2(mapPacket.SpawnX, mapPacket.SpawnY));
+            case MessageType.DungeonGeometry:
+                var geoPacket = new DungeonGeometryPacket();
+                geoPacket.Deserialize(reader);
+                var solids = new List<CoreAabb>(geoPacket.Boxes.Length / 6);
+                for (var i = 0; i + 5 < geoPacket.Boxes.Length; i += 6)
+                    solids.Add(new CoreAabb(
+                        new SysVec3(geoPacket.Boxes[i], geoPacket.Boxes[i + 1], geoPacket.Boxes[i + 2]),
+                        new SysVec3(geoPacket.Boxes[i + 3], geoPacket.Boxes[i + 4], geoPacket.Boxes[i + 5])));
+                _geometry = new DungeonGeometry(
+                    new SysVec3(geoPacket.SpawnX, geoPacket.SpawnY, geoPacket.SpawnZ),
+                    solids, System.Array.Empty<SysVec3>());
                 BuildDungeonMesh();
                 break;
 
@@ -229,7 +235,7 @@ public partial class NetworkClient : Node3D
                 var welcome = new WelcomePacket();
                 welcome.Deserialize(reader);
                 _localPlayerId = welcome.PlayerId;
-                _prediction = new ClientPrediction(_localPlayerId, _map?.SpawnPoint ?? SysVec2.Zero, _map);
+                _prediction = new ClientPrediction(_localPlayerId, _geometry?.SpawnPoint ?? SysVec3.Zero, _geometry);
                 _prevTickPos = _localRenderPos = _prediction.Position;
                 GD.Print($"Joined as player {_localPlayerId}");
                 break;
@@ -263,13 +269,13 @@ public partial class NetworkClient : Node3D
         foreach (var p in snapshot.Players)
         {
             seenPlayers.Add(p.Id);
-            var pos = new Vector3(p.X, EntityY, p.Y);
+            var pos = new Vector3(p.X, p.Y + EntityY, p.Z);
             GetOrCreatePlayerView(p.Id, pos);
 
             if (p.Id == _localPlayerId)
             {
                 _localHealth = p.Health; // authoritative, never predicted
-                _prediction?.Reconcile(new SysVec2(p.X, p.Y), p.LastProcessedInput);
+                _prediction?.Reconcile(new SysVec3(p.X, p.Y, p.Z), p.LastProcessedInput);
             }
             else
             {
@@ -282,7 +288,7 @@ public partial class NetworkClient : Node3D
         foreach (var e in snapshot.Enemies)
         {
             seenEnemies.Add(e.Id);
-            var pos = new Vector3(e.X, EntityY, e.Y);
+            var pos = new Vector3(e.X, e.Y + EntityY, e.Z);
             var view = GetOrCreateEnemyView(e.Id, pos);
             _enemyTargets[e.Id] = pos;
             UpdateHealthBar(view, Mathf.Clamp(e.Health / SimConstants.EnemyMaxHealth, 0f, 1f));
@@ -293,10 +299,11 @@ public partial class NetworkClient : Node3D
         foreach (var g in snapshot.GroundItems)
         {
             seenLoot.Add(g.Id);
-            var view = GetOrCreateLootView(g.Id, g.Rarity);
-            view.Position = new Vector3(g.X, LootY, g.Y);
+            var ground = new Vector3(g.X, g.Y, g.Z);
+            _lootBase[g.Id] = ground;
+            GetOrCreateLootView(g.Id, g.Rarity, ground + Vector3.Up * LootY);
         }
-        Prune(_lootViews, seenLoot);
+        Prune(_lootViews, seenLoot, _lootBase);
     }
 
     private void UpdateViews(double delta)
@@ -309,8 +316,8 @@ public partial class NetworkClient : Node3D
             {
                 // Interpolate between the last two fixed ticks so 30 Hz motion renders smoothly.
                 var alpha = Mathf.Clamp((float)(_tickAccumulator / SimConstants.TickDelta), 0f, 1f);
-                _localRenderPos = SysVec2.Lerp(_prevTickPos, _prediction.Position, alpha);
-                view.Position = new Vector3(_localRenderPos.X, EntityY, _localRenderPos.Y);
+                _localRenderPos = SysVec3.Lerp(_prevTickPos, _prediction.Position, alpha);
+                view.Position = ToGodot(_localRenderPos) + Vector3.Up * EntityY;
             }
             else if (_remoteTargets.TryGetValue(id, out var target))
             {
@@ -324,9 +331,10 @@ public partial class NetworkClient : Node3D
 
         // Loot gems spin and bob so drops catch the eye.
         var bob = Mathf.Sin((float)_elapsed * 3f) * 4f;
-        foreach (var view in _lootViews.Values)
+        foreach (var (id, view) in _lootViews)
         {
-            view.Position = new Vector3(view.Position.X, LootY + bob, view.Position.Z);
+            if (_lootBase.TryGetValue(id, out var ground))
+                view.Position = ground + Vector3.Up * (LootY + bob);
             view.RotateY((float)delta * 2f);
         }
     }
@@ -334,7 +342,7 @@ public partial class NetworkClient : Node3D
     private void UpdateCamera(double delta)
     {
         var target = _prediction is not null
-            ? new Vector3(_localRenderPos.X, 0f, _localRenderPos.Y) // follow the smoothed render position
+            ? ToGodot(_localRenderPos) // follow the smoothed render position (feet)
             : Vector3.Zero;
 
         // Smooth the LOOK-TARGET (not the camera position) and keep the camera at a fixed
@@ -392,41 +400,41 @@ public partial class NetworkClient : Node3D
 
     private void BuildDungeonMesh()
     {
-        if (_map is null)
+        if (_geometry is null)
             return;
 
-        var floorPositions = new List<Vector3>();
-        var wallPositions = new List<Vector3>();
-        for (var ty = 0; ty < _map.Height; ty++)
-        for (var tx = 0; tx < _map.Width; tx++)
-        {
-            var c = _map.TileCenter(tx, ty);
-            if (_map.IsFloorTile(tx, ty))
-                floorPositions.Add(new Vector3(c.X, -2f, c.Y));       // thin slab, top at y=0
-            else
-                wallPositions.Add(new Vector3(c.X, WallHeight / 2f, c.Y));
-        }
-
-        var floorMesh = new BoxMesh { Size = new Vector3(_map.TileSize, 4f, _map.TileSize) };
+        // One floor slab spanning the world extent (authored scenes will bring their own floors).
+        var bounds = _geometry.Bounds;
+        var size = ToGodot(bounds.Size);
+        var center = ToGodot(bounds.Center);
+        var floorMesh = new BoxMesh { Size = new Vector3(size.X, 4f, size.Z) };
+        var floorPositions = new List<Vector3> { new(center.X, -2f, center.Z) };
         AddChild(MakeTileField(floorMesh, floorPositions, FloorMaterial()));
-        BuildWalls(wallPositions);
+
+        BuildSolids();
     }
 
-    private void BuildWalls(List<Vector3> positions)
+    private void BuildSolids()
     {
-        _wallPositions = positions.ToArray();
+        var solids = _geometry!.Solids;
+        _wallMins = new Vector3[solids.Count];
+        _wallMaxs = new Vector3[solids.Count];
 
-        var mesh = new BoxMesh { Size = new Vector3(_map!.TileSize, WallHeight, _map.TileSize) };
+        // One unit cube, scaled per instance to each solid's size.
+        var mesh = new BoxMesh { Size = Vector3.One };
         _wallMulti = new MultiMesh
         {
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
             UseColors = true, // must be set before InstanceCount
             Mesh = mesh,
-            InstanceCount = positions.Count,
+            InstanceCount = solids.Count,
         };
-        for (var i = 0; i < positions.Count; i++)
+        for (var i = 0; i < solids.Count; i++)
         {
-            _wallMulti.SetInstanceTransform(i, new Transform3D(Basis.Identity, positions[i]));
+            _wallMins[i] = ToGodot(solids[i].Min);
+            _wallMaxs[i] = ToGodot(solids[i].Max);
+            var basis = Basis.Identity.Scaled(ToGodot(solids[i].Size));
+            _wallMulti.SetInstanceTransform(i, new Transform3D(basis, ToGodot(solids[i].Center)));
             _wallMulti.SetInstanceColor(i, Colors.White); // white = full stone texture; alpha = fade
         }
 
@@ -441,18 +449,20 @@ public partial class NetworkClient : Node3D
         if (_wallMulti is null || _prediction is null)
             return;
 
-        var player = new Vector3(_localRenderPos.X, EntityY, _localRenderPos.Y);
+        var player = ToGodot(_localRenderPos) + Vector3.Up * EntityY;
         var camDir = CameraOffset.Normalized(); // player → camera (fixed iso direction)
         const float fadeRadius = 55f;
         const float fadedAlpha = 0.18f;
 
-        for (var i = 0; i < _wallPositions.Length; i++)
+        for (var i = 0; i < _wallMins.Length; i++)
         {
-            var v = _wallPositions[i] - player;
+            // Closest point on the box to the player, so long merged walls fade correctly.
+            var closest = player.Clamp(_wallMins[i], _wallMaxs[i]);
+            var v = closest - player;
             var along = v.Dot(camDir);
 
             var alpha = 1f;
-            if (along > 0f) // wall is on the camera side of the player
+            if (along > 0f) // box is on the camera side of the player
             {
                 var perp = (v - camDir * along).Length(); // screen-space closeness (ortho)
                 if (perp < fadeRadius)
@@ -592,7 +602,7 @@ public partial class NetworkClient : Node3D
         BillboardKeepScale = true,
     };
 
-    private MeshInstance3D GetOrCreateLootView(int id, byte rarity)
+    private MeshInstance3D GetOrCreateLootView(int id, byte rarity, Vector3 spawn)
     {
         if (_lootViews.TryGetValue(id, out var existing))
             return existing;
@@ -600,6 +610,7 @@ public partial class NetworkClient : Node3D
         var view = new MeshInstance3D
         {
             Mesh = _lootMesh,
+            Position = spawn,
             RotationDegrees = new Vector3(0, 0, 45), // sit like a gem
             MaterialOverride = new StandardMaterial3D
             {
@@ -636,4 +647,6 @@ public partial class NetworkClient : Node3D
         4 => new Color(1.00f, 0.50f, 0.10f), // Legendary
         _ => Colors.White,
     };
+
+    private static Vector3 ToGodot(SysVec3 v) => new(v.X, v.Y, v.Z);
 }

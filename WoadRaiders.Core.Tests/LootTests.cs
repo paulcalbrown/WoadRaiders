@@ -50,7 +50,7 @@ public class LootTests
     {
         var world = new GameWorld(new Random(1));
         var player = world.AddPlayer(1, "A"); // at origin
-        var dropped = world.DropItem(new Item(0, "Test Blade", ItemRarity.Rare, ItemType.Blade, 25), new Vector2(10, 0));
+        var dropped = world.DropItem(new Item(0, "Test Blade", ItemRarity.Rare, ItemType.Blade, 25), new Vector3(10, 0, 0));
 
         world.Step();
 
@@ -64,7 +64,7 @@ public class LootTests
     {
         var world = new GameWorld(new Random(1));
         var player = world.AddPlayer(1, "A");
-        world.DropItem(new Item(0, "Far Torc", ItemRarity.Common, ItemType.Torc, 5), new Vector2(500, 0));
+        world.DropItem(new Item(0, "Far Torc", ItemRarity.Common, ItemType.Torc, 5), new Vector3(500, 0, 0));
 
         world.Step();
 
@@ -77,7 +77,7 @@ public class LootTests
     {
         var world = new GameWorld(new Random(1));
         world.AddPlayer(1, "A");
-        world.DropItem(new Item(0, "Test", ItemRarity.Magic, ItemType.Axe, 12), new Vector2(5, 0));
+        world.DropItem(new Item(0, "Test", ItemRarity.Magic, ItemType.Axe, 12), new Vector3(5, 0, 0));
 
         world.Step();
 
@@ -94,7 +94,7 @@ public class LootTests
         var world = new GameWorld(new Random(2024));
         // No player present, so nothing is auto-collected; drops stay on the ground.
         for (var i = 0; i < 30; i++)
-            world.SpawnEnemy(new Vector2(500 + i, 500)).TakeDamage(SimConstants.EnemyMaxHealth);
+            world.SpawnEnemy(new Vector3(500 + i, 0, 500)).TakeDamage(SimConstants.EnemyMaxHealth);
 
         world.Step(); // removes dead enemies, rolling drops
 

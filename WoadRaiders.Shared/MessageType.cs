@@ -28,6 +28,6 @@ public enum MessageType : byte
     /// <summary>Server → one client: your current equipped item ids per slot.</summary>
     EquipmentUpdate = 7,
 
-    /// <summary>Server → client: the generated dungeon tile grid (sent once on join).</summary>
-    DungeonMap = 8,
+    /// <summary>Server → client: the dungeon's 3D collision geometry (sent once on join).</summary>
+    DungeonGeometry = 8,
 }

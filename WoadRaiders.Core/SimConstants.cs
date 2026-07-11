@@ -18,10 +18,10 @@ public static class SimConstants
     /// <summary>Starting/max player health.</summary>
     public const float PlayerMaxHealth = 100f;
 
-    /// <summary>Playfield extends this far from the origin on the X axis.</summary>
+    /// <summary>Fallback arena (no geometry): extent from the origin on the X axis.</summary>
     public const float WorldHalfWidth = 960f;
 
-    /// <summary>Playfield extends this far from the origin on the Y axis.</summary>
+    /// <summary>Fallback arena (no geometry): extent from the origin on the Z axis.</summary>
     public const float WorldHalfHeight = 540f;
 
     // --- Combat: player ---
@@ -50,4 +50,11 @@ public static class SimConstants
     // --- Equipment ---
     /// <summary>Each point of equipped armor Power soaks this much of every incoming hit.</summary>
     public const float ArmorDamageReductionPerPower = 0.1f;
+
+    // --- Character collision (vertical cylinder approximation) ---
+    /// <summary>Character body radius on the XZ plane.</summary>
+    public const float CharacterRadius = 14f;
+
+    /// <summary>Character body height; solids above this (relative to the feet) don't block.</summary>
+    public const float CharacterHeight = 44f;
 }

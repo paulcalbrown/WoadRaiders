@@ -6,8 +6,8 @@ namespace WoadRaiders.Core;
 /// Client-side prediction + server reconciliation for the local player.
 ///
 /// It runs a one-player <see cref="GameWorld"/> using the exact same movement
-/// rules as the server, so predicting locally can never diverge from the server's
-/// physics. The flow:
+/// rules (and the same <see cref="IDungeonGeometry"/>) as the server, so
+/// predicting locally can never diverge from the server's physics. The flow:
 ///   1. Every client tick, call <see cref="Predict"/> with the local input. The
 ///      player moves immediately and the input is buffered as "unacknowledged".
 ///   2. When an authoritative snapshot arrives, call <see cref="Reconcile"/> with
@@ -23,16 +23,16 @@ public sealed class ClientPrediction
     private readonly List<PlayerInput> _pending = new();
     private readonly int _localPlayerId;
 
-    public ClientPrediction(int localPlayerId, Vector2 startPosition, DungeonMap? map = null)
+    public ClientPrediction(int localPlayerId, Vector3 startPosition, IDungeonGeometry? geometry = null)
     {
-        _world.Map = map; // predict against the same walls the server uses
+        _world.Geometry = geometry; // predict against the same geometry the server uses
         _localPlayerId = localPlayerId;
         var player = _world.AddPlayer(localPlayerId, "local");
         player.Position = startPosition;
     }
 
     /// <summary>The current predicted position of the local player.</summary>
-    public Vector2 Position => _world.Players[_localPlayerId].Position;
+    public Vector3 Position => _world.Players[_localPlayerId].Position;
 
     /// <summary>Inputs sent but not yet acknowledged by the server.</summary>
     public int PendingInputCount => _pending.Count;
@@ -41,7 +41,7 @@ public sealed class ClientPrediction
     /// Apply one locally-generated input immediately and remember it until the
     /// server acknowledges it. Returns the new predicted position.
     /// </summary>
-    public Vector2 Predict(PlayerInput input)
+    public Vector3 Predict(PlayerInput input)
     {
         _pending.Add(input);
         _world.SetInput(_localPlayerId, input);
@@ -54,13 +54,13 @@ public sealed class ClientPrediction
     /// processed, snap to the server position, then replay the inputs still in
     /// flight. Returns the corrected predicted position.
     /// </summary>
-    public Vector2 Reconcile(Vector2 authoritativePosition, uint lastProcessedInput)
+    public Vector3 Reconcile(Vector3 authoritativePosition, uint lastProcessedInput)
     {
         _pending.RemoveAll(i => i.Sequence <= lastProcessedInput);
 
         var player = _world.Players[_localPlayerId];
         player.Position = authoritativePosition;
-        player.Velocity = Vector2.Zero;
+        player.Velocity = Vector3.Zero;
 
         foreach (var input in _pending)
         {
