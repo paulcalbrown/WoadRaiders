@@ -223,7 +223,7 @@ public partial class NetworkClient : Node3D
         // fill leaves, marking health just lost, then drains down to meet the fill.
         _healthBarChip = new ColorRect
         {
-            Color = new Color(0.95f, 0.9f, 0.55f, 0.95f), // pale "recently lost" trail
+            Color = new Color(1.0f, 0.7f, 0.7f, 0.95f), // very light red "recently lost" trail
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Position = new Vector2(HudBarPad, HudBarPad),
             Size = new Vector2(HudBarWidth - 2 * HudBarPad, HudBarHeight - 2 * HudBarPad),
@@ -843,7 +843,7 @@ public partial class NetworkClient : Node3D
         {
             Mesh = _barMesh,
             Position = new Vector3(0, HealthBarHeight, 0.1f),
-            MaterialOverride = BarMaterial(new Color(0.95f, 0.9f, 0.55f)), // pale trail
+            MaterialOverride = BarMaterial(new Color(1.0f, 0.7f, 0.7f)), // very light red trail
         };
         holder.AddChild(chip);
 
@@ -851,7 +851,7 @@ public partial class NetworkClient : Node3D
         {
             Mesh = _barMesh,
             Position = new Vector3(0, HealthBarHeight, 0.2f),
-            MaterialOverride = BarMaterial(Colors.LimeGreen),
+            MaterialOverride = BarMaterial(new Color(0.85f, 0.15f, 0.15f)), // solid red (hostile)
         };
         holder.AddChild(fill);
 
@@ -869,8 +869,6 @@ public partial class NetworkClient : Node3D
 
         PlaceBar(view.HealthChip, view.ChipFrac, 0.1f);
         PlaceBar(view.HealthFill, view.HealthFrac, 0.2f);
-        ((StandardMaterial3D)view.HealthFill.MaterialOverride).AlbedoColor =
-            new Color(0.9f, 0.2f, 0.2f).Lerp(Colors.LimeGreen, view.HealthFrac);
     }
 
     // Scale a billboard bar to its fraction and left-anchor it. The quad billboards
