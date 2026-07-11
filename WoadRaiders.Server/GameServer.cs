@@ -21,14 +21,15 @@ public sealed class GameServer
     private readonly GameWorld _world = new();
     private readonly Random _rng = new();
     private readonly Dictionary<int, NetPeer> _peers = new();
+    private readonly Dictionary<int, ServerInputBuffer> _inputBuffers = new();
     private readonly string _mapPath;
     private DungeonGeometry _dungeon = null!;
     private volatile bool _running;
 
     // Enemy population policy — map-driven: authors control density by placing
-    // EnemySpawn markers (target = 2 enemies per marker, clamped to sane bounds).
+    // EnemySpawn markers (target = 1 enemy per marker, clamped to sane bounds).
     private int _targetEnemyCount;
-    private static readonly TimeSpan EnemyRespawnInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan EnemyRespawnInterval = TimeSpan.FromSeconds(6);
 
     public GameServer(string mapPath)
     {
@@ -80,7 +81,7 @@ public sealed class GameServer
                           $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns" +
                           $"{(_dungeon.ScenePath is null ? "" : $", scene {_dungeon.ScenePath}")}).");
         _world.Geometry = _dungeon;
-        _targetEnemyCount = Math.Clamp(_dungeon.EnemySpawns.Count * 2, 4, 24);
+        _targetEnemyCount = Math.Clamp(_dungeon.EnemySpawns.Count, 3, 10);
 
         SpawnInitialEnemies();
 
@@ -104,6 +105,7 @@ public sealed class GameServer
         _listener.PeerConnectedEvent += peer =>
         {
             _peers[peer.Id] = peer;
+            _inputBuffers[peer.Id] = new ServerInputBuffer();
             var player = _world.AddPlayer(peer.Id, $"Raider-{peer.Id}");
             player.Position = _dungeon.SpawnPoint;
             Console.WriteLine($"[+] Player {peer.Id} joined  ({_net.ConnectedPeersCount} online)");
@@ -117,6 +119,7 @@ public sealed class GameServer
         _listener.PeerDisconnectedEvent += (peer, _) =>
         {
             _peers.Remove(peer.Id);
+            _inputBuffers.Remove(peer.Id);
             _world.RemovePlayer(peer.Id);
             Console.WriteLine($"[-] Player {peer.Id} left    ({_net.ConnectedPeersCount} online)");
         };
@@ -142,14 +145,17 @@ public sealed class GameServer
             {
                 var input = new InputPacket();
                 input.Deserialize(reader);
-                // Trust nothing but the intent; the simulation clamps/normalizes it.
-                _world.SetInput(peer.Id, new PlayerInput
-                {
-                    MoveX = input.MoveX,
-                    MoveZ = input.MoveZ,
-                    Sequence = input.Sequence,
-                    Attack = input.Attack,
-                });
+                // Buffer the intent; it is applied one-per-tick, in order, by the sim
+                // loop (see ApplyBufferedInputs). Trust nothing but the intent — the
+                // simulation clamps/normalizes it.
+                if (_inputBuffers.TryGetValue(peer.Id, out var buffer))
+                    buffer.Enqueue(new PlayerInput
+                    {
+                        MoveX = input.MoveX,
+                        MoveZ = input.MoveZ,
+                        Sequence = input.Sequence,
+                        Attack = input.Attack,
+                    });
                 break;
             }
 
@@ -183,6 +189,7 @@ public sealed class GameServer
             // Fixed-step simulation, catching up if the loop fell behind.
             while (now >= nextTick)
             {
+                ApplyBufferedInputs();
                 _world.Step();
                 nextTick += tickInterval;
             }
@@ -204,6 +211,25 @@ public sealed class GameServer
             }
 
             Thread.Sleep(1);
+        }
+    }
+
+    /// <summary>
+    /// Hand the simulation exactly one buffered input per player for this tick, in
+    /// sequence order, so the server replays each client's input stream 1:1 and
+    /// reconciliation stays drift-free. A priming or starved buffer <em>holds</em>
+    /// the player — a zero-move input tagged with their last processed sequence, so
+    /// <c>LastProcessedInput</c> never regresses and the client reconciles the freeze
+    /// exactly instead of fighting a re-applied stale input.
+    /// </summary>
+    private void ApplyBufferedInputs()
+    {
+        foreach (var player in _world.Players.Values)
+        {
+            if (_inputBuffers.TryGetValue(player.Id, out var buffer) && buffer.TryDequeue(out var input))
+                _world.SetInput(player.Id, input);
+            else
+                _world.SetInput(player.Id, new PlayerInput { Sequence = player.LastProcessedInput });
         }
     }
 

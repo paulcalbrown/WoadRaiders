@@ -1,9 +1,18 @@
+using System.Numerics;
+
 namespace WoadRaiders.Core;
 
 /// <summary>Authoritative state for a single connected player.</summary>
 public sealed class PlayerState : Combatant
 {
     public string Name { get; set; }
+
+    /// <summary>
+    /// Unit direction the player faces on the ground plane (XZ). Updated from the
+    /// last non-zero movement intent and held while idle, so a standing player
+    /// keeps facing where they last moved. Melee strikes only land in front of it.
+    /// </summary>
+    public Vector3 Facing = Vector3.UnitX;
 
     /// <summary>
     /// Sequence number of the last input folded into this state. Broadcast in

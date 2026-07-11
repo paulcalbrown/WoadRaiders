@@ -10,13 +10,53 @@ public class CombatTests
     public void Player_attack_damages_enemy_in_range()
     {
         var world = new GameWorld();
-        world.AddPlayer(1, "A"); // at the origin
-        var enemy = world.SpawnEnemy(new Vector3(50, 0, 0)); // inside PlayerAttackRange (96)
+        world.AddPlayer(1, "A"); // at the origin, faces +X by default
+        var enemy = world.SpawnEnemy(new Vector3(50, 0, 0)); // in front, inside PlayerAttackRange (72)
 
         world.SetInput(1, new PlayerInput { Attack = true });
         world.Step();
 
         Assert.Equal(SimConstants.EnemyMaxHealth - SimConstants.PlayerAttackDamage, enemy.Health, 3);
+    }
+
+    [Fact]
+    public void Attack_misses_an_enemy_behind_the_player()
+    {
+        var world = new GameWorld();
+        world.AddPlayer(1, "A");                              // faces +X by default
+        var enemy = world.SpawnEnemy(new Vector3(-50, 0, 0)); // directly behind, but in reach
+
+        world.SetInput(1, new PlayerInput { Attack = true });
+        world.Step();
+
+        Assert.Equal(SimConstants.EnemyMaxHealth, enemy.Health, 3); // untouched — not in front
+    }
+
+    [Fact]
+    public void Attack_hits_only_the_nearest_enemy_in_front()
+    {
+        var world = new GameWorld();
+        world.AddPlayer(1, "A"); // faces +X
+        var near = world.SpawnEnemy(new Vector3(40, 0, 0));
+        var far = world.SpawnEnemy(new Vector3(65, 0, 0)); // also in front and in reach, just farther
+
+        world.SetInput(1, new PlayerInput { Attack = true });
+        world.Step();
+
+        Assert.Equal(SimConstants.EnemyMaxHealth - SimConstants.PlayerAttackDamage, near.Health, 3);
+        Assert.Equal(SimConstants.EnemyMaxHealth, far.Health, 3); // single target: only the nearest
+    }
+
+    [Fact]
+    public void Facing_tracks_the_last_movement_direction()
+    {
+        var world = new GameWorld();
+        var player = world.AddPlayer(1, "A");
+
+        world.SetInput(1, new PlayerInput { MoveX = -1f }); // steer left
+        world.Step();
+
+        Assert.Equal(new Vector3(-1, 0, 0), player.Facing); // now a strike lands to the left, not +X
     }
 
     [Fact]

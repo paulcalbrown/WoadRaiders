@@ -253,12 +253,14 @@ public partial class NetworkClient : Node3D
         // Movement is predicted; damage, loot, and equipment stay server-authoritative.
         _prediction.Predict(input);
 
+        // ReliableOrdered so the server's per-player input buffer receives every input
+        // exactly once, in order — that 1:1 replay is what keeps reconciliation drift-free.
         _server.Send(
             NetProtocol.Frame(MessageType.Input, new InputPacket
             {
                 MoveX = move.X, MoveZ = move.Y, Attack = attack, Sequence = input.Sequence,
             }),
-            Channel, DeliveryMethod.Sequenced);
+            Channel, DeliveryMethod.ReliableOrdered);
     }
 
     private void OnReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)

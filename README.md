@@ -46,9 +46,12 @@ target from `Core`/`Shared`.
 
 ### Networking model
 - Transport: **LiteNetLib 2.x** (reliable UDP). All gameplay traffic on channel 0.
-- `Welcome` / `JoinRequest`: `ReliableOrdered` (must arrive).
-- `Input` / `WorldSnapshot`: `Sequenced` (unreliable, but never delivers a stale packet after a
-  newer one — ideal for high-frequency state).
+- `Welcome` / `JoinRequest` / `Input`: `ReliableOrdered` (must arrive, in order). Input is
+  reliable-ordered so the server's per-player **input buffer** receives every input exactly once,
+  in sequence — it applies one per tick, replaying the client's stream 1:1, so reconciliation
+  introduces ~zero correction (no prediction pop).
+- `WorldSnapshot`: `Sequenced` (unreliable, but never delivers a stale snapshot after a newer one —
+  ideal for high-frequency state).
 - Server steps the simulation at **30 Hz** and broadcasts snapshots at **20 Hz**.
 
 ---
@@ -69,7 +72,8 @@ two in lockstep if you upgrade Godot.
 1. Open the `WoadRaiders.Client` folder in the Godot editor once (it generates the `.godot/`
    import cache), then press **Play**. From the CLI: `godot-mono --path WoadRaiders.Client`.
 2. An orthographic isometric camera eases after you (with directional shadows). **Arrows** move,
-   **Space** attacks (cleave), **I** opens the inventory (**1-9** to equip). You're a **Knight**,
+   **Space** attacks (a frontal melee strike — face your target), **I** opens the inventory
+   (**1-9** to equip). You're a **Knight**,
    other players are **Barbarians**, enemies are **Skeleton Warriors** — all animated KayKit
    characters that face their movement and play idle/run/attack clips (enemies carry billboard
    health bars). Loot spins and glows by rarity. Walls between you and the camera fade out.
@@ -93,14 +97,20 @@ core loop earns it.
 - [x] **Client-side prediction + reconciliation** — implemented in `Core.ClientPrediction`
       (engine-free, unit-tested). The local player applies input instantly and reconciles against
       each snapshot; drift stays ~1–2 ticks. Remote players ease toward their latest snapshot.
+- [x] **Server-side input buffer** — the server buffers each client's inputs and applies exactly
+      one per tick in sequence order (a small jitter cushion; `ServerInputBuffer` in `Core`,
+      unit-tested), replaying the client's stream 1:1 so reconciliation introduces ~zero correction
+      — the drift that caused the visible prediction pop is gone at the source (the smoke test
+      asserts `maxCorrection ≈ 0`). Input is sent `ReliableOrdered` so nothing is lost or reordered.
 - [ ] **Remote interpolation** — buffer timestamped snapshots and render remote players ~100 ms in
-      the past for smoothness (currently a simple ease-toward-latest). Optional refinement: a
-      server-side input queue to erase the last tick of prediction drift.
-- [x] **Combat (first pass)** — server-authoritative melee cleave, enemies with seek/attack AI,
+      the past for smoothness (currently a simple ease-toward-latest).
+- [x] **Combat (first pass)** — server-authoritative directional melee (strike the nearest enemy
+      in front, within reach — not a 360° area sweep), enemies with seek/attack AI,
       damage, enemy death + respawn, player respawn. Logic in `Core`, unit-tested. Client sends only
       the attack intent; the client predicts movement, never damage.
 - [ ] **Combat polish** — directional/aimed attacks, on-screen health bars, downed state + revive,
-      more enemy types, attack telegraphs. (Currently: radius cleave, immediate respawn at origin.)
+      more enemy types, attack telegraphs. (Currently: single-target frontal strike, immediate
+      respawn at origin.)
 - [x] **3D simulation** — `Core` simulates in full 3D world space (`System.Numerics.Vector3`,
       **Y-up**, matching Godot and glTF conventions, so the client maps sim positions 1:1). Dungeon
       shape sits behind the `IDungeonGeometry` seam. Movement input stays 2D ground-plane intent
@@ -128,7 +138,8 @@ core loop earns it.
       sprawling seven-room dungeon built from it — entry hall, pillared great hall, shrine,
       storeroom, barracks, treasury, and a long crypt, joined by looping corridors, with auto-placed
       wall torches, banners, and props (241 floor tiles, 193 collision solids). Enemy density is
-      **map-driven**: the server targets 2 enemies per `EnemySpawn` marker (clamped 4–24). Serve it with
+      **map-driven**: the server targets 1 enemy per `EnemySpawn` marker (clamped 3–10), replenished
+      one every 6 s. Serve it with
       `dotnet run --project WoadRaiders.Server -- --map WoadRaiders.Client/maps/Barrow.json`.
       Kit pieces are on a 4-unit grid, placed under a ×20-scaled `Visuals` node (1 kit tile = 80
       world units); collision boxes and markers are authored in world units as usual.
@@ -145,7 +156,7 @@ core loop earns it.
       names like "Chieftain's Blade"); players auto-collect nearby drops; server-authoritative
       per-player inventory with reliable pickup events; ground loot in snapshots. `Core`, unit-tested.
 - [x] **Equipment & inventory** — equip items (I opens inventory, 1-9 equips); weapon/trinket Power
-      boosts your cleave, armor soaks incoming damage. Equipping is server-validated. `Core`,
+      boosts your strike, armor soaks incoming damage. Equipping is server-validated. `Core`,
       unit-tested. This closes the core loop: kill → loot → equip → hit harder.
 - [ ] **Loot & progression polish** — loot visibility (drops linger/beam before pickup), item
       affixes/multiple stats, character levels/XP, and persistence via PlayFab Economy.

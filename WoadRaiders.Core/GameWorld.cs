@@ -134,9 +134,15 @@ public sealed class GameWorld
 
             // Intent is on the ground plane; the geometry decides the resulting height.
             var move = new Vector3(input.MoveX, 0f, input.MoveZ);
+            var moveLenSq = move.LengthSquared();
             // Guard the zero vector (Normalize → NaN) and cap diagonal speed.
-            if (move.LengthSquared() > 1f)
+            if (moveLenSq > 1f)
                 move = Vector3.Normalize(move);
+
+            // Face where we're steering; hold the last facing while standing still,
+            // so a stationary attack still strikes in a sensible direction.
+            if (moveLenSq > 0.0001f)
+                player.Facing = Vector3.Normalize(move);
 
             player.Velocity = move * SimConstants.PlayerMoveSpeed;
             player.Position = ResolveMove(player.Position, player.Velocity * dt);
@@ -159,13 +165,33 @@ public sealed class GameWorld
             player.AttackCooldown = SimConstants.PlayerAttackCooldown;
             player.AttackAnimRemaining = SimConstants.AttackAnimDuration;
 
-            // Cleave: every enemy within range takes the hit (scaled by gear).
+            // Direct melee: strike the single nearest enemy you're in contact with —
+            // within reach AND in front of you (a frontal arc), not a 360° area sweep.
+            EnemyState? victim = null;
+            var bestSq = float.MaxValue;
             foreach (var enemy in _enemies.Values)
             {
-                if (enemy.IsAlive &&
-                    Vector3.DistanceSquared(player.Position, enemy.Position) <= rangeSq)
-                    enemy.TakeDamage(player.AttackDamage);
+                if (!enemy.IsAlive)
+                    continue;
+
+                var toEnemy = enemy.Position - player.Position;
+                var distSq = toEnemy.LengthSquared();
+                if (distSq > rangeSq)
+                    continue; // out of reach
+
+                // Must be facing the enemy (the zero-distance case counts as "in contact").
+                if (distSq > 0.0001f &&
+                    Vector3.Dot(player.Facing, toEnemy / MathF.Sqrt(distSq)) < SimConstants.PlayerAttackArcDot)
+                    continue; // behind or off to the side
+
+                if (distSq < bestSq)
+                {
+                    bestSq = distSq;
+                    victim = enemy;
+                }
             }
+
+            victim?.TakeDamage(player.AttackDamage);
         }
     }
 

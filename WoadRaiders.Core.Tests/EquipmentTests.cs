@@ -22,11 +22,11 @@ public class EquipmentTests
     }
 
     [Fact]
-    public void Equipped_weapon_deals_more_cleave_damage()
+    public void Equipped_weapon_deals_more_damage()
     {
         var world = new GameWorld(new Random(1));
-        var player = world.AddPlayer(1, "A");
-        var enemy = world.SpawnEnemy(new Vector3(40, 0, 0));
+        var player = world.AddPlayer(1, "A"); // faces +X by default
+        var enemy = world.SpawnEnemy(new Vector3(40, 0, 0)); // in front, in reach
 
         var blade = Make(10, ItemType.Blade, 20);
         player.Inventory.Add(blade);

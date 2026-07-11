@@ -25,8 +25,14 @@ public static class SimConstants
     public const float WorldHalfHeight = 540f;
 
     // --- Combat: player ---
-    /// <summary>Radius of a player's melee "cleave"; every enemy inside is hit.</summary>
-    public const float PlayerAttackRange = 96f;
+    /// <summary>Reach of a player's melee strike; the enemy must be this close AND in front.</summary>
+    public const float PlayerAttackRange = 72f;
+    /// <summary>
+    /// Minimum dot product between the player's facing and the direction to an enemy
+    /// for a strike to connect — enforces direct, frontal contact rather than a 360°
+    /// area sweep. 0.5 ≈ a 120° cone in front (cos 60°). Raise for a tighter arc.
+    /// </summary>
+    public const float PlayerAttackArcDot = 0.5f;
     public const float PlayerAttackDamage = 30f;
     /// <summary>Seconds between player attacks.</summary>
     public const float PlayerAttackCooldown = 0.4f;
@@ -36,9 +42,9 @@ public static class SimConstants
     public const float EnemyMoveSpeed = 140f;
     /// <summary>How close an enemy must be to strike a player.</summary>
     public const float EnemyAttackRange = 44f;
-    public const float EnemyAttackDamage = 6f;
+    public const float EnemyAttackDamage = 3f;
     /// <summary>Seconds between enemy attacks.</summary>
-    public const float EnemyAttackCooldown = 1.0f;
+    public const float EnemyAttackCooldown = 1.5f;
 
     // --- Loot ---
     /// <summary>Chance (0..1) that a slain enemy drops an item.</summary>
