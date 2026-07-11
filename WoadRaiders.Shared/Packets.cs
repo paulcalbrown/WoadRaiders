@@ -64,6 +64,7 @@ public struct PlayerSnapshot : INetSerializable
     public float Z;
     public float Health;
     public uint LastProcessedInput;
+    public bool Attacking;
 
     public void Serialize(NetDataWriter w)
     {
@@ -73,6 +74,7 @@ public struct PlayerSnapshot : INetSerializable
         w.Put(Z);
         w.Put(Health);
         w.Put(LastProcessedInput);
+        w.Put((byte)(Attacking ? 1 : 0));
     }
 
     public void Deserialize(NetDataReader r)
@@ -83,6 +85,7 @@ public struct PlayerSnapshot : INetSerializable
         Z = r.GetFloat();
         Health = r.GetFloat();
         LastProcessedInput = r.GetUInt();
+        Attacking = r.GetByte() != 0;
     }
 }
 
@@ -94,6 +97,7 @@ public struct EnemySnapshot : INetSerializable
     public float Y;
     public float Z;
     public float Health;
+    public bool Attacking;
 
     public void Serialize(NetDataWriter w)
     {
@@ -102,6 +106,7 @@ public struct EnemySnapshot : INetSerializable
         w.Put(Y);
         w.Put(Z);
         w.Put(Health);
+        w.Put((byte)(Attacking ? 1 : 0));
     }
 
     public void Deserialize(NetDataReader r)
@@ -111,6 +116,7 @@ public struct EnemySnapshot : INetSerializable
         Y = r.GetFloat();
         Z = r.GetFloat();
         Health = r.GetFloat();
+        Attacking = r.GetByte() != 0;
     }
 }
 

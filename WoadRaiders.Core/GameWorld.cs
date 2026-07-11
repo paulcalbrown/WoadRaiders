@@ -114,9 +114,15 @@ public sealed class GameWorld
     private void TickCooldowns(float dt)
     {
         foreach (var p in _players.Values)
+        {
             p.AttackCooldown = Math.Max(0f, p.AttackCooldown - dt);
+            p.AttackAnimRemaining = Math.Max(0f, p.AttackAnimRemaining - dt);
+        }
         foreach (var e in _enemies.Values)
+        {
             e.AttackCooldown = Math.Max(0f, e.AttackCooldown - dt);
+            e.AttackAnimRemaining = Math.Max(0f, e.AttackAnimRemaining - dt);
+        }
     }
 
     private void MovePlayers(float dt)
@@ -151,6 +157,7 @@ public sealed class GameWorld
                 continue;
 
             player.AttackCooldown = SimConstants.PlayerAttackCooldown;
+            player.AttackAnimRemaining = SimConstants.AttackAnimDuration;
 
             // Cleave: every enemy within range takes the hit (scaled by gear).
             foreach (var enemy in _enemies.Values)
@@ -194,6 +201,7 @@ public sealed class GameWorld
                     var damage = Math.Max(1f, SimConstants.EnemyAttackDamage - target.DamageReduction);
                     target.TakeDamage(damage);
                     enemy.AttackCooldown = SimConstants.EnemyAttackCooldown;
+                    enemy.AttackAnimRemaining = SimConstants.AttackAnimDuration;
                 }
             }
         }

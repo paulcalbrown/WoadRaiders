@@ -19,6 +19,16 @@ public abstract class Combatant
     /// <summary>Seconds remaining until this combatant may attack again.</summary>
     public float AttackCooldown;
 
+    /// <summary>
+    /// Seconds remaining in the current attack animation. Set when an attack
+    /// lands, ticked down each step, and broadcast so clients play the attack
+    /// clip for this combatant (presentation only — never affects the sim).
+    /// </summary>
+    public float AttackAnimRemaining;
+
+    /// <summary>True while the attack animation should be playing.</summary>
+    public bool IsAttacking => AttackAnimRemaining > 0f;
+
     public bool IsAlive => Health > 0f;
 
     protected Combatant(int id, float maxHealth)

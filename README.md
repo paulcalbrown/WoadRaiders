@@ -69,9 +69,10 @@ two in lockstep if you upgrade Godot.
 1. Open the `WoadRaiders.Client` folder in the Godot editor once (it generates the `.godot/`
    import cache), then press **Play**. From the CLI: `godot-mono --path WoadRaiders.Client`.
 2. An orthographic isometric camera eases after you (with directional shadows). **Arrows** move,
-   **Space** attacks (cleave), **I** opens the inventory (**1-9** to equip). You're the blue
-   capsule; other players are green; enemies are orange with billboard health bars; loot spins,
-   bobs, and glows by rarity. Walls between you and the camera fade out so you're never hidden.
+   **Space** attacks (cleave), **I** opens the inventory (**1-9** to equip). You're a **Knight**,
+   other players are **Barbarians**, enemies are **Skeleton Warriors** — all animated KayKit
+   characters that face their movement and play idle/run/attack clips (enemies carry billboard
+   health bars). Loot spins and glows by rarity. Walls between you and the camera fade out.
 
 ### 3. A two-player local test
 Start the server, then launch **two** client instances (Godot editor "Play" + an exported build,
@@ -131,6 +132,11 @@ core loop earns it.
       `dotnet run --project WoadRaiders.Server -- --map WoadRaiders.Client/maps/Barrow.json`.
       Kit pieces are on a 4-unit grid, placed under a ×20-scaled `Visuals` node (1 kit tile = 80
       world units); collision boxes and markers are authored in world units as usual.
+- [x] **Animated characters** — players and enemies are rigged KayKit characters (Knight,
+      Barbarian, Skeleton Warrior) at `addons/kaykit_character_pack_{adventures,skeletons}`. They
+      face their movement direction and play **idle / run / attack** clips. Facing and movement are
+      derived client-side from motion; the attack clip is driven by an authoritative `Attacking`
+      flag on the snapshot (set when an attack lands, ticked down, broadcast).
 - [ ] **Dungeon content & depth** — more maps and kit variety; BepuPhysics for non-box collision
       and DotRecast navmesh for smarter AI pathing, all behind `IDungeonGeometry`.
 - [ ] **Gauntlet-style dungeons** — enemy generators (destroy to stop the horde), an exit/portal to

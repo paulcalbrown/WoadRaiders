@@ -223,6 +223,7 @@ public sealed class GameServer
                 Z = p.Position.Z,
                 Health = p.Health,
                 LastProcessedInput = p.LastProcessedInput,
+                Attacking = p.IsAttacking,
             }).ToArray(),
             Enemies = _world.Enemies.Values.Select(e => new EnemySnapshot
             {
@@ -231,6 +232,7 @@ public sealed class GameServer
                 Y = e.Position.Y,
                 Z = e.Position.Z,
                 Health = e.Health,
+                Attacking = e.IsAttacking,
             }).ToArray(),
             GroundItems = _world.GroundItems.Values.Select(g => new GroundItemSnapshot
             {

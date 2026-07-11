@@ -85,6 +85,24 @@ public class CombatTests
     }
 
     [Fact]
+    public void Attacking_sets_then_clears_the_animation_flag()
+    {
+        var world = new GameWorld();
+        var player = world.AddPlayer(1, "A");
+
+        world.SetInput(1, new PlayerInput { Attack = true });
+        world.Step();
+        Assert.True(player.IsAttacking); // flag raised on the swing
+
+        world.SetInput(1, new PlayerInput { Attack = false });
+        var ticks = (int)System.Math.Ceiling(SimConstants.AttackAnimDuration / SimConstants.TickDelta) + 1;
+        for (var i = 0; i < ticks; i++)
+            world.Step();
+
+        Assert.False(player.IsAttacking); // and lowered after the window
+    }
+
+    [Fact]
     public void Dead_player_respawns_at_full_health()
     {
         var world = new GameWorld();

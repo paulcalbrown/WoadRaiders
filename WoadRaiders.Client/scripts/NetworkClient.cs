@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Godot;
 using LiteNetLib;
@@ -11,9 +12,9 @@ using CoreAabb = WoadRaiders.Core.Aabb;  // disambiguate from Godot.Aabb
 ///
 /// The simulation is fully 3D (System.Numerics, Y-up) — the same convention as
 /// Godot, so sim positions map to the scene 1:1. An orthographic camera at a
-/// fixed isometric angle eases after the local player. Characters are capsules,
-/// the dungeon is MultiMesh floor/walls with shadows, loot gems spin, and
-/// enemies carry billboard health bars.
+/// fixed isometric angle eases after the local player. Players and enemies are
+/// animated KayKit characters that face their movement and play idle/run/attack
+/// clips; the dungeon renders its authored scene; loot gems spin.
 ///
 /// Arrows move · Space attacks · walk over loot · I = inventory · 1-9 = equip.
 /// </summary>
@@ -24,14 +25,20 @@ public partial class NetworkClient : Node3D
     private const float CameraSmoothing = 8f;
 
     // 3D layout (world units == sim units).
-    private const float EntityY = 22f;     // half the capsule height, so feet rest on the floor
+    private const float BodyHeight = 22f;  // approx body-centre height, for camera/fade reference
     private const float LootY = 14f;
     private static readonly Vector3 CameraOffset = new(600f, 700f, 600f); // 45° yaw, ~40° pitch
     private const float CameraOrthoSize = 720f;
 
-    private static readonly Color LocalColor = Colors.SkyBlue;
-    private static readonly Color RemoteColor = Colors.SeaGreen;
-    private static readonly Color EnemyColor = Colors.OrangeRed;
+    // Characters (KayKit models are ~2.47 units tall → ~20x to reach ~49 world units).
+    private const float CharScale = 20f;
+    private const float HealthBarHeight = 54f;      // above the character's head
+    private const float MoveAnimSpeed = 25f;        // units/s at/above which the run clip plays
+    private const float TurnSpeed = 14f;            // facing lerp rate
+    private const float ModelYawOffset = 0f;  // KayKit chars face +Z (glTF convention); flip to Mathf.Pi if they moonwalk
+    private const string AnimIdle = "Idle";
+    private const string AnimRun = "Running_A";
+    private const string AnimAttack = "1H_Melee_Attack_Chop";
 
     private EventBasedNetListener _listener = null!;
     private NetManager _net = null!;
@@ -48,11 +55,15 @@ public partial class NetworkClient : Node3D
     private bool _cameraInitialised;
     private SysVec3 _prevTickPos;    // predicted position at the previous fixed tick
     private SysVec3 _localRenderPos; // interpolated position actually drawn this frame
+    private float _localAttackAnim;      // predicted attack-anim window, so the swing is instant
+    private float _localAttackCooldown;  // predicted attack cooldown, mirrors the server's cadence
 
     private Camera3D _camera = null!;
-    private CapsuleMesh _entityMesh = null!;
     private BoxMesh _lootMesh = null!;
     private QuadMesh _barMesh = null!;
+    private PackedScene _localCharScene = null!;
+    private PackedScene _remoteCharScene = null!;
+    private PackedScene _enemyCharScene = null!;
 
     private MultiMesh? _wallMulti;
     private Vector3[] _wallMins = System.Array.Empty<Vector3>();
@@ -62,9 +73,9 @@ public partial class NetworkClient : Node3D
     private const float FadeMinHeight = 35f; // meshes whose top is below this never fade (floors)
     private readonly List<(GeometryInstance3D Node, Vector3 Min, Vector3 Max)> _fadeMeshes = new();
 
-    private readonly Dictionary<int, MeshInstance3D> _playerViews = new();
+    private readonly Dictionary<int, CharacterView> _playerViews = new();
     private readonly Dictionary<int, Vector3> _remoteTargets = new();
-    private readonly Dictionary<int, MeshInstance3D> _enemyViews = new();
+    private readonly Dictionary<int, CharacterView> _enemyViews = new();
     private readonly Dictionary<int, Vector3> _enemyTargets = new();
     private readonly Dictionary<int, MeshInstance3D> _lootViews = new();
     private readonly Dictionary<int, Vector3> _lootBase = new(); // ground point each gem bobs above
@@ -77,6 +88,19 @@ public partial class NetworkClient : Node3D
 
     private Label _hud = null!;
     private Label _invPanel = null!;
+
+    /// <summary>An animated character: a positioned holder, a facing pivot, and its AnimationPlayer.</summary>
+    private sealed class CharacterView
+    {
+        public Node3D Root = null!;        // world position (never rotated → billboard bars stay upright)
+        public Node3D Pivot = null!;       // yaw rotation for facing
+        public AnimationPlayer? Anim;
+        public MeshInstance3D? HealthFill; // enemies only
+        public Vector3 LastPos;
+        public string Clip = "";
+        public float Yaw;
+        public bool Attacking;
+    }
 
     public override void _Ready()
     {
@@ -101,9 +125,14 @@ public partial class NetworkClient : Node3D
 
     private void SetupScene()
     {
-        _entityMesh = new CapsuleMesh { Radius = 12f, Height = 44f };
         _lootMesh = new BoxMesh { Size = new Vector3(16, 16, 16) };
         _barMesh = new QuadMesh { Size = new Vector2(40, 6) };
+
+        const string adv = "res://addons/kaykit_character_pack_adventures/Characters/gltf";
+        const string skel = "res://addons/kaykit_character_pack_skeletons/Characters/gltf";
+        _localCharScene = GD.Load<PackedScene>($"{adv}/Knight.glb");
+        _remoteCharScene = GD.Load<PackedScene>($"{adv}/Barbarian.glb");
+        _enemyCharScene = GD.Load<PackedScene>($"{skel}/Skeleton_Warrior.glb");
 
         _camera = new Camera3D
         {
@@ -205,6 +234,17 @@ public partial class NetworkClient : Node3D
         var attack = Input.IsActionPressed("ui_accept"); // Space / Enter
         var input = new PlayerInput { MoveX = move.X, MoveZ = move.Y, Attack = attack, Sequence = ++_inputSequence };
 
+        // Predict our own attack animation so the swing is instant (everyone else plays
+        // theirs from the authoritative snapshot flag). Mirror the server's cooldown so we
+        // trigger at the same cadence it will.
+        _localAttackCooldown = Mathf.Max(0f, _localAttackCooldown - SimConstants.TickDelta);
+        _localAttackAnim = Mathf.Max(0f, _localAttackAnim - SimConstants.TickDelta);
+        if (attack && _localAttackCooldown <= 0f)
+        {
+            _localAttackAnim = SimConstants.AttackAnimDuration;
+            _localAttackCooldown = SimConstants.PlayerAttackCooldown;
+        }
+
         // Movement is predicted; damage, loot, and equipment stay server-authoritative.
         _prediction.Predict(input);
 
@@ -276,8 +316,9 @@ public partial class NetworkClient : Node3D
         foreach (var p in snapshot.Players)
         {
             seenPlayers.Add(p.Id);
-            var pos = new Vector3(p.X, p.Y + EntityY, p.Z);
-            GetOrCreatePlayerView(p.Id, pos);
+            var feet = new Vector3(p.X, p.Y, p.Z);
+            var view = GetOrCreatePlayerView(p.Id, feet);
+            view.Attacking = p.Attacking;
 
             if (p.Id == _localPlayerId)
             {
@@ -286,7 +327,7 @@ public partial class NetworkClient : Node3D
             }
             else
             {
-                _remoteTargets[p.Id] = pos;
+                _remoteTargets[p.Id] = feet;
             }
         }
         Prune(_playerViews, seenPlayers, _remoteTargets);
@@ -295,9 +336,10 @@ public partial class NetworkClient : Node3D
         foreach (var e in snapshot.Enemies)
         {
             seenEnemies.Add(e.Id);
-            var pos = new Vector3(e.X, e.Y + EntityY, e.Z);
-            var view = GetOrCreateEnemyView(e.Id, pos);
-            _enemyTargets[e.Id] = pos;
+            var feet = new Vector3(e.X, e.Y, e.Z);
+            var view = GetOrCreateEnemyView(e.Id, feet);
+            view.Attacking = e.Attacking;
+            _enemyTargets[e.Id] = feet;
             UpdateHealthBar(view, Mathf.Clamp(e.Health / SimConstants.EnemyMaxHealth, 0f, 1f));
         }
         Prune(_enemyViews, seenEnemies, _enemyTargets);
@@ -310,7 +352,7 @@ public partial class NetworkClient : Node3D
             _lootBase[g.Id] = ground;
             GetOrCreateLootView(g.Id, g.Rarity, ground + Vector3.Up * LootY);
         }
-        Prune(_lootViews, seenLoot, _lootBase);
+        PruneLoot(seenLoot);
     }
 
     private void UpdateViews(double delta)
@@ -324,32 +366,72 @@ public partial class NetworkClient : Node3D
                 // Interpolate between the last two fixed ticks so 30 Hz motion renders smoothly.
                 var alpha = Mathf.Clamp((float)(_tickAccumulator / SimConstants.TickDelta), 0f, 1f);
                 _localRenderPos = SysVec3.Lerp(_prevTickPos, _prediction.Position, alpha);
-                view.Position = ToGodot(_localRenderPos) + Vector3.Up * EntityY;
+                view.Root.Position = ToGodot(_localRenderPos);
+                view.Attacking = _localAttackAnim > 0f; // predicted (instant), not the snapshot flag
             }
             else if (_remoteTargets.TryGetValue(id, out var target))
             {
-                view.Position = view.Position.Lerp(target, factor);
+                view.Root.Position = view.Root.Position.Lerp(target, factor);
             }
+            AnimateCharacter(view, delta);
         }
 
         foreach (var (id, view) in _enemyViews)
+        {
             if (_enemyTargets.TryGetValue(id, out var target))
-                view.Position = view.Position.Lerp(target, factor);
+                view.Root.Position = view.Root.Position.Lerp(target, factor);
+            AnimateCharacter(view, delta);
+        }
 
         // Loot gems spin and bob so drops catch the eye.
         var bob = Mathf.Sin((float)_elapsed * 3f) * 4f;
-        foreach (var (id, view) in _lootViews)
+        foreach (var (lid, lview) in _lootViews)
         {
-            if (_lootBase.TryGetValue(id, out var ground))
-                view.Position = ground + Vector3.Up * (LootY + bob);
-            view.RotateY((float)delta * 2f);
+            if (_lootBase.TryGetValue(lid, out var ground))
+                lview.Position = ground + Vector3.Up * (LootY + bob);
+            lview.RotateY((float)delta * 2f);
         }
     }
+
+    // Faces the character along its movement and plays idle/run/attack. Replaying a
+    // clip once it finishes makes every clip loop without touching import settings.
+    private void AnimateCharacter(CharacterView view, double delta)
+    {
+        var pos = view.Root.Position;
+        var flat = new Vector3(pos.X - view.LastPos.X, 0f, pos.Z - view.LastPos.Z);
+        var speed = flat.Length() / Mathf.Max((float)delta, 0.0001f);
+        view.LastPos = pos;
+
+        var moving = speed > MoveAnimSpeed;
+        if (moving && flat.LengthSquared() > 0.0001f)
+        {
+            var targetYaw = Mathf.Atan2(flat.X, flat.Z) + ModelYawOffset;
+            view.Yaw = Mathf.LerpAngle(view.Yaw, targetYaw, Mathf.Clamp((float)delta * TurnSpeed, 0f, 1f));
+            view.Pivot.Rotation = new Vector3(0f, view.Yaw, 0f);
+        }
+
+        if (view.Anim is null)
+            return;
+
+        var desired = view.Attacking ? AnimAttack : moving ? AnimRun : AnimIdle;
+        if (desired != view.Clip || !view.Anim.IsPlaying())
+        {
+            view.Anim.SpeedScale = desired == AnimAttack ? AttackSpeedScale(view.Anim) : 1f;
+            view.Anim.Play(desired);
+            view.Clip = desired;
+        }
+    }
+
+    // Speed the attack clip so its full swing fits the authoritative attack window.
+    private static float AttackSpeedScale(AnimationPlayer anim) =>
+        anim.HasAnimation(AnimAttack)
+            ? (float)anim.GetAnimation(AnimAttack).Length / SimConstants.AttackAnimDuration
+            : 1f;
 
     private void UpdateCamera(double delta)
     {
         var target = _prediction is not null
-            ? ToGodot(_localRenderPos) // follow the smoothed render position (feet)
+            ? ToGodot(_localRenderPos) + Vector3.Up * BodyHeight // follow the smoothed render position
             : Vector3.Zero;
 
         // Smooth the LOOK-TARGET (not the camera position) and keep the camera at a fixed
@@ -405,8 +487,8 @@ public partial class NetworkClient : Node3D
         return 0;
     }
 
-    // Hand-crafted maps render their own scene; procedural (or missing scene) maps
-    // fall back to placeholder boxes built from the collision solids.
+    // Hand-crafted maps render their own scene; a missing scene falls back to
+    // placeholder boxes built from the collision solids.
     private void BuildDungeonVisuals()
     {
         if (TryLoadAuthoredScene())
@@ -484,8 +566,6 @@ public partial class NetworkClient : Node3D
             _wallMulti.SetInstanceColor(i, Colors.White); // white = full stone texture; alpha = fade
         }
 
-        // WallMaterial is textured stone; VertexColorUseAsAlbedo lets each instance's alpha fade it
-        // when it would occlude the player, and AlphaHash writes depth so solid walls never mis-sort.
         AddChild(new MultiMeshInstance3D { Multimesh = _wallMulti, MaterialOverride = WallMaterial() });
     }
 
@@ -496,7 +576,7 @@ public partial class NetworkClient : Node3D
         if (_prediction is null)
             return;
 
-        var player = ToGodot(_localRenderPos) + Vector3.Up * EntityY;
+        var player = ToGodot(_localRenderPos) + Vector3.Up * BodyHeight;
 
         if (_wallMulti is not null)
         {
@@ -518,7 +598,6 @@ public partial class NetworkClient : Node3D
         const float fadeRadius = 55f;
         const float fadedAlpha = 0.18f;
 
-        // Closest point on the box to the player, so long walls fade correctly.
         var closest = player.Clamp(boxMin, boxMax);
         var v = closest - player;
         var along = v.Dot(camDir);
@@ -551,8 +630,6 @@ public partial class NetworkClient : Node3D
         albedoSeed: 3, normalSeed: 4,
         dark: new Color(0.06f, 0.06f, 0.09f), light: new Color(0.20f, 0.19f, 0.25f), fadeable: true);
 
-    // Procedural stone: color-ramped noise albedo + a noise normal map, projected with world-space
-    // triplanar so it reads as one continuous rock surface across all tiles (no per-tile seams).
     private static StandardMaterial3D StoneMaterial(int albedoSeed, int normalSeed, Color dark, Color light, bool fadeable)
     {
         var ramp = new Gradient();
@@ -590,64 +667,91 @@ public partial class NetworkClient : Node3D
         return material;
     }
 
-    private MeshInstance3D GetOrCreatePlayerView(int id, Vector3 spawn)
+    private CharacterView GetOrCreatePlayerView(int id, Vector3 feet)
     {
         if (_playerViews.TryGetValue(id, out var existing))
             return existing;
 
-        var view = new MeshInstance3D
-        {
-            Mesh = _entityMesh,
-            Position = spawn, // snap to the real spot so it doesn't lerp in from the origin
-            MaterialOverride = new StandardMaterial3D { AlbedoColor = id == _localPlayerId ? LocalColor : RemoteColor },
-        };
-        AddChild(view);
+        var scene = id == _localPlayerId ? _localCharScene : _remoteCharScene;
+        var view = CreateCharacter(scene, feet, withHealthBar: false);
         _playerViews[id] = view;
         return view;
     }
 
-    private MeshInstance3D GetOrCreateEnemyView(int id, Vector3 spawn)
+    private CharacterView GetOrCreateEnemyView(int id, Vector3 feet)
     {
         if (_enemyViews.TryGetValue(id, out var existing))
             return existing;
 
-        var view = new MeshInstance3D
-        {
-            Mesh = _entityMesh,
-            Position = spawn, // snap to the real spot so it doesn't lerp in from the origin
-            MaterialOverride = new StandardMaterial3D { AlbedoColor = EnemyColor },
-        };
-        AddChild(view);
-        AttachHealthBar(view);
+        var view = CreateCharacter(_enemyCharScene, feet, withHealthBar: true);
         _enemyViews[id] = view;
         return view;
     }
 
-    private void AttachHealthBar(MeshInstance3D enemy)
+    private CharacterView CreateCharacter(PackedScene scene, Vector3 feet, bool withHealthBar)
+    {
+        var holder = new Node3D { Position = feet }; // snap to real spot (no lerp-in from origin)
+        var pivot = new Node3D();
+        var model = scene.Instantiate<Node3D>();
+        model.Scale = Vector3.One * CharScale;
+        pivot.AddChild(model);
+        holder.AddChild(pivot);
+        AddChild(holder);
+
+        var view = new CharacterView
+        {
+            Root = holder,
+            Pivot = pivot,
+            Anim = FindAnimPlayer(model),
+            LastPos = feet,
+        };
+        if (view.Anim is not null)
+        {
+            view.Anim.Play(AnimIdle);
+            view.Clip = AnimIdle;
+        }
+        if (withHealthBar)
+            view.HealthFill = AttachHealthBar(holder);
+        return view;
+    }
+
+    private static AnimationPlayer? FindAnimPlayer(Node node)
+    {
+        if (node is AnimationPlayer ap)
+            return ap;
+        foreach (var child in node.GetChildren())
+            if (FindAnimPlayer(child) is { } found)
+                return found;
+        return null;
+    }
+
+    private MeshInstance3D AttachHealthBar(Node3D holder)
     {
         var bg = new MeshInstance3D
         {
             Mesh = _barMesh,
-            Position = new Vector3(0, 34, 0),
+            Position = new Vector3(0, HealthBarHeight, 0),
             MaterialOverride = BarMaterial(new Color(0.05f, 0.05f, 0.05f)),
         };
-        enemy.AddChild(bg);
+        holder.AddChild(bg);
 
         var fill = new MeshInstance3D
         {
-            Name = "HealthFill",
             Mesh = _barMesh,
-            Position = new Vector3(0, 34, 0.2f),
+            Position = new Vector3(0, HealthBarHeight, 0.2f),
             MaterialOverride = BarMaterial(Colors.LimeGreen),
         };
-        enemy.AddChild(fill);
+        holder.AddChild(fill);
+        return fill;
     }
 
-    private static void UpdateHealthBar(MeshInstance3D enemy, float frac)
+    private static void UpdateHealthBar(CharacterView view, float frac)
     {
-        var fill = enemy.GetNode<MeshInstance3D>("HealthFill");
-        fill.Scale = new Vector3(frac, 1f, 1f);
-        ((StandardMaterial3D)fill.MaterialOverride).AlbedoColor = new Color(0.9f, 0.2f, 0.2f).Lerp(Colors.LimeGreen, frac);
+        if (view.HealthFill is null)
+            return;
+        view.HealthFill.Scale = new Vector3(frac, 1f, 1f);
+        ((StandardMaterial3D)view.HealthFill.MaterialOverride).AlbedoColor =
+            new Color(0.9f, 0.2f, 0.2f).Lerp(Colors.LimeGreen, frac);
     }
 
     private static StandardMaterial3D BarMaterial(Color color) => new()
@@ -681,16 +785,28 @@ public partial class NetworkClient : Node3D
         return view;
     }
 
-    private static void Prune(Dictionary<int, MeshInstance3D> views, HashSet<int> seen,
+    private static void Prune(Dictionary<int, CharacterView> views, HashSet<int> seen,
                               Dictionary<int, Vector3>? targets = null)
     {
         foreach (var id in new List<int>(views.Keys))
         {
             if (seen.Contains(id))
                 continue;
-            views[id].QueueFree();
+            views[id].Root.QueueFree();
             views.Remove(id);
             targets?.Remove(id);
+        }
+    }
+
+    private void PruneLoot(HashSet<int> seen)
+    {
+        foreach (var id in new List<int>(_lootViews.Keys))
+        {
+            if (seen.Contains(id))
+                continue;
+            _lootViews[id].QueueFree();
+            _lootViews.Remove(id);
+            _lootBase.Remove(id);
         }
     }
 

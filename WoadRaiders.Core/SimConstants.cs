@@ -51,6 +51,9 @@ public static class SimConstants
     /// <summary>Each point of equipped armor Power soaks this much of every incoming hit.</summary>
     public const float ArmorDamageReductionPerPower = 0.1f;
 
+    /// <summary>How long the attack animation flag stays set after an attack lands.</summary>
+    public const float AttackAnimDuration = 0.6f;
+
     // --- Character collision (vertical cylinder approximation) ---
     /// <summary>Character body radius on the XZ plane.</summary>
     public const float CharacterRadius = 14f;
