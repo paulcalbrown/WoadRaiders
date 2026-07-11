@@ -30,6 +30,21 @@ public partial class NetworkClient : Node3D
     private static readonly Vector3 CameraOffset = new(600f, 700f, 600f); // 45° yaw, ~40° pitch
     private const float CameraOrthoSize = 600f; // ortho view height in world units at the 1080 base; lower = more zoomed in
 
+    // Top-of-screen player health bar (pixels at the 1080 render base).
+    private const float HudBarWidth = 460f;
+    private const float HudBarHeight = 30f;
+    private const float HudBarMargin = 18f; // gap from the top edge
+    private const float HudBarPad = 3f;     // dark frame thickness around the fill
+
+    // Damage-chip trail (shared by the HUD bar and the enemy billboard bars).
+    private const float EnemyBarWidth = 40f;     // matches _barMesh width
+    private const float ChipDrainRate = 0.8f;    // health-fraction per second the chip drains after a hit
+    private const float ChipHoldTime = 0.35f;    // seconds the chip lingers at the pre-hit level first
+
+    // World-space "screen right" for the fixed iso camera (= Camera3D basis.X = up × viewZ).
+    // The billboarded bars scale along this axis, so we also shift along it to left-anchor them.
+    private static readonly Vector3 BillboardRight = Vector3.Up.Cross(CameraOffset.Normalized()).Normalized();
+
     // Characters (KayKit models are ~2.47 units tall → ~20x to reach ~49 world units).
     private const float CharScale = 20f;
     private const float HealthBarHeight = 54f;      // above the character's head
@@ -92,6 +107,11 @@ public partial class NetworkClient : Node3D
 
     private Label _hud = null!;
     private Label _invPanel = null!;
+    private ColorRect _healthBarChip = null!;
+    private ColorRect _healthBarFill = null!;
+    private Label _healthBarLabel = null!;
+    private float _hudChipFrac = 1f;
+    private float _hudChipHold;
 
     /// <summary>An animated character: a positioned holder, a facing pivot, and its AnimationPlayer.</summary>
     private sealed class CharacterView
@@ -100,6 +120,10 @@ public partial class NetworkClient : Node3D
         public Node3D Pivot = null!;       // yaw rotation for facing
         public AnimationPlayer? Anim;
         public MeshInstance3D? HealthFill; // enemies only
+        public MeshInstance3D? HealthChip; // enemies only — the lagging "recently lost" trail
+        public float HealthFrac = 1f;      // current authoritative health (target for fill + chip)
+        public float ChipFrac = 1f;        // lagging fraction the chip drains toward HealthFrac
+        public float ChipHold;             // seconds to linger before the chip starts draining
         public Vector3 LastPos;
         public Vector3 SmoothVel;          // low-passed velocity used for facing (kills reconcile twitch)
         public string Clip = "";
@@ -182,6 +206,46 @@ public partial class NetworkClient : Node3D
         canvas.AddChild(_hud);
         _invPanel = new Label { Position = new Vector2(16, 44), Visible = false };
         canvas.AddChild(_invPanel);
+
+        // Player health bar, centred along the top edge. Anchored to the top-centre
+        // so it holds its place as the window scales (stretch mode = viewport).
+        var barBg = new ColorRect
+        {
+            Color = new Color(0.08f, 0.08f, 0.10f, 0.85f), // dark frame / empty track
+            MouseFilter = Control.MouseFilterEnum.Ignore,   // never intercept input
+            AnchorLeft = 0.5f, AnchorRight = 0.5f, AnchorTop = 0f, AnchorBottom = 0f,
+            OffsetLeft = -HudBarWidth / 2f, OffsetRight = HudBarWidth / 2f,
+            OffsetTop = HudBarMargin, OffsetBottom = HudBarMargin + HudBarHeight,
+        };
+        canvas.AddChild(barBg);
+
+        // Chip first so it sits behind the fill: it shows in the gap the shrinking
+        // fill leaves, marking health just lost, then drains down to meet the fill.
+        _healthBarChip = new ColorRect
+        {
+            Color = new Color(0.95f, 0.9f, 0.55f, 0.95f), // pale "recently lost" trail
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Position = new Vector2(HudBarPad, HudBarPad),
+            Size = new Vector2(HudBarWidth - 2 * HudBarPad, HudBarHeight - 2 * HudBarPad),
+        };
+        barBg.AddChild(_healthBarChip);
+
+        _healthBarFill = new ColorRect
+        {
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Position = new Vector2(HudBarPad, HudBarPad),
+            Size = new Vector2(HudBarWidth - 2 * HudBarPad, HudBarHeight - 2 * HudBarPad),
+        };
+        barBg.AddChild(_healthBarFill);
+
+        _healthBarLabel = new Label
+        {
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Size = new Vector2(HudBarWidth, HudBarHeight),
+        };
+        barBg.AddChild(_healthBarLabel); // added after the fill → drawn on top
     }
 
     public override void _Process(double delta)
@@ -204,7 +268,7 @@ public partial class NetworkClient : Node3D
         UpdateViews(delta);
         UpdateWallFade();
         UpdateCamera(delta);
-        UpdateHud();
+        UpdateHud(delta);
     }
 
     public override void _Input(InputEvent @event)
@@ -329,6 +393,7 @@ public partial class NetworkClient : Node3D
 
             if (p.Id == _localPlayerId)
             {
+                if (p.Health < _localHealth) _hudChipHold = ChipHoldTime; // took a hit → linger the chip
                 _localHealth = p.Health; // authoritative, never predicted
                 if (_prediction is not null)
                 {
@@ -354,7 +419,10 @@ public partial class NetworkClient : Node3D
             var view = GetOrCreateEnemyView(e.Id, feet);
             view.Attacking = e.Attacking;
             _enemyTargets[e.Id] = feet;
-            UpdateHealthBar(view, Mathf.Clamp(e.Health / SimConstants.EnemyMaxHealth, 0f, 1f));
+
+            var frac = Mathf.Clamp(e.Health / SimConstants.EnemyMaxHealth, 0f, 1f);
+            if (frac < view.HealthFrac) view.ChipHold = ChipHoldTime; // took a hit → linger the chip
+            view.HealthFrac = frac; // fill + chip are rendered per-frame in UpdateEnemyBar
         }
         Prune(_enemyViews, seenEnemies, _enemyTargets);
 
@@ -400,6 +468,7 @@ public partial class NetworkClient : Node3D
             if (_enemyTargets.TryGetValue(id, out var target))
                 view.Root.Position = view.Root.Position.Lerp(target, factor);
             AnimateCharacter(view, delta);
+            UpdateEnemyBar(view, (float)delta);
         }
 
         // Loot gems spin and bob so drops catch the eye.
@@ -475,13 +544,22 @@ public partial class NetworkClient : Node3D
         _camera.LookAt(_cameraTarget, Vector3.Up);
     }
 
-    private void UpdateHud()
+    private void UpdateHud(double delta)
     {
         var attack = SimConstants.PlayerAttackDamage + PowerOf(_equippedWeaponId) + PowerOf(_equippedTrinketId);
         var reduction = PowerOf(_equippedArmorId) * SimConstants.ArmorDamageReductionPerPower;
 
-        _hud.Text = $"HP {Mathf.RoundToInt(_localHealth)}/{Mathf.RoundToInt(SimConstants.PlayerMaxHealth)}   " +
-                    $"Items {_inventory.Count}   Atk {attack:0}   Armor {reduction:0.0}   " +
+        // Top-of-screen health bar: the fill snaps to current health; the chip behind
+        // it lingers then drains, so a hit leaves a brief pale trail of what was lost.
+        var frac = Mathf.Clamp(_localHealth / SimConstants.PlayerMaxHealth, 0f, 1f);
+        AdvanceChip(ref _hudChipFrac, ref _hudChipHold, frac, (float)delta);
+        var inner = HudBarHeight - 2 * HudBarPad;
+        _healthBarChip.Size = new Vector2((HudBarWidth - 2 * HudBarPad) * _hudChipFrac, inner);
+        _healthBarFill.Size = new Vector2((HudBarWidth - 2 * HudBarPad) * frac, inner);
+        _healthBarFill.Color = Color.FromHsv(0.33f * frac, 0.75f, 0.8f); // green when full → red when low
+        _healthBarLabel.Text = $"{Mathf.RoundToInt(_localHealth)} / {Mathf.RoundToInt(SimConstants.PlayerMaxHealth)}";
+
+        _hud.Text = $"Items {_inventory.Count}   Atk {attack:0}   Armor {reduction:0.0}   " +
                     "[I] inventory   [Space] attack";
 
         if (_inventoryOpen)
@@ -735,7 +813,7 @@ public partial class NetworkClient : Node3D
             view.Clip = AnimIdle;
         }
         if (withHealthBar)
-            view.HealthFill = AttachHealthBar(holder);
+            AttachHealthBar(holder, view);
         return view;
     }
 
@@ -749,7 +827,7 @@ public partial class NetworkClient : Node3D
         return null;
     }
 
-    private MeshInstance3D AttachHealthBar(Node3D holder)
+    private void AttachHealthBar(Node3D holder, CharacterView view)
     {
         var bg = new MeshInstance3D
         {
@@ -759,6 +837,16 @@ public partial class NetworkClient : Node3D
         };
         holder.AddChild(bg);
 
+        // Chip sits between the track and the fill; it lingers where the fill was,
+        // marking freshly-lost health, then drains down to meet it.
+        var chip = new MeshInstance3D
+        {
+            Mesh = _barMesh,
+            Position = new Vector3(0, HealthBarHeight, 0.1f),
+            MaterialOverride = BarMaterial(new Color(0.95f, 0.9f, 0.55f)), // pale trail
+        };
+        holder.AddChild(chip);
+
         var fill = new MeshInstance3D
         {
             Mesh = _barMesh,
@@ -766,16 +854,54 @@ public partial class NetworkClient : Node3D
             MaterialOverride = BarMaterial(Colors.LimeGreen),
         };
         holder.AddChild(fill);
-        return fill;
+
+        view.HealthChip = chip;
+        view.HealthFill = fill;
     }
 
-    private static void UpdateHealthBar(CharacterView view, float frac)
+    // Per-frame: drain the chip toward current health, then place both bars.
+    private static void UpdateEnemyBar(CharacterView view, float delta)
     {
         if (view.HealthFill is null)
             return;
-        view.HealthFill.Scale = new Vector3(frac, 1f, 1f);
+
+        AdvanceChip(ref view.ChipFrac, ref view.ChipHold, view.HealthFrac, delta);
+
+        PlaceBar(view.HealthChip, view.ChipFrac, 0.1f);
+        PlaceBar(view.HealthFill, view.HealthFrac, 0.2f);
         ((StandardMaterial3D)view.HealthFill.MaterialOverride).AlbedoColor =
-            new Color(0.9f, 0.2f, 0.2f).Lerp(Colors.LimeGreen, frac);
+            new Color(0.9f, 0.2f, 0.2f).Lerp(Colors.LimeGreen, view.HealthFrac);
+    }
+
+    // Scale a billboard bar to its fraction and left-anchor it. The quad billboards
+    // (keep-scale), so its width shrinks along the camera's right axis; shifting the
+    // centre left along that SAME axis by half the lost width keeps the left edge fixed
+    // and drains from the right, like the HUD bar. (A world-X shift skews diagonally and
+    // reads as a detached second bar.)
+    private static void PlaceBar(MeshInstance3D? bar, float frac, float z)
+    {
+        if (bar is null)
+            return;
+        frac = Mathf.Clamp(frac, 0f, 1f);
+        bar.Scale = new Vector3(Mathf.Max(frac, 0.001f), 1f, 1f);
+        bar.Position = new Vector3(0f, HealthBarHeight, z) - EnemyBarWidth * (1f - frac) / 2f * BillboardRight;
+    }
+
+    // Chip easing shared by the HUD and enemy bars: snap up on heal, else linger
+    // (ChipHold) at the pre-hit level and then drain down to the current health.
+    private static void AdvanceChip(ref float chipFrac, ref float chipHold, float target, float delta)
+    {
+        if (target >= chipFrac)
+        {
+            chipFrac = target; // healed or steady — no trailing chip
+            return;
+        }
+        if (chipHold > 0f)
+        {
+            chipHold -= delta;
+            return;
+        }
+        chipFrac = Mathf.MoveToward(chipFrac, target, ChipDrainRate * delta);
     }
 
     private static StandardMaterial3D BarMaterial(Color color) => new()
