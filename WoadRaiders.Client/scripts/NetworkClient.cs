@@ -28,7 +28,7 @@ public partial class NetworkClient : Node3D
     private const float BodyHeight = 22f;  // approx body-centre height, for camera/fade reference
     private const float LootY = 14f;
     private static readonly Vector3 CameraOffset = new(600f, 700f, 600f); // 45° yaw, ~40° pitch
-    private const float CameraOrthoSize = 720f;
+    private const float CameraOrthoSize = 500f; // ortho view height in world units; lower = more zoomed in
 
     // Characters (KayKit models are ~2.47 units tall → ~20x to reach ~49 world units).
     private const float CharScale = 20f;
