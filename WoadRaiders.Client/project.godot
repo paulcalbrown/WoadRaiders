@@ -12,8 +12,13 @@ config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 
 [display]
 
-window/size/viewport_width=1600
-window/size/viewport_height=900
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+; Render the 3D at a fixed 1080-tall base and scale to the window, so resizing the
+; window shows more/less of the level instead of changing the zoom. keep_height
+; locks the vertical framing (no letterbox); a wider window reveals more sideways.
+window/stretch/mode="viewport"
+window/stretch/aspect="keep_height"
 
 [dotnet]
 
