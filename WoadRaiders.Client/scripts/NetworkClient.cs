@@ -35,6 +35,9 @@ public partial class NetworkClient : Node3D
     private const float HealthBarHeight = 54f;      // above the character's head
     private const float MoveAnimSpeed = 25f;        // units/s at/above which the run clip plays
     private const float TurnSpeed = 14f;            // facing lerp rate
+    private const float ErrorDecayRate = 10f;       // how fast reconciliation corrections ease out
+    private const float MaxSnapError = 120f;        // above this, snap (respawn/teleport) not smooth
+    private const float VelSmoothRate = 12f;        // facing-velocity smoothing (kills twitch)
     private const float ModelYawOffset = 0f;  // KayKit chars face +Z (glTF convention); flip to Mathf.Pi if they moonwalk
     private const string AnimIdle = "Idle";
     private const string AnimRun = "Running_A";
@@ -57,6 +60,7 @@ public partial class NetworkClient : Node3D
     private SysVec3 _localRenderPos; // interpolated position actually drawn this frame
     private float _localAttackAnim;      // predicted attack-anim window, so the swing is instant
     private float _localAttackCooldown;  // predicted attack cooldown, mirrors the server's cadence
+    private SysVec3 _renderError;         // reconciliation correction being smoothed out of the render
 
     private Camera3D _camera = null!;
     private BoxMesh _lootMesh = null!;
@@ -97,6 +101,7 @@ public partial class NetworkClient : Node3D
         public AnimationPlayer? Anim;
         public MeshInstance3D? HealthFill; // enemies only
         public Vector3 LastPos;
+        public Vector3 SmoothVel;          // low-passed velocity used for facing (kills reconcile twitch)
         public string Clip = "";
         public float Yaw;
         public bool Attacking;
@@ -323,7 +328,14 @@ public partial class NetworkClient : Node3D
             if (p.Id == _localPlayerId)
             {
                 _localHealth = p.Health; // authoritative, never predicted
-                _prediction?.Reconcile(new SysVec3(p.X, p.Y, p.Z), p.LastProcessedInput);
+                if (_prediction is not null)
+                {
+                    // Absorb the reconciliation correction into a decaying render error so the
+                    // authoritative snap eases in over a few frames instead of popping.
+                    var before = _prediction.Position;
+                    _prediction.Reconcile(new SysVec3(p.X, p.Y, p.Z), p.LastProcessedInput);
+                    _renderError += before - _prediction.Position;
+                }
             }
             else
             {
@@ -365,7 +377,12 @@ public partial class NetworkClient : Node3D
             {
                 // Interpolate between the last two fixed ticks so 30 Hz motion renders smoothly.
                 var alpha = Mathf.Clamp((float)(_tickAccumulator / SimConstants.TickDelta), 0f, 1f);
-                _localRenderPos = SysVec3.Lerp(_prevTickPos, _prediction.Position, alpha);
+                // Ease reconciliation corrections out instead of popping — but snap a large jump
+                // (respawn/teleport), which isn't a correction and shouldn't be smoothed.
+                if (_renderError.LengthSquared() > MaxSnapError * MaxSnapError)
+                    _renderError = SysVec3.Zero;
+                _renderError *= Mathf.Exp(-ErrorDecayRate * (float)delta);
+                _localRenderPos = SysVec3.Lerp(_prevTickPos, _prediction.Position, alpha) + _renderError;
                 view.Root.Position = ToGodot(_localRenderPos);
                 view.Attacking = _localAttackAnim > 0f; // predicted (instant), not the snapshot flag
             }
@@ -399,13 +416,18 @@ public partial class NetworkClient : Node3D
     {
         var pos = view.Root.Position;
         var flat = new Vector3(pos.X - view.LastPos.X, 0f, pos.Z - view.LastPos.Z);
-        var speed = flat.Length() / Mathf.Max((float)delta, 0.0001f);
         view.LastPos = pos;
 
+        // Low-pass the velocity so per-frame reconciliation micro-corrections don't make the
+        // model twitch its facing or flicker between idle/run.
+        var frameVel = flat / Mathf.Max((float)delta, 0.0001f);
+        view.SmoothVel = view.SmoothVel.Lerp(frameVel, Mathf.Clamp((float)delta * VelSmoothRate, 0f, 1f));
+        var speed = view.SmoothVel.Length();
+
         var moving = speed > MoveAnimSpeed;
-        if (moving && flat.LengthSquared() > 0.0001f)
+        if (moving)
         {
-            var targetYaw = Mathf.Atan2(flat.X, flat.Z) + ModelYawOffset;
+            var targetYaw = Mathf.Atan2(view.SmoothVel.X, view.SmoothVel.Z) + ModelYawOffset;
             view.Yaw = Mathf.LerpAngle(view.Yaw, targetYaw, Mathf.Clamp((float)delta * TurnSpeed, 0f, 1f));
             view.Pivot.Rotation = new Vector3(0f, view.Yaw, 0f);
         }
