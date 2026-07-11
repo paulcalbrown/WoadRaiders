@@ -1,7 +1,7 @@
 # WoadRaiders
 
 A public co-op, **server-authoritative** ARPG dungeon crawler (Celtic/Pictish woad-raider
-theme), rendered in **3D isometric**. Real-time action, loot, procedural dungeons — built so that
+theme), rendered in **3D isometric**. Real-time action, loot, hand-crafted dungeons — built so that
 online multiplayer with matchmaking is a first-class concern from day one, not a bolt-on.
 
 This repository is the **architecture scaffold**: a working client ⇄ dedicated-server skeleton
@@ -15,7 +15,7 @@ The golden rule of this codebase: **the simulation is engine-free and the server
 truth.** Clients may only ever send *input*; the server decides positions, damage, and loot.
 
 ```
-WoadRaiders.Core      Pure C# simulation — combat, movement, loot, dungeon gen.
+WoadRaiders.Core      Pure C# simulation — combat, movement, loot, dungeon geometry.
                       No engine, no networking. Deterministic. Unit-tested.
         ▲   ▲
         │   │
@@ -112,11 +112,25 @@ core loop earns it.
       `BoxShape3D` solids, a `Marker3D` named `PlayerSpawn`, and `EnemySpawn*` markers, then export
       it with `tools/export_dungeon.gd` (runs headless) to JSON; serve it with
       `dotnet run --project WoadRaiders.Server -- --map maps/YourMap.json`. `maps/TestArena.tscn` is
-      a working example. The **procedural generator emits the same structure** (merged wall boxes),
-      so generated and authored maps are interchangeable everywhere.
-- [ ] **Dungeon art pass** — render authored scenes' own meshes on the client (glTF module kits)
-      instead of the placeholder textured boxes; later: BepuPhysics for non-box collision, DotRecast
-      navmesh for smarter AI pathing. All behind `IDungeonGeometry`, no gameplay changes.
+      a working example, and the server defaults to it when run without `--map`. **Maps are the only
+      way dungeons exist** — procedural generation has been removed by design (hand-crafted maps are
+      the product direction).
+- [x] **Dungeon art pass** — hand-crafted maps now **render their own Godot scene** (meshes,
+      materials, lights authored in the editor; the collision boxes stay the sim truth). The export
+      tool records the source scene in the JSON; the server passes it over the wire; the client
+      instantiates it — falling back to placeholder textured boxes if the scene is missing. The wall
+      occlusion fade works on authored meshes too (tall meshes only, via `GeometryInstance3D`
+      transparency; opt out with a `no_fade` group). `TestArena.tscn` demos it with its own
+      materials and torch-lit braziers.
+- [x] **Real map with a glTF kit** — the **KayKit Dungeon Remastered** kit (CC0, 203 glTF models)
+      is installed at `addons/kaykit_dungeon_remastered`, and `maps/Barrow.tscn` ("The Barrow") is a
+      real three-room dungeon built from it: entry hall, pillared great vault, and crypt, with
+      torch-lit corridors, banners, and props. Serve it with
+      `dotnet run --project WoadRaiders.Server -- --map WoadRaiders.Client/maps/Barrow.json`.
+      Kit pieces are on a 4-unit grid, placed under a ×20-scaled `Visuals` node (1 kit tile = 80
+      world units); collision boxes and markers are authored in world units as usual.
+- [ ] **Dungeon content & depth** — more maps and kit variety; BepuPhysics for non-box collision
+      and DotRecast navmesh for smarter AI pathing, all behind `IDungeonGeometry`.
 - [ ] **Gauntlet-style dungeons** — enemy generators (destroy to stop the horde), an exit/portal to
       descend to the next level, health-drain + food pickups, keys/doors/gates, themed realms.
 - [x] **Loot (first pass)** — enemies drop themed items on death (rarity-weighted, Celtic/Pict

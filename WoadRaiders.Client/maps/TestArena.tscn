@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=16 format=3]
 
 [sub_resource type="BoxShape3D" id="wall_ns"]
 size = Vector3(880, 70, 40)
@@ -11,6 +11,52 @@ size = Vector3(80, 70, 80)
 
 [sub_resource type="BoxShape3D" id="beam"]
 size = Vector3(200, 20, 40)
+
+[sub_resource type="StandardMaterial3D" id="mat_floor"]
+albedo_color = Color(0.16, 0.15, 0.18, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_wall"]
+albedo_color = Color(0.24, 0.21, 0.29, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_pillar"]
+albedo_color = Color(0.34, 0.18, 0.14, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="mat_beam"]
+albedo_color = Color(0.29, 0.21, 0.12, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="mat_brazier"]
+albedo_color = Color(0.9, 0.45, 0.15, 1)
+emission_enabled = true
+emission = Color(1, 0.5, 0.15, 1)
+emission_energy_multiplier = 2.0
+
+[sub_resource type="BoxMesh" id="mesh_floor"]
+material = SubResource("mat_floor")
+size = Vector3(880, 8, 640)
+
+[sub_resource type="BoxMesh" id="mesh_wall_ns"]
+material = SubResource("mat_wall")
+size = Vector3(880, 70, 40)
+
+[sub_resource type="BoxMesh" id="mesh_wall_ew"]
+material = SubResource("mat_wall")
+size = Vector3(40, 70, 640)
+
+[sub_resource type="BoxMesh" id="mesh_pillar"]
+material = SubResource("mat_pillar")
+size = Vector3(80, 70, 80)
+
+[sub_resource type="BoxMesh" id="mesh_beam"]
+material = SubResource("mat_beam")
+size = Vector3(200, 20, 40)
+
+[sub_resource type="BoxMesh" id="mesh_brazier"]
+material = SubResource("mat_brazier")
+size = Vector3(20, 30, 20)
 
 [node name="TestArena" type="Node3D"]
 
@@ -39,6 +85,56 @@ shape = SubResource("pillar")
 [node name="Overpass" type="CollisionShape3D" parent="Static"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -100, 60, -120)
 shape = SubResource("beam")
+
+[node name="Visuals" type="Node3D" parent="."]
+
+[node name="FloorMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -4, 0)
+mesh = SubResource("mesh_floor")
+
+[node name="WallNorthMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 35, -300)
+mesh = SubResource("mesh_wall_ns")
+
+[node name="WallSouthMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 35, 300)
+mesh = SubResource("mesh_wall_ns")
+
+[node name="WallEastMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 420, 35, 0)
+mesh = SubResource("mesh_wall_ew")
+
+[node name="WallWestMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -420, 35, 0)
+mesh = SubResource("mesh_wall_ew")
+
+[node name="PillarMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 120, 35, 40)
+mesh = SubResource("mesh_pillar")
+
+[node name="OverpassMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -100, 60, -120)
+mesh = SubResource("mesh_beam")
+
+[node name="BrazierNE" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 370, 15, -250)
+mesh = SubResource("mesh_brazier")
+
+[node name="BrazierSW" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -370, 15, 250)
+mesh = SubResource("mesh_brazier")
+
+[node name="BrazierLightNE" type="OmniLight3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 370, 45, -250)
+light_color = Color(1, 0.6, 0.3, 1)
+light_energy = 1.5
+omni_range = 260.0
+
+[node name="BrazierLightSW" type="OmniLight3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -370, 45, 250)
+light_color = Color(1, 0.6, 0.3, 1)
+light_energy = 1.5
+omni_range = 260.0
 
 [node name="PlayerSpawn" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -200, 0, 0)

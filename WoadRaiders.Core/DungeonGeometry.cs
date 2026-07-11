@@ -27,6 +27,14 @@ public sealed class DungeonGeometry : IDungeonGeometry
     public IReadOnlyList<Aabb> Solids { get; }
     public IReadOnlyList<Vector3> EnemySpawns { get; }
 
+    /// <summary>
+    /// res:// path of the Godot scene these solids were exported from, so clients
+    /// can render the authored visuals. Null for procedural maps (clients fall
+    /// back to placeholder rendering). Presentation metadata — the simulation
+    /// never reads it.
+    /// </summary>
+    public string? ScenePath { get; init; }
+
     /// <summary>World extent of all solids (used as a safety clamp and for rendering the floor).</summary>
     public Aabb Bounds { get; }
 

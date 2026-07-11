@@ -21,7 +21,7 @@ public sealed class GameServer
     private readonly GameWorld _world = new();
     private readonly Random _rng = new();
     private readonly Dictionary<int, NetPeer> _peers = new();
-    private readonly string? _mapPath;
+    private readonly string _mapPath;
     private DungeonGeometry _dungeon = null!;
     private volatile bool _running;
 
@@ -29,20 +29,33 @@ public sealed class GameServer
     private const int TargetEnemyCount = 12;
     private static readonly TimeSpan EnemyRespawnInterval = TimeSpan.FromSeconds(2);
 
-    public GameServer(string? mapPath = null)
+    public GameServer(string mapPath)
     {
         _mapPath = mapPath;
         _net = new NetManager(_listener);
     }
 
-    public void Run(int port = NetConfig.DefaultPort)
+    /// <summary>Locates the bundled test arena for map-less dev runs (repo root or bin dir).</summary>
+    public static string? FindDefaultMap()
+    {
+        string[] candidates =
+        {
+            Path.Combine("WoadRaiders.Client", "maps", "TestArena.json"),
+            Path.Combine("..", "WoadRaiders.Client", "maps", "TestArena.json"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WoadRaiders.Client", "maps", "TestArena.json"),
+        };
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>Runs the server until stopped. Returns false if startup failed.</summary>
+    public bool Run(int port = NetConfig.DefaultPort)
     {
         WireEvents();
 
         if (!_net.Start(port))
         {
             Console.Error.WriteLine($"Failed to bind udp/{port}. Is another server already running?");
-            return;
+            return false;
         }
 
         _running = true;
@@ -52,18 +65,19 @@ public sealed class GameServer
             $"WoadRaiders dedicated server listening on udp/{port} " +
             $"(sim {SimConstants.TickRate}Hz, snapshots {NetConfig.SnapshotsPerSecond}Hz). Ctrl+C to stop.");
 
-        if (_mapPath is not null)
+        try
         {
             _dungeon = DungeonGeometryFile.Load(_mapPath);
-            Console.WriteLine($"Loaded hand-crafted map '{_mapPath}' " +
-                              $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns).");
         }
-        else
+        catch (Exception e)
         {
-            var seed = _rng.Next();
-            _dungeon = DungeonGenerator.Generate(seed);
-            Console.WriteLine($"Generated dungeon (seed {seed}, {_dungeon.Solids.Count} solids).");
+            Console.Error.WriteLine($"Failed to load map '{_mapPath}': {e.Message}");
+            _net.Stop();
+            return false;
         }
+        Console.WriteLine($"Loaded map '{_mapPath}' " +
+                          $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns" +
+                          $"{(_dungeon.ScenePath is null ? "" : $", scene {_dungeon.ScenePath}")}).");
         _world.Geometry = _dungeon;
 
         SpawnInitialEnemies();
@@ -72,6 +86,7 @@ public sealed class GameServer
 
         _net.Stop();
         Console.WriteLine("Server stopped.");
+        return true;
     }
 
     private void WireEvents()
@@ -306,6 +321,7 @@ public sealed class GameServer
             SpawnX = _dungeon.SpawnPoint.X,
             SpawnY = _dungeon.SpawnPoint.Y,
             SpawnZ = _dungeon.SpawnPoint.Z,
+            ScenePath = _dungeon.ScenePath ?? "",
             Boxes = boxes,
         };
     }

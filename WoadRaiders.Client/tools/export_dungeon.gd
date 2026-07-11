@@ -28,6 +28,7 @@ func _init() -> void:
 
 	var root := packed.instantiate()
 	var out := {
+		"scene": args[0], # clients render this scene; collision below stays the sim truth
 		"spawn": [0.0, 0.0, 0.0],
 		"solids": [],
 		"enemySpawns": [],

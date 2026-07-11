@@ -10,6 +10,7 @@ namespace WoadRaiders.Core;
 ///
 /// Shape:
 /// {
+///   "scene": "res://maps/YourMap.tscn",          (optional — authored visuals)
 ///   "spawn": [x, y, z],
 ///   "solids": [ { "min": [x,y,z], "max": [x,y,z] }, ... ],
 ///   "enemySpawns": [ [x,y,z], ... ]
@@ -22,6 +23,7 @@ public static class DungeonGeometryFile
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         WriteIndented = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
     public static DungeonGeometry Load(string path) => Parse(File.ReadAllText(path));
@@ -39,13 +41,17 @@ public static class DungeonGeometryFile
         foreach (var s in doc.EnemySpawns ?? Array.Empty<float[]>())
             spawns.Add(ToVec(s, "enemySpawn"));
 
-        return new DungeonGeometry(ToVec(doc.Spawn, "spawn"), solids, spawns);
+        return new DungeonGeometry(ToVec(doc.Spawn, "spawn"), solids, spawns)
+        {
+            ScenePath = string.IsNullOrWhiteSpace(doc.Scene) ? null : doc.Scene,
+        };
     }
 
     public static string ToJson(DungeonGeometry g)
     {
         var doc = new GeometryDoc
         {
+            Scene = g.ScenePath,
             Spawn = new[] { g.SpawnPoint.X, g.SpawnPoint.Y, g.SpawnPoint.Z },
             Solids = g.Solids.Select(s => new BoxDoc
             {
@@ -64,6 +70,7 @@ public static class DungeonGeometryFile
 
     private sealed class GeometryDoc
     {
+        public string? Scene { get; set; }
         public float[]? Spawn { get; set; }
         public BoxDoc[]? Solids { get; set; }
         public float[][]? EnemySpawns { get; set; }

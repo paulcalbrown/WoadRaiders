@@ -16,6 +16,7 @@
       180.0
     ]
   ],
+  "scene": "res://maps/TestArena.tscn",
   "solids": [
     {
       "max": [

@@ -85,11 +85,15 @@ public class DungeonGeometryTests
                 new Aabb(new Vector3(-10, 0, -10), new Vector3(10, 70, 10)),
                 new Aabb(new Vector3(50, 0, 50), new Vector3(90, 35, 60)),
             },
-            new List<Vector3> { new(5, 0, 5), new(-7, 0, 9) });
+            new List<Vector3> { new(5, 0, 5), new(-7, 0, 9) })
+        {
+            ScenePath = "res://maps/Test.tscn",
+        };
 
         var restored = DungeonGeometryFile.Parse(DungeonGeometryFile.ToJson(original));
 
         Assert.Equal(original.SpawnPoint, restored.SpawnPoint);
+        Assert.Equal(original.ScenePath, restored.ScenePath);
         Assert.Equal(original.Solids.Count, restored.Solids.Count);
         for (var i = 0; i < original.Solids.Count; i++)
             Assert.Equal(original.Solids[i], restored.Solids[i]);
@@ -97,25 +101,14 @@ public class DungeonGeometryTests
     }
 
     [Fact]
-    public void Generator_is_deterministic_for_a_seed()
+    public void Json_without_scene_path_parses_as_null()
     {
-        var a = DungeonGenerator.Generate(12345);
-        var b = DungeonGenerator.Generate(12345);
+        var geo = new DungeonGeometry(Vector3.Zero,
+            new[] { new Aabb(Vector3.Zero, new Vector3(1, 1, 1)) }, Array.Empty<Vector3>());
 
-        Assert.Equal(a.SpawnPoint, b.SpawnPoint);
-        Assert.Equal(a.Solids, b.Solids);
-        Assert.Equal(a.EnemySpawns, b.EnemySpawns);
-    }
+        var restored = DungeonGeometryFile.Parse(DungeonGeometryFile.ToJson(geo));
 
-    [Fact]
-    public void Generator_spawns_are_not_inside_solids()
-    {
-        var geo = DungeonGenerator.Generate(2024);
-
-        Assert.True(geo.Solids.Count > 0, "expected wall boxes");
-        Assert.False(geo.IsBlocked(geo.SpawnPoint), "player spawn must be clear");
-        foreach (var spawn in geo.EnemySpawns)
-            Assert.False(geo.IsBlocked(spawn), $"enemy spawn {spawn} must be clear");
+        Assert.Null(restored.ScenePath);
     }
 
     [Fact]

@@ -58,6 +58,10 @@ public partial class NetworkClient : Node3D
     private Vector3[] _wallMins = System.Array.Empty<Vector3>();
     private Vector3[] _wallMaxs = System.Array.Empty<Vector3>();
 
+    // Authored-scene visuals: tall meshes that participate in the occlusion fade.
+    private const float FadeMinHeight = 35f; // meshes whose top is below this never fade (floors)
+    private readonly List<(GeometryInstance3D Node, Vector3 Min, Vector3 Max)> _fadeMeshes = new();
+
     private readonly Dictionary<int, MeshInstance3D> _playerViews = new();
     private readonly Dictionary<int, Vector3> _remoteTargets = new();
     private readonly Dictionary<int, MeshInstance3D> _enemyViews = new();
@@ -227,8 +231,11 @@ public partial class NetworkClient : Node3D
                         new SysVec3(geoPacket.Boxes[i + 3], geoPacket.Boxes[i + 4], geoPacket.Boxes[i + 5])));
                 _geometry = new DungeonGeometry(
                     new SysVec3(geoPacket.SpawnX, geoPacket.SpawnY, geoPacket.SpawnZ),
-                    solids, System.Array.Empty<SysVec3>());
-                BuildDungeonMesh();
+                    solids, System.Array.Empty<SysVec3>())
+                {
+                    ScenePath = string.IsNullOrEmpty(geoPacket.ScenePath) ? null : geoPacket.ScenePath,
+                };
+                BuildDungeonVisuals();
                 break;
 
             case MessageType.Welcome:
@@ -398,6 +405,45 @@ public partial class NetworkClient : Node3D
         return 0;
     }
 
+    // Hand-crafted maps render their own scene; procedural (or missing scene) maps
+    // fall back to placeholder boxes built from the collision solids.
+    private void BuildDungeonVisuals()
+    {
+        if (TryLoadAuthoredScene())
+            return;
+        BuildDungeonMesh();
+    }
+
+    private bool TryLoadAuthoredScene()
+    {
+        var path = _geometry?.ScenePath;
+        if (string.IsNullOrEmpty(path) || !ResourceLoader.Exists(path))
+            return false;
+        if (ResourceLoader.Load<PackedScene>(path) is not { } packed)
+            return false;
+
+        var scene = packed.Instantiate<Node>();
+        AddChild(scene); // must be in-tree before reading global transforms
+        CollectFadeMeshes(scene);
+        GD.Print($"Rendering authored map scene '{path}' ({_fadeMeshes.Count} fade-aware meshes)");
+        return true;
+    }
+
+    // Tall meshes take part in the occlusion fade; floors (low tops) never do.
+    // Opt any mesh out by adding it to the "no_fade" group in the editor.
+    private void CollectFadeMeshes(Node node)
+    {
+        if (node is MeshInstance3D mesh && !mesh.IsInGroup("no_fade"))
+        {
+            var aabb = mesh.GlobalTransform * mesh.GetAabb();
+            if (aabb.Position.Y + aabb.Size.Y > FadeMinHeight)
+                _fadeMeshes.Add((mesh, aabb.Position, aabb.Position + aabb.Size));
+        }
+
+        foreach (var child in node.GetChildren())
+            CollectFadeMeshes(child);
+    }
+
     private void BuildDungeonMesh()
     {
         if (_geometry is null)
@@ -443,34 +489,44 @@ public partial class NetworkClient : Node3D
         AddChild(new MultiMeshInstance3D { Multimesh = _wallMulti, MaterialOverride = WallMaterial() });
     }
 
-    // Fade the walls between the camera and the local player so it is never hidden.
+    // Fade whatever is between the camera and the local player so it is never
+    // hidden — placeholder wall instances and authored scene meshes alike.
     private void UpdateWallFade()
     {
-        if (_wallMulti is null || _prediction is null)
+        if (_prediction is null)
             return;
 
         var player = ToGodot(_localRenderPos) + Vector3.Up * EntityY;
+
+        if (_wallMulti is not null)
+        {
+            for (var i = 0; i < _wallMins.Length; i++)
+            {
+                var alpha = OcclusionAlpha(player, _wallMins[i], _wallMaxs[i]);
+                _wallMulti.SetInstanceColor(i, new Color(1f, 1f, 1f, alpha));
+            }
+        }
+
+        foreach (var (node, min, max) in _fadeMeshes)
+            node.Transparency = 1f - OcclusionAlpha(player, min, max);
+    }
+
+    // 1 = fully visible; falls toward fadedAlpha when the box occludes the player.
+    private static float OcclusionAlpha(Vector3 player, Vector3 boxMin, Vector3 boxMax)
+    {
         var camDir = CameraOffset.Normalized(); // player → camera (fixed iso direction)
         const float fadeRadius = 55f;
         const float fadedAlpha = 0.18f;
 
-        for (var i = 0; i < _wallMins.Length; i++)
-        {
-            // Closest point on the box to the player, so long merged walls fade correctly.
-            var closest = player.Clamp(_wallMins[i], _wallMaxs[i]);
-            var v = closest - player;
-            var along = v.Dot(camDir);
+        // Closest point on the box to the player, so long walls fade correctly.
+        var closest = player.Clamp(boxMin, boxMax);
+        var v = closest - player;
+        var along = v.Dot(camDir);
+        if (along <= 0f) // box is behind the player relative to the camera
+            return 1f;
 
-            var alpha = 1f;
-            if (along > 0f) // box is on the camera side of the player
-            {
-                var perp = (v - camDir * along).Length(); // screen-space closeness (ortho)
-                if (perp < fadeRadius)
-                    alpha = Mathf.Lerp(fadedAlpha, 1f, perp / fadeRadius);
-            }
-
-            _wallMulti.SetInstanceColor(i, new Color(1f, 1f, 1f, alpha));
-        }
+        var perp = (v - camDir * along).Length(); // screen-space closeness (ortho)
+        return perp < fadeRadius ? Mathf.Lerp(fadedAlpha, 1f, perp / fadeRadius) : 1f;
     }
 
     private static MultiMeshInstance3D MakeTileField(Mesh mesh, List<Vector3> positions, Material material)

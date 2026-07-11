@@ -270,6 +270,9 @@ public sealed class DungeonGeometryPacket : INetSerializable
     public float SpawnY;
     public float SpawnZ;
 
+    /// <summary>res:// scene to render for this map ("" = none; client uses placeholder boxes).</summary>
+    public string ScenePath = "";
+
     /// <summary>Flattened boxes: 6 floats each (minX minY minZ maxX maxY maxZ).</summary>
     public float[] Boxes = System.Array.Empty<float>();
 
@@ -278,6 +281,7 @@ public sealed class DungeonGeometryPacket : INetSerializable
         w.Put(SpawnX);
         w.Put(SpawnY);
         w.Put(SpawnZ);
+        w.Put(ScenePath);
         w.Put((ushort)(Boxes.Length / 6));
         foreach (var f in Boxes)
             w.Put(f);
@@ -288,6 +292,7 @@ public sealed class DungeonGeometryPacket : INetSerializable
         SpawnX = r.GetFloat();
         SpawnY = r.GetFloat();
         SpawnZ = r.GetFloat();
+        ScenePath = r.GetString();
         int count = r.GetUShort();
         Boxes = new float[count * 6];
         for (var i = 0; i < Boxes.Length; i++)
