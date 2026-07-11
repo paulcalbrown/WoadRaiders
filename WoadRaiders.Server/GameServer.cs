@@ -25,8 +25,9 @@ public sealed class GameServer
     private DungeonGeometry _dungeon = null!;
     private volatile bool _running;
 
-    // Enemy population policy — a "keep the sandbox lively" concern, not simulation.
-    private const int TargetEnemyCount = 12;
+    // Enemy population policy — map-driven: authors control density by placing
+    // EnemySpawn markers (target = 2 enemies per marker, clamped to sane bounds).
+    private int _targetEnemyCount;
     private static readonly TimeSpan EnemyRespawnInterval = TimeSpan.FromSeconds(2);
 
     public GameServer(string mapPath)
@@ -79,6 +80,7 @@ public sealed class GameServer
                           $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns" +
                           $"{(_dungeon.ScenePath is null ? "" : $", scene {_dungeon.ScenePath}")}).");
         _world.Geometry = _dungeon;
+        _targetEnemyCount = Math.Clamp(_dungeon.EnemySpawns.Count * 2, 4, 24);
 
         SpawnInitialEnemies();
 
@@ -190,7 +192,7 @@ public sealed class GameServer
             // Top the enemy population back up over time.
             if (now >= nextEnemyCheck)
             {
-                if (_world.Enemies.Count < TargetEnemyCount)
+                if (_world.Enemies.Count < _targetEnemyCount)
                     _world.SpawnEnemy(RandomEnemySpawn());
                 nextEnemyCheck += EnemyRespawnInterval;
             }
@@ -284,9 +286,9 @@ public sealed class GameServer
 
     private void SpawnInitialEnemies()
     {
-        for (var i = 0; i < TargetEnemyCount; i++)
+        for (var i = 0; i < _targetEnemyCount; i++)
             _world.SpawnEnemy(RandomEnemySpawn());
-        Console.WriteLine($"Spawned {TargetEnemyCount} enemies.");
+        Console.WriteLine($"Spawned {_targetEnemyCount} enemies (map has {_dungeon.EnemySpawns.Count} spawn markers).");
     }
 
     private Vector3 RandomEnemySpawn()

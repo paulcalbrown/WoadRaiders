@@ -124,8 +124,10 @@ core loop earns it.
       materials and torch-lit braziers.
 - [x] **Real map with a glTF kit** — the **KayKit Dungeon Remastered** kit (CC0, 203 glTF models)
       is installed at `addons/kaykit_dungeon_remastered`, and `maps/Barrow.tscn` ("The Barrow") is a
-      real three-room dungeon built from it: entry hall, pillared great vault, and crypt, with
-      torch-lit corridors, banners, and props. Serve it with
+      sprawling seven-room dungeon built from it — entry hall, pillared great hall, shrine,
+      storeroom, barracks, treasury, and a long crypt, joined by looping corridors, with auto-placed
+      wall torches, banners, and props (241 floor tiles, 193 collision solids). Enemy density is
+      **map-driven**: the server targets 2 enemies per `EnemySpawn` marker (clamped 4–24). Serve it with
       `dotnet run --project WoadRaiders.Server -- --map WoadRaiders.Client/maps/Barrow.json`.
       Kit pieces are on a 4-unit grid, placed under a ×20-scaled `Visuals` node (1 kit tile = 80
       world units); collision boxes and markers are authored in world units as usual.
