@@ -165,10 +165,9 @@ public sealed class GameWorld
             player.AttackCooldown = SimConstants.PlayerAttackCooldown;
             player.AttackAnimRemaining = SimConstants.AttackAnimDuration;
 
-            // Direct melee: strike the single nearest enemy you're in contact with —
-            // within reach AND in front of you (a frontal arc), not a 360° area sweep.
-            EnemyState? victim = null;
-            var bestSq = float.MaxValue;
+            // Frontal cleave: every enemy within reach AND in front of you (the damage
+            // arc) takes the hit — a swing through the arc, not a single target, but
+            // still not a 360° sweep.
             foreach (var enemy in _enemies.Values)
             {
                 if (!enemy.IsAlive)
@@ -184,14 +183,8 @@ public sealed class GameWorld
                     Vector3.Dot(player.Facing, toEnemy / MathF.Sqrt(distSq)) < SimConstants.PlayerAttackArcDot)
                     continue; // behind or off to the side
 
-                if (distSq < bestSq)
-                {
-                    bestSq = distSq;
-                    victim = enemy;
-                }
+                enemy.TakeDamage(player.AttackDamage);
             }
-
-            victim?.TakeDamage(player.AttackDamage);
         }
     }
 

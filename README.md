@@ -74,7 +74,7 @@ two in lockstep if you upgrade Godot.
 2. An orthographic isometric camera eases after you (with directional shadows). **Arrows** move,
    **Space** attacks (a frontal melee strike — face your target), **I** opens the inventory
    (**1-9** to equip). You're a **Knight**,
-   other players are **Barbarians**, enemies are **Skeleton Warriors** — all animated KayKit
+   other players are **Barbarians**, enemies are **Skeletons** — all animated KayKit
    characters that face their movement and play idle/run/attack clips (enemies carry billboard
    health bars). Loot spins and glows by rarity. Walls between you and the camera fade out.
 
@@ -104,12 +104,12 @@ core loop earns it.
       asserts `maxCorrection ≈ 0`). Input is sent `ReliableOrdered` so nothing is lost or reordered.
 - [ ] **Remote interpolation** — buffer timestamped snapshots and render remote players ~100 ms in
       the past for smoothness (currently a simple ease-toward-latest).
-- [x] **Combat (first pass)** — server-authoritative directional melee (strike the nearest enemy
-      in front, within reach — not a 360° area sweep), enemies with seek/attack AI,
-      damage, enemy death + respawn, player respawn. Logic in `Core`, unit-tested. Client sends only
-      the attack intent; the client predicts movement, never damage.
+- [x] **Combat (first pass)** — server-authoritative directional melee (a frontal cleave: every
+      enemy in front and within reach takes the hit — not a 360° area sweep), enemies with
+      seek/attack AI, damage, enemy death + respawn, player respawn. Logic in `Core`, unit-tested.
+      Client sends only the attack intent; the client predicts movement, never damage.
 - [ ] **Combat polish** — directional/aimed attacks, on-screen health bars, downed state + revive,
-      more enemy types, attack telegraphs. (Currently: single-target frontal strike, immediate
+      more enemy types, attack telegraphs. (Currently: frontal-cleave strike, immediate
       respawn at origin.)
 - [x] **3D simulation** — `Core` simulates in full 3D world space (`System.Numerics.Vector3`,
       **Y-up**, matching Godot and glTF conventions, so the client maps sim positions 1:1). Dungeon
@@ -144,7 +144,7 @@ core loop earns it.
       Kit pieces are on a 4-unit grid, placed under a ×20-scaled `Visuals` node (1 kit tile = 80
       world units); collision boxes and markers are authored in world units as usual.
 - [x] **Animated characters** — players and enemies are rigged KayKit characters (Knight,
-      Barbarian, Skeleton Warrior) at `addons/kaykit_character_pack_{adventures,skeletons}`. They
+      Barbarian, Skeleton) at `addons/kaykit_character_pack_{adventures,skeletons}`. They
       face their movement direction and play **idle / run / attack** clips. Facing and movement are
       derived client-side from motion; the attack clip is driven by an authoritative `Attacking`
       flag on the snapshot (set when an attack lands, ticked down, broadcast).

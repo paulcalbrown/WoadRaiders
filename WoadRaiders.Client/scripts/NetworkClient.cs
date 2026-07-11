@@ -161,7 +161,7 @@ public partial class NetworkClient : Node3D
         const string skel = "res://addons/kaykit_character_pack_skeletons/Characters/gltf";
         _localCharScene = GD.Load<PackedScene>($"{adv}/Knight.glb");
         _remoteCharScene = GD.Load<PackedScene>($"{adv}/Barbarian.glb");
-        _enemyCharScene = GD.Load<PackedScene>($"{skel}/Skeleton_Warrior.glb");
+        _enemyCharScene = GD.Load<PackedScene>($"{skel}/Skeleton_Minion.glb"); // bare-skull skeleton (Warrior's horned helm read as a barbarian)
 
         _camera = new Camera3D
         {

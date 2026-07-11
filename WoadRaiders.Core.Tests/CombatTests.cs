@@ -33,18 +33,21 @@ public class CombatTests
     }
 
     [Fact]
-    public void Attack_hits_only_the_nearest_enemy_in_front()
+    public void Attack_cleaves_every_enemy_in_the_arc()
     {
         var world = new GameWorld();
         world.AddPlayer(1, "A"); // faces +X
         var near = world.SpawnEnemy(new Vector3(40, 0, 0));
-        var far = world.SpawnEnemy(new Vector3(65, 0, 0)); // also in front and in reach, just farther
+        var far = world.SpawnEnemy(new Vector3(65, 0, 0));    // also in front and in reach
+        var behind = world.SpawnEnemy(new Vector3(-50, 0, 0)); // in reach but behind → spared
 
         world.SetInput(1, new PlayerInput { Attack = true });
         world.Step();
 
-        Assert.Equal(SimConstants.EnemyMaxHealth - SimConstants.PlayerAttackDamage, near.Health, 3);
-        Assert.Equal(SimConstants.EnemyMaxHealth, far.Health, 3); // single target: only the nearest
+        var damaged = SimConstants.EnemyMaxHealth - SimConstants.PlayerAttackDamage;
+        Assert.Equal(damaged, near.Health, 3);
+        Assert.Equal(damaged, far.Health, 3);                        // both front enemies hit — cleave
+        Assert.Equal(SimConstants.EnemyMaxHealth, behind.Health, 3); // still arc-limited, not 360°
     }
 
     [Fact]
