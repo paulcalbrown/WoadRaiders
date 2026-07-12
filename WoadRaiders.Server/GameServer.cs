@@ -24,15 +24,8 @@ public sealed class GameServer
     private readonly Dictionary<int, ServerInputBuffer> _inputBuffers = new();
     private readonly string _mapPath;
     private DungeonGeometry _dungeon = null!;
+    private SpawnDirector _director = null!; // owns enemy population + boss lifecycle (Core policy)
     private volatile bool _running;
-
-    // Enemy population policy — map-driven: authors control density and mix by
-    // placing typed EnemySpawn markers (target = 1 enemy per marker, clamped).
-    // The boss is tracked separately and never counts toward the population.
-    private int _targetEnemyCount;
-    private static readonly TimeSpan EnemyRespawnInterval = TimeSpan.FromSeconds(6);
-    private static readonly TimeSpan BossRespawnDelay = TimeSpan.FromSeconds(120);
-    private TimeSpan? _bossRespawnAt; // set once when the boss dies; null while alive
 
     public GameServer(string mapPath)
     {
@@ -86,9 +79,16 @@ public sealed class GameServer
                           $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns" +
                           $"{(_dungeon.ScenePath is null ? "" : $", scene {_dungeon.ScenePath}")}).");
         _world.Geometry = _dungeon;
-        _targetEnemyCount = Math.Clamp(_dungeon.EnemySpawns.Count, 4, 40);
 
-        SpawnInitialEnemies();
+        _director = new SpawnDirector(_world, _dungeon, _rng);
+        _director.BossFell += () => Console.WriteLine(
+            $"[boss] The Barrow King has fallen! He returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
+        _director.BossRose += () => Console.WriteLine("[boss] The Barrow King rises again.");
+
+        var spawned = _director.SpawnInitial();
+        Console.WriteLine($"Spawned {spawned} enemies (map has {_dungeon.TypedEnemySpawns.Count} spawn markers).");
+        if (_dungeon.BossSpawn is not null)
+            Console.WriteLine("The Barrow King waits in his chamber.");
 
         Loop();
 
@@ -209,7 +209,6 @@ public sealed class GameServer
         var clock = Stopwatch.StartNew();
         var nextTick = clock.Elapsed;
         var nextSnapshot = clock.Elapsed;
-        var nextEnemyCheck = clock.Elapsed + EnemyRespawnInterval;
 
         while (_running)
         {
@@ -220,13 +219,15 @@ public sealed class GameServer
             // Fixed-step simulation, catching up if the loop fell behind — but bounded.
             // After a long stall (GC pause, debugger break, machine sleep) replaying
             // every missed tick would only stall the loop further, so drop the lost
-            // time and resume at the normal cadence instead.
+            // time and resume at the normal cadence instead. Spawn policy advances
+            // with the sim (one Update per tick), so it too rides out a stall cleanly.
             const int maxCatchUpTicks = 10; // ~1/3 s at 30 Hz
             var ticksRun = 0;
             while (now >= nextTick && ticksRun++ < maxCatchUpTicks)
             {
                 ApplyBufferedInputs();
                 _world.Step();
+                _director.Update();
                 nextTick += tickInterval;
             }
             if (now >= nextTick)
@@ -237,25 +238,10 @@ public sealed class GameServer
 
             DeliverPickups();
 
-            // Top the enemy population back up over time (the boss is separate).
-            // Scheduled from "now" rather than accumulated, so a stall can never
-            // bank a burst of overdue spawns.
-            if (now >= nextEnemyCheck)
-            {
-                var regulars = _world.Enemies.Values.Count(e => e.Type != EnemyType.Boss);
-                if (regulars < _targetEnemyCount)
-                {
-                    var spawn = RandomEnemySpawn();
-                    _world.SpawnEnemy(spawn.Position, spawn.Type);
-                }
-                UpdateBoss(now);
-                nextEnemyCheck = now + EnemyRespawnInterval;
-            }
-
             if (now >= nextSnapshot)
             {
                 BroadcastSnapshot();
-                nextSnapshot = now + snapshotInterval; // same: no post-stall snapshot burst
+                nextSnapshot = now + snapshotInterval; // anchored to now: no post-stall snapshot burst
             }
 
             Thread.Sleep(1);
@@ -366,60 +352,6 @@ public sealed class GameServer
             peer.Send(NetProtocol.Frame(MessageType.ItemPickedUp, packet), Channel, DeliveryMethod.ReliableOrdered);
             Console.WriteLine($"[loot] Player {pickup.PlayerId} picked up {item.Name} (power {item.Power})");
         }
-    }
-
-    private void SpawnInitialEnemies()
-    {
-        // One enemy per typed marker (up to the cap) so the authored mix is exact,
-        // then top up randomly if the cap exceeds the marker count.
-        var markers = _dungeon.TypedEnemySpawns;
-        for (var i = 0; i < _targetEnemyCount; i++)
-        {
-            var spawn = i < markers.Count ? markers[i] : RandomEnemySpawn();
-            _world.SpawnEnemy(spawn.Position, spawn.Type);
-        }
-        Console.WriteLine($"Spawned {_targetEnemyCount} enemies (map has {markers.Count} spawn markers).");
-
-        if (_dungeon.BossSpawn is { } bossPos)
-        {
-            _world.SpawnEnemy(bossPos, EnemyType.Boss);
-            Console.WriteLine("The Barrow King waits in his chamber.");
-        }
-    }
-
-    /// <summary>Respawn the boss a while after it is slain (so the fight repeats).</summary>
-    private void UpdateBoss(TimeSpan now)
-    {
-        if (_dungeon.BossSpawn is not { } bossPos)
-            return;
-
-        if (_world.Enemies.Values.Any(e => e.Type == EnemyType.Boss))
-            return;
-
-        if (_bossRespawnAt is null)
-        {
-            _bossRespawnAt = now + BossRespawnDelay;
-            Console.WriteLine($"[boss] The Barrow King has fallen! He returns in {BossRespawnDelay.TotalSeconds:0}s.");
-        }
-        else if (now >= _bossRespawnAt)
-        {
-            _bossRespawnAt = null;
-            _world.SpawnEnemy(bossPos, EnemyType.Boss);
-            Console.WriteLine("[boss] The Barrow King rises again.");
-        }
-    }
-
-    private EnemySpawnPoint RandomEnemySpawn()
-    {
-        // A random typed spawn marker, but not right on top of the player spawn.
-        const float minDistanceSq = 200f * 200f;
-        for (var attempt = 0; attempt < 20; attempt++)
-        {
-            var spawn = _dungeon.RandomEnemySpawn(_rng);
-            if (Vector3.DistanceSquared(spawn.Position, _dungeon.SpawnPoint) > minDistanceSq)
-                return spawn;
-        }
-        return _dungeon.RandomEnemySpawn(_rng);
     }
 
     private DungeonGeometryPacket BuildGeometryPacket()
