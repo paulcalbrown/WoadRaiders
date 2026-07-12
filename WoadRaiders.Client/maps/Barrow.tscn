@@ -1,4 +1,4 @@
-[gd_scene load_steps=34 format=3]
+[gd_scene load_steps=35 format=3]
 
 [ext_resource type="PackedScene" path="res://addons/kaykit_dungeon_remastered/Assets/gltf/floor_tile_large.gltf.glb" id="1_floor"]
 [ext_resource type="PackedScene" path="res://addons/kaykit_dungeon_remastered/Assets/gltf/floor_dirt_large_rocky.gltf.glb" id="2_floorvar"]
@@ -490,7 +490,29 @@ _data = {
 "flicker": SubResource("flicker_anim")
 }
 
+[sub_resource type="Environment" id="dungeon_env"]
+background_mode = 1
+background_color = Color(0.015, 0.015, 0.025, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.28, 0.3, 0.48, 1)
+ambient_light_energy = 0.12
+fog_enabled = true
+fog_light_color = Color(0.03, 0.03, 0.05, 1)
+fog_density = 0.0005
 [node name="Barrow" type="Node3D"]
+
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("dungeon_env")
+
+[node name="KeyLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.643, 0.628, -0.439, 0, 0.574, 0.819, 0.766, -0.527, 0.369, 0, 0, 0)
+light_color = Color(0.7, 0.78, 1, 1)
+light_energy = 0.28
+shadow_enabled = true
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.643, -0.324, 0.694, 0, 0.906, 0.423, -0.766, 0.272, -0.583, 0, 0, 0)
+light_energy = 0.08
 
 [node name="Static" type="StaticBody3D" parent="."]
 

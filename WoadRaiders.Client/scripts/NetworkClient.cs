@@ -199,22 +199,35 @@ public partial class NetworkClient : Node3D
             Position = CameraOffset,
         };
         AddChild(_camera);
+        // Lighting/atmosphere now belongs to the map scene (authored in the .tscn,
+        // emitted by MapGen). The client only supplies a default for maps that
+        // bring none — see AddDefaultLighting, applied at map-load time.
+    }
 
-        // Deliberately dim and cool-tinted so the map's warm torch pools carry the
-        // scene (a "dark torch-lit dungeon"). The key still casts shadows for shape;
-        // the fill + ambient are low so torches read as the dominant local light.
+    // Fallback lighting for placeholder rendering, or an authored scene that has no
+    // WorldEnvironment of its own — the dim, cool "dark torch-lit dungeon" default.
+    private void AddDefaultLighting()
+    {
         var key = new DirectionalLight3D
         {
             RotationDegrees = new Vector3(-55, -50, 0),
             LightEnergy = 0.28f,
-            LightColor = new Color(0.70f, 0.78f, 1.0f), // cool moonlight → contrasts the warm torches
+            LightColor = new Color(0.70f, 0.78f, 1.0f), // cool moonlight → contrasts warm torches
             ShadowEnabled = true,
         };
         AddChild(key);
-        var fill = new DirectionalLight3D { RotationDegrees = new Vector3(-25, 130, 0), LightEnergy = 0.08f };
-        AddChild(fill);
-
+        AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-25, 130, 0), LightEnergy = 0.08f });
         AddChild(new WorldEnvironment { Environment = DungeonEnvironment() });
+    }
+
+    private static bool SceneHasEnvironment(Node node)
+    {
+        if (node is WorldEnvironment)
+            return true;
+        foreach (var child in node.GetChildren())
+            if (SceneHasEnvironment(child))
+                return true;
+        return false;
     }
 
     private static Godot.Environment DungeonEnvironment() => new()
@@ -661,7 +674,11 @@ public partial class NetworkClient : Node3D
         var scene = packed.Instantiate<Node>();
         AddChild(scene); // must be in-tree before reading global transforms
         CollectFadeMeshes(scene);
-        GD.Print($"Rendering authored map scene '{path}' ({_fadeMeshes.Count} fade-aware meshes)");
+        var selfLit = SceneHasEnvironment(scene);
+        if (!selfLit)
+            AddDefaultLighting(); // map brings no WorldEnvironment → light it with the default
+        GD.Print($"Rendering authored map scene '{path}' ({_fadeMeshes.Count} fade-aware meshes, " +
+                 $"{(selfLit ? "self-lit" : "default lighting")})");
         return true;
     }
 
@@ -684,6 +701,8 @@ public partial class NetworkClient : Node3D
     {
         if (_geometry is null)
             return;
+
+        AddDefaultLighting(); // placeholder rendering brings no scene, so light it here
 
         // One floor slab spanning the world extent (authored scenes will bring their own floors).
         var bounds = _geometry.Bounds;
