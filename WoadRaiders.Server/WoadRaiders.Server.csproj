@@ -16,4 +16,9 @@
     <ProjectReference Include="..\WoadRaiders.Shared\WoadRaiders.Shared.csproj" />
   </ItemGroup>
 
+  <!-- Expose internals (e.g. SanitizeName) to the test project. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="WoadRaiders.Core.Tests" />
+  </ItemGroup>
+
 </Project>

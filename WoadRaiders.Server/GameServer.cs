@@ -26,6 +26,7 @@ public sealed class GameServer
     private readonly ServerLog _log = new(); // non-blocking: keeps console I/O off the game loop
     private readonly Dictionary<MessageType, Action<NetPeer, NetPacketReader>> _handlers;
     private DungeonGeometry _dungeon = null!;
+    private DungeonGeometryPacket _geometryPacket = null!; // immutable geometry — built once, sent per join
     private SpawnDirector _director = null!; // owns enemy population + boss lifecycle (Core policy)
     private volatile bool _running;
 
@@ -61,9 +62,10 @@ public sealed class GameServer
     /// <summary>Runs the server until stopped. Returns false if startup failed.</summary>
     public bool Run(int port = NetConfig.DefaultPort)
     {
+        var started = false;
         try
         {
-            // Validate the map before binding the port — fail fast with no side effects.
+            // Validate the map first — fail fast with no side effects (no socket, no threads).
             try
             {
                 _dungeon = DungeonGeometryFile.Load(_mapPath);
@@ -73,34 +75,14 @@ public sealed class GameServer
                 _log.Error($"Failed to load map '{_mapPath}': {e.Message}");
                 return false;
             }
-
-            WireEvents();
-
-            if (!_net.Start(port))
-            {
-                _log.Error($"Failed to bind udp/{port}. Is another server already running?");
-                return false;
-            }
-
-            _running = true;
-            Console.CancelKeyPress += (_, e) => { e.Cancel = true; _running = false; };
-            // A container orchestrator stops the process with SIGTERM (docker stop,
-            // kubectl delete). Handle it so shutdown runs the same graceful path as
-            // Ctrl+C — flush logs, send disconnects — instead of being hard-killed.
-            using var sigterm = PosixSignalRegistration.Create(
-                PosixSignal.SIGTERM, ctx => { ctx.Cancel = true; _running = false; });
-
-            // Raise the OS timer resolution so the loop's Sleep(1) wakes ~1 ms late, not
-            // ~15 ms — otherwise 30 Hz ticks arrive in bursts. Released on shutdown.
-            using var frameTimer = FrameTimer.HighResolution();
-
-            _log.Info(
-                $"WoadRaiders dedicated server listening on udp/{port} " +
-                $"(sim {SimConstants.TickRate}Hz, snapshots {NetConfig.SnapshotsPerSecond}Hz). Ctrl+C to stop.");
             _log.Info($"Loaded map '{_mapPath}' " +
                       $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns" +
                       $"{(_dungeon.ScenePath is null ? "" : $", scene {_dungeon.ScenePath}")}).");
+
+            // Build the world before opening the socket. The geometry packet is immutable,
+            // so it is built once here and reused for every join.
             _world.Geometry = _dungeon;
+            _geometryPacket = DungeonSnapshot.From(_dungeon);
 
             _director = new SpawnDirector(_world, _dungeon, _rng);
             _director.BossFell += () => _log.Info(
@@ -112,15 +94,44 @@ public sealed class GameServer
             if (_dungeon.BossSpawn is not null)
                 _log.Info("The Barrow King waits in his chamber.");
 
-            Loop();
+            // Only now, with the world fully built, open the socket — so a joining peer
+            // can never race a half-initialized server.
+            WireEvents();
+            if (!_net.Start(port))
+            {
+                _log.Error($"Failed to bind udp/{port}. Is another server already running?");
+                return false;
+            }
+            started = true;
 
-            _net.Stop(sendDisconnectMessages: true); // clients see a clean disconnect, not a timeout
-            _log.Info("Server stopped.");
+            _running = true;
+            Console.CancelKeyPress += (_, e) => { e.Cancel = true; _running = false; };
+            // A container orchestrator stops the process with SIGTERM (docker stop,
+            // kubectl delete). Handle it so shutdown runs the same graceful path as
+            // Ctrl+C — flush logs, send disconnects — instead of being hard-killed.
+            using var sigterm = PosixSignalRegistration.Create(
+                PosixSignal.SIGTERM, ctx => { ctx.Cancel = true; _running = false; });
+            // Raise the OS timer resolution so the loop's Sleep(1) wakes ~1 ms late, not
+            // ~15 ms — otherwise 30 Hz ticks arrive in bursts. Released on shutdown.
+            using var frameTimer = FrameTimer.HighResolution();
+
+            _log.Info(
+                $"WoadRaiders dedicated server listening on udp/{port} " +
+                $"(sim {SimConstants.TickRate}Hz, snapshots {NetConfig.SnapshotsPerSecond}Hz). Ctrl+C to stop.");
+
+            Loop();
             return true;
         }
         finally
         {
-            _log.Dispose(); // flush the backlog and stop the drain thread
+            // The same graceful shutdown whether Loop returned or threw: close the socket
+            // (clients get a disconnect, not a timeout), then flush and stop the logger.
+            if (started)
+            {
+                _net.Stop(sendDisconnectMessages: true);
+                _log.Info("Server stopped.");
+            }
+            _log.Dispose();
         }
     }
 
@@ -143,7 +154,7 @@ public sealed class GameServer
             _log.Info($"[+] Player {peer.Id} joined  ({_net.ConnectedPeersCount} online)");
 
             // Send the dungeon first, then the welcome (both reliable-ordered on the same channel).
-            peer.Send(NetProtocol.Frame(MessageType.DungeonGeometry, BuildGeometryPacket()), Channel, DeliveryMethod.ReliableOrdered);
+            peer.Send(NetProtocol.Frame(MessageType.DungeonGeometry, _geometryPacket), Channel, DeliveryMethod.ReliableOrdered);
             var welcome = new WelcomePacket { PlayerId = peer.Id, ServerTick = _world.Tick };
             peer.Send(NetProtocol.Frame(MessageType.Welcome, welcome), Channel, DeliveryMethod.ReliableOrdered);
         };
@@ -218,7 +229,7 @@ public sealed class GameServer
     }
 
     /// <summary>Client-supplied names are untrusted: strip control chars, cap the length.</summary>
-    private static string SanitizeName(string name, int playerId)
+    internal static string SanitizeName(string name, int playerId)
     {
         const int maxLength = 24;
         var cleaned = string.Concat(name.Where(c => !char.IsControl(c))).Trim();
@@ -344,27 +355,4 @@ public sealed class GameServer
         }
     }
 
-    private DungeonGeometryPacket BuildGeometryPacket()
-    {
-        var boxes = new float[_dungeon.Solids.Count * 6];
-        for (var i = 0; i < _dungeon.Solids.Count; i++)
-        {
-            var s = _dungeon.Solids[i];
-            boxes[i * 6 + 0] = s.Min.X;
-            boxes[i * 6 + 1] = s.Min.Y;
-            boxes[i * 6 + 2] = s.Min.Z;
-            boxes[i * 6 + 3] = s.Max.X;
-            boxes[i * 6 + 4] = s.Max.Y;
-            boxes[i * 6 + 5] = s.Max.Z;
-        }
-
-        return new DungeonGeometryPacket
-        {
-            SpawnX = _dungeon.SpawnPoint.X,
-            SpawnY = _dungeon.SpawnPoint.Y,
-            SpawnZ = _dungeon.SpawnPoint.Z,
-            ScenePath = _dungeon.ScenePath ?? "",
-            Boxes = boxes,
-        };
-    }
 }

@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\WoadRaiders.Core\WoadRaiders.Core.csproj" />
     <ProjectReference Include="..\WoadRaiders.Shared\WoadRaiders.Shared.csproj" />
+    <ProjectReference Include="..\WoadRaiders.Server\WoadRaiders.Server.csproj" />
   </ItemGroup>
 
 </Project>
