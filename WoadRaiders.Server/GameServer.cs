@@ -20,8 +20,7 @@ public sealed class GameServer
     private readonly NetManager _net;
     private readonly GameWorld _world = new();
     private readonly Random _rng = new();
-    private readonly Dictionary<int, NetPeer> _peers = new();
-    private readonly Dictionary<int, ServerInputBuffer> _inputBuffers = new();
+    private readonly Dictionary<int, Connection> _connections = new(); // per-peer transport + input buffer
     private readonly string _mapPath;
     private readonly ServerLog _log = new(); // non-blocking: keeps console I/O off the game loop
     private readonly Dictionary<MessageType, Action<NetPeer, NetPacketReader>> _handlers;
@@ -147,8 +146,7 @@ public sealed class GameServer
 
         _listener.PeerConnectedEvent += peer =>
         {
-            _peers[peer.Id] = peer;
-            _inputBuffers[peer.Id] = new ServerInputBuffer();
+            _connections[peer.Id] = new Connection(peer);
             var player = _world.AddPlayer(peer.Id, $"Raider-{peer.Id}");
             player.Position = _dungeon.SpawnPoint;
             _log.Info($"[+] Player {peer.Id} joined  ({_net.ConnectedPeersCount} online)");
@@ -161,8 +159,7 @@ public sealed class GameServer
 
         _listener.PeerDisconnectedEvent += (peer, _) =>
         {
-            _peers.Remove(peer.Id);
-            _inputBuffers.Remove(peer.Id);
+            _connections.Remove(peer.Id);
             _world.RemovePlayer(peer.Id);
             _log.Info($"[-] Player {peer.Id} left    ({_net.ConnectedPeersCount} online)");
         };
@@ -210,8 +207,8 @@ public sealed class GameServer
         // Buffer the intent; it is applied one-per-tick, in order, by the sim loop
         // (see ApplyBufferedInputs). Trust nothing but the intent — the simulation
         // clamps/normalizes it.
-        if (_inputBuffers.TryGetValue(peer.Id, out var buffer))
-            buffer.Enqueue(new PlayerInput
+        if (_connections.TryGetValue(peer.Id, out var connection))
+            connection.Buffer.Enqueue(new PlayerInput
             {
                 MoveX = input.MoveX,
                 MoveZ = input.MoveZ,
@@ -240,46 +237,33 @@ public sealed class GameServer
 
     private void Loop()
     {
-        var tickInterval = TimeSpan.FromSeconds(SimConstants.TickDelta);
-        var snapshotInterval = TimeSpan.FromSeconds(1.0 / NetConfig.SnapshotsPerSecond);
+        var scheduler = new FixedTimestepScheduler(
+            TimeSpan.FromSeconds(SimConstants.TickDelta),
+            TimeSpan.FromSeconds(1.0 / NetConfig.SnapshotsPerSecond),
+            maxCatchUpTicks: 10); // ~1/3 s at 30 Hz — bounds catch-up after a stall
 
         var clock = Stopwatch.StartNew();
-        var nextTick = clock.Elapsed;
-        var nextSnapshot = clock.Elapsed;
-
         while (_running)
         {
             _net.PollEvents();
 
-            var now = clock.Elapsed;
+            var plan = scheduler.Advance(clock.Elapsed);
 
-            // Fixed-step simulation, catching up if the loop fell behind — but bounded.
-            // After a long stall (GC pause, debugger break, machine sleep) replaying
-            // every missed tick would only stall the loop further, so drop the lost
-            // time and resume at the normal cadence instead. Spawn policy advances
-            // with the sim (one Update per tick), so it too rides out a stall cleanly.
-            const int maxCatchUpTicks = 10; // ~1/3 s at 30 Hz
-            var ticksRun = 0;
-            while (now >= nextTick && ticksRun++ < maxCatchUpTicks)
+            // Spawn policy advances with the sim (one Update per tick), so it too rides
+            // out a stall cleanly under the catch-up bound.
+            for (var i = 0; i < plan.Ticks; i++)
             {
                 ApplyBufferedInputs();
                 _world.Step();
                 _director.Update();
-                nextTick += tickInterval;
             }
-            if (now >= nextTick)
-            {
-                _log.Info($"[!] Sim stalled {(now - nextTick).TotalMilliseconds:0} ms beyond the catch-up cap — dropping the lost time.");
-                nextTick = now;
-            }
+            if (plan.Stalled)
+                _log.Info($"[!] Sim stalled {plan.Dropped.TotalMilliseconds:0} ms beyond the catch-up cap — dropping the lost time.");
 
             DeliverPickups();
 
-            if (now >= nextSnapshot)
-            {
+            if (plan.Snapshot)
                 BroadcastSnapshot();
-                nextSnapshot = now + snapshotInterval; // anchored to now: no post-stall snapshot burst
-            }
 
             // Yield a slice so we poll often (low input latency) without busy-waiting.
             // With the raised timer resolution this wakes in ~1-2 ms, not ~15 ms.
@@ -299,7 +283,7 @@ public sealed class GameServer
     {
         foreach (var player in _world.Players.Values)
         {
-            if (_inputBuffers.TryGetValue(player.Id, out var buffer) && buffer.TryDequeue(out var input))
+            if (_connections.TryGetValue(player.Id, out var connection) && connection.Buffer.TryDequeue(out var input))
                 _world.SetInput(player.Id, input);
             else
                 _world.SetInput(player.Id, new PlayerInput { Sequence = player.LastProcessedInput });
@@ -338,7 +322,7 @@ public sealed class GameServer
     {
         foreach (var pickup in _world.ConsumePickups())
         {
-            if (!_peers.TryGetValue(pickup.PlayerId, out var peer))
+            if (!_connections.TryGetValue(pickup.PlayerId, out var connection))
                 continue;
 
             var item = pickup.Item;
@@ -350,7 +334,7 @@ public sealed class GameServer
                 Type = (byte)item.Type,
                 Power = item.Power,
             };
-            peer.Send(NetProtocol.Frame(MessageType.ItemPickedUp, packet), Channel, DeliveryMethod.ReliableOrdered);
+            connection.Peer.Send(NetProtocol.Frame(MessageType.ItemPickedUp, packet), Channel, DeliveryMethod.ReliableOrdered);
             _log.Info($"[loot] Player {pickup.PlayerId} picked up {item.Name} (power {item.Power})");
         }
     }
