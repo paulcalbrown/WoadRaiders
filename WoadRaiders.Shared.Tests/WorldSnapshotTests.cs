@@ -5,7 +5,7 @@ using LiteNetLib.Utils;
 using WoadRaiders.Core;
 using WoadRaiders.Shared;
 
-namespace WoadRaiders.Core.Tests;
+namespace WoadRaiders.Shared.Tests;
 
 public class WorldSnapshotTests
 {

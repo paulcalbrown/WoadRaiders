@@ -32,7 +32,9 @@ cheaply, allocated per
 match by hosting later.
 ```
 
-`WoadRaiders.Core.Tests` covers the simulation (movement, clamping, determinism).
+Each library has a matching test project: `WoadRaiders.Core.Tests` (the simulation —
+movement, clamping, determinism, spawn policy), `WoadRaiders.Shared.Tests` (the
+wire-protocol mappers), and `WoadRaiders.Server.Tests` (server internals).
 
 ### Target frameworks
 | Project | TFM | Why |
@@ -88,7 +90,7 @@ or two editor windows). Both characters are driven by the same authoritative ser
 
 ### 4. Run the tests
 ```bash
-dotnet test WoadRaiders.Core.Tests
+dotnet test   # resolves WoadRaiders.slnx — runs Core, Shared, and Server test projects
 ```
 
 ---

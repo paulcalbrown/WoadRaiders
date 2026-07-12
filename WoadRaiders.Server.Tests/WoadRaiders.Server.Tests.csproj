@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -18,8 +18,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Tests server internals (SanitizeName), exposed via InternalsVisibleTo. -->
   <ItemGroup>
-    <ProjectReference Include="..\WoadRaiders.Core\WoadRaiders.Core.csproj" />
+    <ProjectReference Include="..\WoadRaiders.Server\WoadRaiders.Server.csproj" />
   </ItemGroup>
 
 </Project>

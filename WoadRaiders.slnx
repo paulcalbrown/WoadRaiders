@@ -7,5 +7,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="WoadRaiders.Core.Tests/WoadRaiders.Core.Tests.csproj" />
+    <Project Path="WoadRaiders.Shared.Tests/WoadRaiders.Shared.Tests.csproj" />
+    <Project Path="WoadRaiders.Server.Tests/WoadRaiders.Server.Tests.csproj" />
   </Folder>
 </Solution>

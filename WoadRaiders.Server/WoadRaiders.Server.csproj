@@ -18,7 +18,7 @@
 
   <!-- Expose internals (e.g. SanitizeName) to the test project. -->
   <ItemGroup>
-    <InternalsVisibleTo Include="WoadRaiders.Core.Tests" />
+    <InternalsVisibleTo Include="WoadRaiders.Server.Tests" />
   </ItemGroup>
 
 </Project>

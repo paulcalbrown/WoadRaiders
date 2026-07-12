@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -18,8 +18,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Tests the wire-protocol mappers. Core comes in transitively (Shared references it). -->
   <ItemGroup>
-    <ProjectReference Include="..\WoadRaiders.Core\WoadRaiders.Core.csproj" />
+    <ProjectReference Include="..\WoadRaiders.Shared\WoadRaiders.Shared.csproj" />
   </ItemGroup>
 
 </Project>

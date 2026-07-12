@@ -1,6 +1,6 @@
 using WoadRaiders.Server;
 
-namespace WoadRaiders.Core.Tests;
+namespace WoadRaiders.Server.Tests;
 
 // SanitizeName is the server's guard on untrusted client-supplied names. It is
 // internal to the server and exposed here via InternalsVisibleTo.
