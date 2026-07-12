@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using System.Numerics;
+using System.Runtime.InteropServices;
 using LiteNetLib;
 using WoadRaiders.Core;
 using WoadRaiders.Shared;
@@ -24,6 +24,7 @@ public sealed class GameServer
     private readonly Dictionary<int, ServerInputBuffer> _inputBuffers = new();
     private readonly string _mapPath;
     private readonly ServerLog _log = new(); // non-blocking: keeps console I/O off the game loop
+    private readonly Dictionary<MessageType, Action<NetPeer, NetPacketReader>> _handlers;
     private DungeonGeometry _dungeon = null!;
     private SpawnDirector _director = null!; // owns enemy population + boss lifecycle (Core policy)
     private volatile bool _running;
@@ -34,6 +35,15 @@ public sealed class GameServer
         // AutoRecycle returns each NetPacketReader to LiteNetLib's pool after the
         // receive event — without it every received packet allocates fresh garbage.
         _net = new NetManager(_listener) { AutoRecycle = true };
+
+        // Dispatch table for client → server messages. Adding a new message is a line
+        // here plus its handler — no growing switch, and each handler stands alone.
+        _handlers = new Dictionary<MessageType, Action<NetPeer, NetPacketReader>>
+        {
+            [MessageType.JoinRequest] = HandleJoin,
+            [MessageType.Input] = HandleInput,
+            [MessageType.EquipRequest] = HandleEquip,
+        };
     }
 
     /// <summary>Locates the bundled test arena for map-less dev runs (repo root or bin dir).</summary>
@@ -74,6 +84,15 @@ public sealed class GameServer
 
             _running = true;
             Console.CancelKeyPress += (_, e) => { e.Cancel = true; _running = false; };
+            // A container orchestrator stops the process with SIGTERM (docker stop,
+            // kubectl delete). Handle it so shutdown runs the same graceful path as
+            // Ctrl+C — flush logs, send disconnects — instead of being hard-killed.
+            using var sigterm = PosixSignalRegistration.Create(
+                PosixSignal.SIGTERM, ctx => { ctx.Cancel = true; _running = false; });
+
+            // Raise the OS timer resolution so the loop's Sleep(1) wakes ~1 ms late, not
+            // ~15 ms — otherwise 30 Hz ticks arrive in bursts. Released on shutdown.
+            using var frameTimer = FrameTimer.HighResolution();
 
             _log.Info(
                 $"WoadRaiders dedicated server listening on udp/{port} " +
@@ -159,44 +178,43 @@ public sealed class GameServer
     private void HandleMessage(NetPeer peer, NetPacketReader reader)
     {
         var type = (MessageType)reader.GetByte();
-        switch (type)
-        {
-            case MessageType.JoinRequest:
-            {
-                var join = new JoinRequest();
-                join.Deserialize(reader);
-                if (_world.Players.TryGetValue(peer.Id, out var player))
-                    player.Name = SanitizeName(join.Name, peer.Id);
-                break;
-            }
+        // One handler per client-sendable message. Unknown/unexpected types are ignored
+        // (a client-only or unregistered type is not a reason to drop the connection).
+        if (_handlers.TryGetValue(type, out var handler))
+            handler(peer, reader);
+    }
 
-            case MessageType.Input:
-            {
-                var input = new InputPacket();
-                input.Deserialize(reader);
-                // Buffer the intent; it is applied one-per-tick, in order, by the sim
-                // loop (see ApplyBufferedInputs). Trust nothing but the intent — the
-                // simulation clamps/normalizes it.
-                if (_inputBuffers.TryGetValue(peer.Id, out var buffer))
-                    buffer.Enqueue(new PlayerInput
-                    {
-                        MoveX = input.MoveX,
-                        MoveZ = input.MoveZ,
-                        Sequence = input.Sequence,
-                        Attack = input.Attack,
-                    });
-                break;
-            }
+    private void HandleJoin(NetPeer peer, NetPacketReader reader)
+    {
+        var join = new JoinRequest();
+        join.Deserialize(reader);
+        if (_world.Players.TryGetValue(peer.Id, out var player))
+            player.Name = SanitizeName(join.Name, peer.Id);
+    }
 
-            case MessageType.EquipRequest:
+    private void HandleInput(NetPeer peer, NetPacketReader reader)
+    {
+        var input = new InputPacket();
+        input.Deserialize(reader);
+        // Buffer the intent; it is applied one-per-tick, in order, by the sim loop
+        // (see ApplyBufferedInputs). Trust nothing but the intent — the simulation
+        // clamps/normalizes it.
+        if (_inputBuffers.TryGetValue(peer.Id, out var buffer))
+            buffer.Enqueue(new PlayerInput
             {
-                var req = new EquipRequestPacket();
-                req.Deserialize(reader);
-                if (_world.Players.TryGetValue(peer.Id, out var player) && player.TryEquip(req.ItemId))
-                    SendEquipment(peer, player);
-                break;
-            }
-        }
+                MoveX = input.MoveX,
+                MoveZ = input.MoveZ,
+                Sequence = input.Sequence,
+                Attack = input.Attack,
+            });
+    }
+
+    private void HandleEquip(NetPeer peer, NetPacketReader reader)
+    {
+        var req = new EquipRequestPacket();
+        req.Deserialize(reader);
+        if (_world.Players.TryGetValue(peer.Id, out var player) && player.TryEquip(req.ItemId))
+            SendEquipment(peer, player);
     }
 
     /// <summary>Client-supplied names are untrusted: strip control chars, cap the length.</summary>
@@ -252,6 +270,8 @@ public sealed class GameServer
                 nextSnapshot = now + snapshotInterval; // anchored to now: no post-stall snapshot burst
             }
 
+            // Yield a slice so we poll often (low input latency) without busy-waiting.
+            // With the raised timer resolution this wakes in ~1-2 ms, not ~15 ms.
             Thread.Sleep(1);
         }
     }
@@ -280,45 +300,7 @@ public sealed class GameServer
         if (_net.ConnectedPeersCount == 0)
             return;
 
-        var snapshot = new WorldSnapshotPacket
-        {
-            ServerTick = _world.Tick,
-            Players = _world.Players.Values.Select(p => new PlayerSnapshot
-            {
-                Id = p.Id,
-                X = p.Position.X,
-                Y = p.Position.Y,
-                Z = p.Position.Z,
-                Health = p.Health,
-                LastProcessedInput = p.LastProcessedInput,
-                Attacking = p.IsAttacking,
-            }).ToArray(),
-            Enemies = _world.Enemies.Values.Select(e => new EnemySnapshot
-            {
-                Id = e.Id,
-                X = e.Position.X,
-                Y = e.Position.Y,
-                Z = e.Position.Z,
-                Health = e.Health,
-                Attacking = e.IsAttacking,
-                Type = (byte)e.Type,
-            }).ToArray(),
-            GroundItems = _world.GroundItems.Values.Select(g => new GroundItemSnapshot
-            {
-                Id = g.Id,
-                X = g.Position.X,
-                Y = g.Position.Y,
-                Z = g.Position.Z,
-                Rarity = (byte)g.Item.Rarity,
-            }).ToArray(),
-            Projectiles = _world.Projectiles.Values.Select(p => new ProjectileSnapshot
-            {
-                Id = p.Id,
-                X = p.Position.X,
-                Y = p.Position.Y,
-                Z = p.Position.Z,
-            }).ToArray(),
-        };
+        var snapshot = WorldSnapshot.From(_world);
 
         // Sequenced: unreliable but never delivers a stale snapshot after a newer one.
         _net.SendToAll(NetProtocol.Frame(MessageType.WorldSnapshot, snapshot), Channel, DeliveryMethod.Sequenced);

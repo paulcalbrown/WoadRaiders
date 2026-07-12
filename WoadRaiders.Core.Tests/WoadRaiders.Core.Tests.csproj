@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WoadRaiders.Core\WoadRaiders.Core.csproj" />
+    <ProjectReference Include="..\WoadRaiders.Shared\WoadRaiders.Shared.csproj" />
   </ItemGroup>
 
 </Project>
