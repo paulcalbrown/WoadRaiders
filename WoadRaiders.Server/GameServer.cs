@@ -23,6 +23,7 @@ public sealed class GameServer
     private readonly Dictionary<int, NetPeer> _peers = new();
     private readonly Dictionary<int, ServerInputBuffer> _inputBuffers = new();
     private readonly string _mapPath;
+    private readonly ServerLog _log = new(); // non-blocking: keeps console I/O off the game loop
     private DungeonGeometry _dungeon = null!;
     private SpawnDirector _director = null!; // owns enemy population + boss lifecycle (Core policy)
     private volatile bool _running;
@@ -50,51 +51,58 @@ public sealed class GameServer
     /// <summary>Runs the server until stopped. Returns false if startup failed.</summary>
     public bool Run(int port = NetConfig.DefaultPort)
     {
-        // Validate the map before binding the port — fail fast with no side effects.
         try
         {
-            _dungeon = DungeonGeometryFile.Load(_mapPath);
+            // Validate the map before binding the port — fail fast with no side effects.
+            try
+            {
+                _dungeon = DungeonGeometryFile.Load(_mapPath);
+            }
+            catch (Exception e)
+            {
+                _log.Error($"Failed to load map '{_mapPath}': {e.Message}");
+                return false;
+            }
+
+            WireEvents();
+
+            if (!_net.Start(port))
+            {
+                _log.Error($"Failed to bind udp/{port}. Is another server already running?");
+                return false;
+            }
+
+            _running = true;
+            Console.CancelKeyPress += (_, e) => { e.Cancel = true; _running = false; };
+
+            _log.Info(
+                $"WoadRaiders dedicated server listening on udp/{port} " +
+                $"(sim {SimConstants.TickRate}Hz, snapshots {NetConfig.SnapshotsPerSecond}Hz). Ctrl+C to stop.");
+            _log.Info($"Loaded map '{_mapPath}' " +
+                      $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns" +
+                      $"{(_dungeon.ScenePath is null ? "" : $", scene {_dungeon.ScenePath}")}).");
+            _world.Geometry = _dungeon;
+
+            _director = new SpawnDirector(_world, _dungeon, _rng);
+            _director.BossFell += () => _log.Info(
+                $"[boss] The Barrow King has fallen! He returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
+            _director.BossRose += () => _log.Info("[boss] The Barrow King rises again.");
+
+            var spawned = _director.SpawnInitial();
+            _log.Info($"Spawned {spawned} enemies (map has {_dungeon.TypedEnemySpawns.Count} spawn markers).");
+            if (_dungeon.BossSpawn is not null)
+                _log.Info("The Barrow King waits in his chamber.");
+
+            Loop();
+
+            _net.Stop(sendDisconnectMessages: true); // clients see a clean disconnect, not a timeout
+            _log.Info("Server stopped.");
+            return true;
         }
-        catch (Exception e)
+        finally
         {
-            Console.Error.WriteLine($"Failed to load map '{_mapPath}': {e.Message}");
-            return false;
+            _log.Dispose(); // flush the backlog and stop the drain thread
         }
-
-        WireEvents();
-
-        if (!_net.Start(port))
-        {
-            Console.Error.WriteLine($"Failed to bind udp/{port}. Is another server already running?");
-            return false;
-        }
-
-        _running = true;
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; _running = false; };
-
-        Console.WriteLine(
-            $"WoadRaiders dedicated server listening on udp/{port} " +
-            $"(sim {SimConstants.TickRate}Hz, snapshots {NetConfig.SnapshotsPerSecond}Hz). Ctrl+C to stop.");
-        Console.WriteLine($"Loaded map '{_mapPath}' " +
-                          $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns" +
-                          $"{(_dungeon.ScenePath is null ? "" : $", scene {_dungeon.ScenePath}")}).");
-        _world.Geometry = _dungeon;
-
-        _director = new SpawnDirector(_world, _dungeon, _rng);
-        _director.BossFell += () => Console.WriteLine(
-            $"[boss] The Barrow King has fallen! He returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
-        _director.BossRose += () => Console.WriteLine("[boss] The Barrow King rises again.");
-
-        var spawned = _director.SpawnInitial();
-        Console.WriteLine($"Spawned {spawned} enemies (map has {_dungeon.TypedEnemySpawns.Count} spawn markers).");
-        if (_dungeon.BossSpawn is not null)
-            Console.WriteLine("The Barrow King waits in his chamber.");
-
-        Loop();
-
-        _net.Stop(sendDisconnectMessages: true); // clients see a clean disconnect, not a timeout
-        Console.WriteLine("Server stopped.");
-        return true;
     }
 
     private void WireEvents()
@@ -113,7 +121,7 @@ public sealed class GameServer
             _inputBuffers[peer.Id] = new ServerInputBuffer();
             var player = _world.AddPlayer(peer.Id, $"Raider-{peer.Id}");
             player.Position = _dungeon.SpawnPoint;
-            Console.WriteLine($"[+] Player {peer.Id} joined  ({_net.ConnectedPeersCount} online)");
+            _log.Info($"[+] Player {peer.Id} joined  ({_net.ConnectedPeersCount} online)");
 
             // Send the dungeon first, then the welcome (both reliable-ordered on the same channel).
             peer.Send(NetProtocol.Frame(MessageType.DungeonGeometry, BuildGeometryPacket()), Channel, DeliveryMethod.ReliableOrdered);
@@ -126,7 +134,7 @@ public sealed class GameServer
             _peers.Remove(peer.Id);
             _inputBuffers.Remove(peer.Id);
             _world.RemovePlayer(peer.Id);
-            Console.WriteLine($"[-] Player {peer.Id} left    ({_net.ConnectedPeersCount} online)");
+            _log.Info($"[-] Player {peer.Id} left    ({_net.ConnectedPeersCount} online)");
         };
 
         _listener.NetworkReceiveEvent += OnReceive;
@@ -143,7 +151,7 @@ public sealed class GameServer
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"[!] Bad packet from player {peer.Id} — disconnecting ({e.GetType().Name}: {e.Message})");
+            _log.Error($"[!] Bad packet from player {peer.Id} — disconnecting ({e.GetType().Name}: {e.Message})");
             peer.Disconnect();
         }
     }
@@ -232,7 +240,7 @@ public sealed class GameServer
             }
             if (now >= nextTick)
             {
-                Console.WriteLine($"[!] Sim stalled {(now - nextTick).TotalMilliseconds:0} ms beyond the catch-up cap — dropping the lost time.");
+                _log.Info($"[!] Sim stalled {(now - nextTick).TotalMilliseconds:0} ms beyond the catch-up cap — dropping the lost time.");
                 nextTick = now;
             }
 
@@ -325,9 +333,9 @@ public sealed class GameServer
             TrinketItemId = EquippedId(player, EquipSlot.Trinket),
         };
         peer.Send(NetProtocol.Frame(MessageType.EquipmentUpdate, packet), Channel, DeliveryMethod.ReliableOrdered);
-        Console.WriteLine($"[equip] Player {player.Id} equipment: " +
-                          $"W{packet.WeaponItemId} A{packet.ArmorItemId} T{packet.TrinketItemId} " +
-                          $"(atk {player.AttackDamage:0}, armor {player.DamageReduction:0.0})");
+        _log.Info($"[equip] Player {player.Id} equipment: " +
+                  $"W{packet.WeaponItemId} A{packet.ArmorItemId} T{packet.TrinketItemId} " +
+                  $"(atk {player.AttackDamage:0}, armor {player.DamageReduction:0.0})");
     }
 
     private static int EquippedId(PlayerState player, EquipSlot slot) =>
@@ -350,7 +358,7 @@ public sealed class GameServer
                 Power = item.Power,
             };
             peer.Send(NetProtocol.Frame(MessageType.ItemPickedUp, packet), Channel, DeliveryMethod.ReliableOrdered);
-            Console.WriteLine($"[loot] Player {pickup.PlayerId} picked up {item.Name} (power {item.Power})");
+            _log.Info($"[loot] Player {pickup.PlayerId} picked up {item.Name} (power {item.Power})");
         }
     }
 
