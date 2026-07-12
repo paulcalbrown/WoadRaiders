@@ -4,9 +4,9 @@ using WoadRaiders.Core;
 namespace WoadRaiders.Server;
 
 /// <summary>
-/// The server-side state that lives and dies with a connected peer: the transport
-/// handle, its per-player input jitter buffer, and its message-rate budget. Bundling
-/// them keeps the connect/disconnect bookkeeping to one add and one remove.
+/// The server-side transport state that lives and dies with a connected peer: the
+/// peer handle and its message-rate budget. (The player's simulation state and input
+/// buffer live in the <see cref="GameSession"/>.)
 /// </summary>
 internal sealed class Connection
 {
@@ -24,8 +24,6 @@ internal sealed class Connection
     }
 
     public NetPeer Peer { get; }
-
-    public ServerInputBuffer Buffer { get; } = new();
 
     /// <summary>False when this peer is over its message-rate budget — drop the message.</summary>
     public bool AllowMessage(TimeSpan now) => _rate.TryConsume(now);

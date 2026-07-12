@@ -1,0 +1,112 @@
+using WoadRaiders.Core;
+using WoadRaiders.Shared;
+
+namespace WoadRaiders.Server;
+
+/// <summary>
+/// One authoritative match: the world, its spawn policy, and the per-player input
+/// buffers. It owns everything the simulation needs and nothing about the network —
+/// the server feeds it input and asks it for the state to broadcast. Engine-free and,
+/// given a seeded RNG, deterministic, so it can be driven in tests without a socket.
+/// </summary>
+internal sealed class GameSession
+{
+    private readonly DungeonGeometry _dungeon;
+    private readonly GameWorld _world;
+    private readonly SpawnDirector _director;
+    private readonly Dictionary<int, ServerInputBuffer> _inputBuffers = new();
+
+    public GameSession(DungeonGeometry dungeon, Random rng)
+    {
+        _dungeon = dungeon;
+        _world = new GameWorld { Geometry = dungeon };
+        _director = new SpawnDirector(_world, dungeon, rng);
+    }
+
+    /// <summary>Raised when the boss is first found dead / when it respawns (for logging).</summary>
+    public event Action? BossFell { add => _director.BossFell += value; remove => _director.BossFell -= value; }
+
+    public event Action? BossRose { add => _director.BossRose += value; remove => _director.BossRose -= value; }
+
+    /// <summary>The current simulation tick.</summary>
+    public int Tick => _world.Tick;
+
+    /// <summary>Populate the map (one enemy per marker, plus the boss). Returns regulars spawned.</summary>
+    public int SpawnInitial() => _director.SpawnInitial();
+
+    public void AddPlayer(int id, string name)
+    {
+        var player = _world.AddPlayer(id, name);
+        player.Position = _dungeon.SpawnPoint;
+        _inputBuffers[id] = new ServerInputBuffer();
+    }
+
+    public void RemovePlayer(int id)
+    {
+        _world.RemovePlayer(id);
+        _inputBuffers.Remove(id);
+    }
+
+    /// <summary>Set an already-connected player's (sanitized) display name.</summary>
+    public void SetName(int id, string name)
+    {
+        if (_world.Players.TryGetValue(id, out var player))
+            player.Name = name;
+    }
+
+    /// <summary>Buffer a player's input intent; it is applied one-per-tick by <see cref="Step"/>.</summary>
+    public void EnqueueInput(int id, in PlayerInput input)
+    {
+        if (_inputBuffers.TryGetValue(id, out var buffer))
+            buffer.Enqueue(input);
+    }
+
+    /// <summary>
+    /// Advance the sim one tick: hand each player exactly one buffered input in sequence
+    /// order, so the server replays each client's stream 1:1 and reconciliation stays
+    /// drift-free. A priming or starved buffer <em>holds</em> the player — a zero-move
+    /// input tagged with their last processed sequence — so <c>LastProcessedInput</c>
+    /// never regresses and the client reconciles the freeze exactly rather than fighting
+    /// a re-applied stale input. Then step the world and advance spawn policy.
+    /// </summary>
+    public void Step()
+    {
+        foreach (var player in _world.Players.Values)
+        {
+            if (_inputBuffers.TryGetValue(player.Id, out var buffer) && buffer.TryDequeue(out var input))
+                _world.SetInput(player.Id, input);
+            else
+                _world.SetInput(player.Id, new PlayerInput { Sequence = player.LastProcessedInput });
+        }
+
+        _world.Step();
+        _director.Update();
+    }
+
+    /// <summary>Project the current world into a broadcastable snapshot packet.</summary>
+    public WorldSnapshotPacket Snapshot() => WorldSnapshot.From(_world);
+
+    /// <summary>Loot collected since the last call, for the server to deliver to each player.</summary>
+    public IReadOnlyList<LootPickup> ConsumePickups() => _world.ConsumePickups();
+
+    /// <summary>Try to equip an item; returns the resulting loadout to send back, or null on no-op.</summary>
+    public EquipOutcome? TryEquip(int playerId, int itemId)
+    {
+        if (!_world.Players.TryGetValue(playerId, out var player) || !player.TryEquip(itemId))
+            return null;
+
+        return new EquipOutcome(
+            EquippedId(player, EquipSlot.Weapon),
+            EquippedId(player, EquipSlot.Armor),
+            EquippedId(player, EquipSlot.Trinket),
+            player.AttackDamage,
+            player.DamageReduction);
+    }
+
+    private static int EquippedId(PlayerState player, EquipSlot slot) =>
+        player.Equipped.TryGetValue(slot, out var item) ? item.Id : 0;
+}
+
+/// <summary>A player's equipped item ids and derived combat stats after an equip.</summary>
+internal readonly record struct EquipOutcome(
+    int WeaponId, int ArmorId, int TrinketId, float AttackDamage, float DamageReduction);

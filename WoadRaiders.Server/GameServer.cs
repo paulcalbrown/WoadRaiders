@@ -18,16 +18,13 @@ public sealed class GameServer
 
     private readonly EventBasedNetListener _listener = new();
     private readonly NetManager _net;
-    private readonly GameWorld _world = new();
-    private readonly Random _rng = new();
-    private readonly Dictionary<int, Connection> _connections = new(); // per-peer transport + input buffer
+    private readonly Dictionary<int, Connection> _connections = new(); // per-peer transport state
     private readonly Stopwatch _clock = Stopwatch.StartNew(); // monotonic; drives the loop and rate limits
     private readonly string _mapPath;
     private readonly ServerLog _log = new(); // non-blocking: keeps console I/O off the game loop
     private readonly Dictionary<MessageType, Action<NetPeer, NetPacketReader>> _handlers;
-    private DungeonGeometry _dungeon = null!;
+    private GameSession _session = null!; // the authoritative match (world, spawns, input buffers)
     private DungeonGeometryPacket _geometryPacket = null!; // immutable geometry — built once, sent per join
-    private SpawnDirector _director = null!; // owns enemy population + boss lifecycle (Core policy)
     private volatile bool _running;
 
     public GameServer(string mapPath)
@@ -66,9 +63,10 @@ public sealed class GameServer
         try
         {
             // Validate the map first — fail fast with no side effects (no socket, no threads).
+            DungeonGeometry dungeon;
             try
             {
-                _dungeon = DungeonGeometryFile.Load(_mapPath);
+                dungeon = DungeonGeometryFile.Load(_mapPath);
             }
             catch (Exception e)
             {
@@ -76,22 +74,20 @@ public sealed class GameServer
                 return false;
             }
             _log.Info($"Loaded map '{_mapPath}' " +
-                      $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns" +
-                      $"{(_dungeon.ScenePath is null ? "" : $", scene {_dungeon.ScenePath}")}).");
+                      $"({dungeon.Solids.Count} solids, {dungeon.EnemySpawns.Count} enemy spawns" +
+                      $"{(dungeon.ScenePath is null ? "" : $", scene {dungeon.ScenePath}")}).");
 
-            // Build the world before opening the socket. The geometry packet is immutable,
+            // Build the match before opening the socket. The geometry packet is immutable,
             // so it is built once here and reused for every join.
-            _world.Geometry = _dungeon;
-            _geometryPacket = DungeonSnapshot.From(_dungeon);
-
-            _director = new SpawnDirector(_world, _dungeon, _rng);
-            _director.BossFell += () => _log.Info(
+            _geometryPacket = DungeonSnapshot.From(dungeon);
+            _session = new GameSession(dungeon, new Random());
+            _session.BossFell += () => _log.Info(
                 $"[boss] The Barrow King has fallen! He returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
-            _director.BossRose += () => _log.Info("[boss] The Barrow King rises again.");
+            _session.BossRose += () => _log.Info("[boss] The Barrow King rises again.");
 
-            var spawned = _director.SpawnInitial();
-            _log.Info($"Spawned {spawned} enemies (map has {_dungeon.TypedEnemySpawns.Count} spawn markers).");
-            if (_dungeon.BossSpawn is not null)
+            var spawned = _session.SpawnInitial();
+            _log.Info($"Spawned {spawned} enemies (map has {dungeon.TypedEnemySpawns.Count} spawn markers).");
+            if (dungeon.BossSpawn is not null)
                 _log.Info("The Barrow King waits in his chamber.");
 
             // Only now, with the world fully built, open the socket — so a joining peer
@@ -148,20 +144,19 @@ public sealed class GameServer
         _listener.PeerConnectedEvent += peer =>
         {
             _connections[peer.Id] = new Connection(peer, _clock.Elapsed);
-            var player = _world.AddPlayer(peer.Id, $"Raider-{peer.Id}");
-            player.Position = _dungeon.SpawnPoint;
+            _session.AddPlayer(peer.Id, $"Raider-{peer.Id}");
             _log.Info($"[+] Player {peer.Id} joined  ({_net.ConnectedPeersCount} online)");
 
             // Send the dungeon first, then the welcome (both reliable-ordered on the same channel).
             peer.Send(NetProtocol.Frame(MessageType.DungeonGeometry, _geometryPacket), Channel, DeliveryMethod.ReliableOrdered);
-            var welcome = new WelcomePacket { PlayerId = peer.Id, ServerTick = _world.Tick };
+            var welcome = new WelcomePacket { PlayerId = peer.Id, ServerTick = _session.Tick };
             peer.Send(NetProtocol.Frame(MessageType.Welcome, welcome), Channel, DeliveryMethod.ReliableOrdered);
         };
 
         _listener.PeerDisconnectedEvent += (peer, _) =>
         {
             _connections.Remove(peer.Id);
-            _world.RemovePlayer(peer.Id);
+            _session.RemovePlayer(peer.Id);
             _log.Info($"[-] Player {peer.Id} left    ({_net.ConnectedPeersCount} online)");
         };
 
@@ -202,33 +197,41 @@ public sealed class GameServer
     {
         var join = new JoinRequest();
         join.Deserialize(reader);
-        if (_world.Players.TryGetValue(peer.Id, out var player))
-            player.Name = SanitizeName(join.Name, peer.Id);
+        _session.SetName(peer.Id, SanitizeName(join.Name, peer.Id));
     }
 
     private void HandleInput(NetPeer peer, NetPacketReader reader)
     {
         var input = new InputPacket();
         input.Deserialize(reader);
-        // Buffer the intent; it is applied one-per-tick, in order, by the sim loop
-        // (see ApplyBufferedInputs). Trust nothing but the intent — the simulation
-        // clamps/normalizes it.
-        if (_connections.TryGetValue(peer.Id, out var connection))
-            connection.Buffer.Enqueue(new PlayerInput
-            {
-                MoveX = input.MoveX,
-                MoveZ = input.MoveZ,
-                Sequence = input.Sequence,
-                Attack = input.Attack,
-            });
+        // Buffer the intent; the session applies it one-per-tick, in order. Trust
+        // nothing but the intent — the simulation clamps/normalizes it.
+        _session.EnqueueInput(peer.Id, new PlayerInput
+        {
+            MoveX = input.MoveX,
+            MoveZ = input.MoveZ,
+            Sequence = input.Sequence,
+            Attack = input.Attack,
+        });
     }
 
     private void HandleEquip(NetPeer peer, NetPacketReader reader)
     {
         var req = new EquipRequestPacket();
         req.Deserialize(reader);
-        if (_world.Players.TryGetValue(peer.Id, out var player) && player.TryEquip(req.ItemId))
-            SendEquipment(peer, player);
+        if (_session.TryEquip(peer.Id, req.ItemId) is not { } equipped)
+            return;
+
+        var packet = new EquipmentUpdatePacket
+        {
+            WeaponItemId = equipped.WeaponId,
+            ArmorItemId = equipped.ArmorId,
+            TrinketItemId = equipped.TrinketId,
+        };
+        peer.Send(NetProtocol.Frame(MessageType.EquipmentUpdate, packet), Channel, DeliveryMethod.ReliableOrdered);
+        _log.Info($"[equip] Player {peer.Id} equipment: " +
+                  $"W{equipped.WeaponId} A{equipped.ArmorId} T{equipped.TrinketId} " +
+                  $"(atk {equipped.AttackDamage:0}, armor {equipped.DamageReduction:0.0})");
     }
 
     /// <summary>Client-supplied names are untrusted: strip control chars, cap the length.</summary>
@@ -255,14 +258,10 @@ public sealed class GameServer
 
             var plan = scheduler.Advance(_clock.Elapsed);
 
-            // Spawn policy advances with the sim (one Update per tick), so it too rides
-            // out a stall cleanly under the catch-up bound.
+            // The session applies one buffered input per player and advances spawn
+            // policy each tick, so it rides out a stall cleanly under the catch-up bound.
             for (var i = 0; i < plan.Ticks; i++)
-            {
-                ApplyBufferedInputs();
-                _world.Step();
-                _director.Update();
-            }
+                _session.Step();
             if (plan.Stalled)
                 _log.Info($"[!] Sim stalled {plan.Dropped.TotalMilliseconds:0} ms beyond the catch-up cap — dropping the lost time.");
 
@@ -277,56 +276,18 @@ public sealed class GameServer
         }
     }
 
-    /// <summary>
-    /// Hand the simulation exactly one buffered input per player for this tick, in
-    /// sequence order, so the server replays each client's input stream 1:1 and
-    /// reconciliation stays drift-free. A priming or starved buffer <em>holds</em>
-    /// the player — a zero-move input tagged with their last processed sequence, so
-    /// <c>LastProcessedInput</c> never regresses and the client reconciles the freeze
-    /// exactly instead of fighting a re-applied stale input.
-    /// </summary>
-    private void ApplyBufferedInputs()
-    {
-        foreach (var player in _world.Players.Values)
-        {
-            if (_connections.TryGetValue(player.Id, out var connection) && connection.Buffer.TryDequeue(out var input))
-                _world.SetInput(player.Id, input);
-            else
-                _world.SetInput(player.Id, new PlayerInput { Sequence = player.LastProcessedInput });
-        }
-    }
-
     private void BroadcastSnapshot()
     {
         if (_net.ConnectedPeersCount == 0)
             return;
 
-        var snapshot = WorldSnapshot.From(_world);
-
         // Sequenced: unreliable but never delivers a stale snapshot after a newer one.
-        _net.SendToAll(NetProtocol.Frame(MessageType.WorldSnapshot, snapshot), Channel, DeliveryMethod.Sequenced);
+        _net.SendToAll(NetProtocol.Frame(MessageType.WorldSnapshot, _session.Snapshot()), Channel, DeliveryMethod.Sequenced);
     }
-
-    private void SendEquipment(NetPeer peer, PlayerState player)
-    {
-        var packet = new EquipmentUpdatePacket
-        {
-            WeaponItemId = EquippedId(player, EquipSlot.Weapon),
-            ArmorItemId = EquippedId(player, EquipSlot.Armor),
-            TrinketItemId = EquippedId(player, EquipSlot.Trinket),
-        };
-        peer.Send(NetProtocol.Frame(MessageType.EquipmentUpdate, packet), Channel, DeliveryMethod.ReliableOrdered);
-        _log.Info($"[equip] Player {player.Id} equipment: " +
-                  $"W{packet.WeaponItemId} A{packet.ArmorItemId} T{packet.TrinketItemId} " +
-                  $"(atk {player.AttackDamage:0}, armor {player.DamageReduction:0.0})");
-    }
-
-    private static int EquippedId(PlayerState player, EquipSlot slot) =>
-        player.Equipped.TryGetValue(slot, out var item) ? item.Id : 0;
 
     private void DeliverPickups()
     {
-        foreach (var pickup in _world.ConsumePickups())
+        foreach (var pickup in _session.ConsumePickups())
         {
             if (!_connections.TryGetValue(pickup.PlayerId, out var connection))
                 continue;
