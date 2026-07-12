@@ -21,6 +21,7 @@ public sealed class GameServer
     private readonly GameWorld _world = new();
     private readonly Random _rng = new();
     private readonly Dictionary<int, Connection> _connections = new(); // per-peer transport + input buffer
+    private readonly Stopwatch _clock = Stopwatch.StartNew(); // monotonic; drives the loop and rate limits
     private readonly string _mapPath;
     private readonly ServerLog _log = new(); // non-blocking: keeps console I/O off the game loop
     private readonly Dictionary<MessageType, Action<NetPeer, NetPacketReader>> _handlers;
@@ -146,7 +147,7 @@ public sealed class GameServer
 
         _listener.PeerConnectedEvent += peer =>
         {
-            _connections[peer.Id] = new Connection(peer);
+            _connections[peer.Id] = new Connection(peer, _clock.Elapsed);
             var player = _world.AddPlayer(peer.Id, $"Raider-{peer.Id}");
             player.Position = _dungeon.SpawnPoint;
             _log.Info($"[+] Player {peer.Id} joined  ({_net.ConnectedPeersCount} online)");
@@ -169,6 +170,11 @@ public sealed class GameServer
 
     private void OnReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)
     {
+        // Cap how fast any one peer can make the server work. Legit traffic sits far
+        // under the budget; a flooder's excess is dropped rather than processed.
+        if (_connections.TryGetValue(peer.Id, out var connection) && !connection.AllowMessage(_clock.Elapsed))
+            return;
+
         // The wire is hostile territory: a truncated or malicious packet must never
         // take the server down. Anything that fails to parse costs the sender their
         // connection, nothing more.
@@ -240,14 +246,14 @@ public sealed class GameServer
         var scheduler = new FixedTimestepScheduler(
             TimeSpan.FromSeconds(SimConstants.TickDelta),
             TimeSpan.FromSeconds(1.0 / NetConfig.SnapshotsPerSecond),
-            maxCatchUpTicks: 10); // ~1/3 s at 30 Hz — bounds catch-up after a stall
+            maxCatchUpTicks: 10, // ~1/3 s at 30 Hz — bounds catch-up after a stall
+            start: _clock.Elapsed);
 
-        var clock = Stopwatch.StartNew();
         while (_running)
         {
             _net.PollEvents();
 
-            var plan = scheduler.Advance(clock.Elapsed);
+            var plan = scheduler.Advance(_clock.Elapsed);
 
             // Spawn policy advances with the sim (one Update per tick), so it too rides
             // out a stall cleanly under the catch-up bound.

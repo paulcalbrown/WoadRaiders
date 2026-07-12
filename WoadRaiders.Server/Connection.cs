@@ -5,15 +5,28 @@ namespace WoadRaiders.Server;
 
 /// <summary>
 /// The server-side state that lives and dies with a connected peer: the transport
-/// handle and its per-player input jitter buffer. Bundling them keeps the
-/// connect/disconnect bookkeeping in one place — one add, one remove — and gives
-/// future per-connection state (rate limits, last-seen time) an obvious home.
+/// handle, its per-player input jitter buffer, and its message-rate budget. Bundling
+/// them keeps the connect/disconnect bookkeeping to one add and one remove.
 /// </summary>
 internal sealed class Connection
 {
-    public Connection(NetPeer peer) => Peer = peer;
+    // Generous headroom over legitimate traffic (input ~30/s plus the odd equip);
+    // a flooding peer is capped at the refill rate, with short bursts up to capacity.
+    private const double RateCapacity = 400;
+    private const double RateRefillPerSecond = 200;
+
+    private readonly RateLimiter _rate;
+
+    public Connection(NetPeer peer, TimeSpan now)
+    {
+        Peer = peer;
+        _rate = new RateLimiter(RateCapacity, RateRefillPerSecond, now);
+    }
 
     public NetPeer Peer { get; }
 
     public ServerInputBuffer Buffer { get; } = new();
+
+    /// <summary>False when this peer is over its message-rate budget — drop the message.</summary>
+    public bool AllowMessage(TimeSpan now) => _rate.TryConsume(now);
 }
