@@ -30,6 +30,12 @@ public static class LootGenerator
         if (rng.NextDouble() > SimConstants.EnemyDropChance)
             return null;
 
+        return RollDrop(rng);
+    }
+
+    /// <summary>Roll a drop that always succeeds (boss loot skips the drop-chance gate).</summary>
+    public static Item RollDrop(Random rng)
+    {
         var rarity = RollRarity(rng);
         var type = (ItemType)rng.Next(Enum.GetValues<ItemType>().Length);
         var (min, max) = PowerByRarity[(int)rarity];

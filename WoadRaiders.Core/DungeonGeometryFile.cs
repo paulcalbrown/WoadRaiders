@@ -13,7 +13,10 @@ namespace WoadRaiders.Core;
 ///   "scene": "res://maps/YourMap.tscn",          (optional — authored visuals)
 ///   "spawn": [x, y, z],
 ///   "solids": [ { "min": [x,y,z], "max": [x,y,z] }, ... ],
-///   "enemySpawns": [ [x,y,z], ... ]
+///   "enemySpawns": [ [x,y,z], ... ],
+///   "enemySpawnTypes": [ 0, 1, 2, ... ],         (optional — parallel to enemySpawns;
+///                                                 EnemyType values, missing → all Minion)
+///   "bossSpawn": [x, y, z]                       (optional — the map's boss)
 /// }
 /// </summary>
 public static class DungeonGeometryFile
@@ -37,13 +40,29 @@ public static class DungeonGeometryFile
         foreach (var b in doc.Solids ?? Array.Empty<BoxDoc>())
             solids.Add(new Aabb(ToVec(b.Min, "solid.min"), ToVec(b.Max, "solid.max")));
 
-        var spawns = new List<Vector3>();
-        foreach (var s in doc.EnemySpawns ?? Array.Empty<float[]>())
-            spawns.Add(ToVec(s, "enemySpawn"));
+        var positions = doc.EnemySpawns ?? Array.Empty<float[]>();
+        var types = doc.EnemySpawnTypes;
+        if (types is not null && types.Length != positions.Length)
+            throw new InvalidDataException("'enemySpawnTypes' must be parallel to 'enemySpawns'");
+
+        var spawns = new List<EnemySpawnPoint>(positions.Length);
+        for (var i = 0; i < positions.Length; i++)
+        {
+            // Validate the RAW int (casting first would wrap modulo 256 past the
+            // check), and reject Boss here too: bosses are only ever authored via
+            // 'bossSpawn' — a boss-typed marker would silently break the server's
+            // population accounting and boss-respawn tracking.
+            var raw = types?[i] ?? (int)EnemyType.Minion;
+            if (raw < 0 || raw >= (int)EnemyType.Boss)
+                throw new InvalidDataException(
+                    $"'enemySpawnTypes[{i}]' = {raw} is invalid (0..{(int)EnemyType.Boss - 1}; bosses use 'bossSpawn')");
+            spawns.Add(new EnemySpawnPoint(ToVec(positions[i], "enemySpawn"), (EnemyType)raw));
+        }
 
         return new DungeonGeometry(ToVec(doc.Spawn, "spawn"), solids, spawns)
         {
             ScenePath = string.IsNullOrWhiteSpace(doc.Scene) ? null : doc.Scene,
+            BossSpawn = doc.BossSpawn is null ? null : ToVec(doc.BossSpawn, "bossSpawn"),
         };
     }
 
@@ -58,7 +77,9 @@ public static class DungeonGeometryFile
                 Min = new[] { s.Min.X, s.Min.Y, s.Min.Z },
                 Max = new[] { s.Max.X, s.Max.Y, s.Max.Z },
             }).ToArray(),
-            EnemySpawns = g.EnemySpawns.Select(p => new[] { p.X, p.Y, p.Z }).ToArray(),
+            EnemySpawns = g.TypedEnemySpawns.Select(s => new[] { s.Position.X, s.Position.Y, s.Position.Z }).ToArray(),
+            EnemySpawnTypes = g.TypedEnemySpawns.Select(s => (int)s.Type).ToArray(),
+            BossSpawn = g.BossSpawn is { } b ? new[] { b.X, b.Y, b.Z } : null,
         };
         return JsonSerializer.Serialize(doc, Options);
     }
@@ -74,6 +95,8 @@ public static class DungeonGeometryFile
         public float[]? Spawn { get; set; }
         public BoxDoc[]? Solids { get; set; }
         public float[][]? EnemySpawns { get; set; }
+        public int[]? EnemySpawnTypes { get; set; }
+        public float[]? BossSpawn { get; set; }
     }
 
     private sealed class BoxDoc

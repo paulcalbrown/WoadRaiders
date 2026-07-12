@@ -15,10 +15,12 @@ public sealed class GameWorld
     private readonly Dictionary<int, PlayerInput> _inputs = new();
     private readonly Dictionary<int, EnemyState> _enemies = new();
     private readonly Dictionary<int, GroundItem> _groundItems = new();
+    private readonly Dictionary<int, ProjectileState> _projectiles = new();
     private readonly List<LootPickup> _pickups = new();
     private readonly Random _rng;
     private int _nextEnemyId = 1;
     private int _nextItemId = 1;
+    private int _nextProjectileId = 1;
 
     public GameWorld() : this(new Random())
     {
@@ -30,6 +32,7 @@ public sealed class GameWorld
     public IReadOnlyDictionary<int, PlayerState> Players => _players;
     public IReadOnlyDictionary<int, EnemyState> Enemies => _enemies;
     public IReadOnlyDictionary<int, GroundItem> GroundItems => _groundItems;
+    public IReadOnlyDictionary<int, ProjectileState> Projectiles => _projectiles;
 
     /// <summary>Dungeon geometry for collision and spawns. Null → open flat arena.</summary>
     public IDungeonGeometry? Geometry { get; set; }
@@ -62,9 +65,9 @@ public sealed class GameWorld
 
     // --- enemies ---
 
-    public EnemyState SpawnEnemy(Vector3 position)
+    public EnemyState SpawnEnemy(Vector3 position, EnemyType type = EnemyType.Minion)
     {
-        var enemy = new EnemyState(_nextEnemyId++) { Position = position };
+        var enemy = new EnemyState(_nextEnemyId++, type) { Position = position, HomePosition = position };
         _enemies[enemy.Id] = enemy;
         return enemy;
     }
@@ -103,9 +106,10 @@ public sealed class GameWorld
         TickCooldowns(dt);
         MovePlayers(dt);
         ResolvePlayerAttacks();
-        UpdateEnemies(dt);
-        RemoveDeadEnemies(); // may drop loot
-        ResolvePickups();    // players auto-collect nearby loot
+        UpdateEnemies(dt);       // mages fire bolts
+        UpdateProjectiles(dt);   // bolts travel and strike
+        RemoveDeadEnemies();     // may drop loot
+        ResolvePickups();        // players auto-collect nearby loot
         RespawnDeadPlayers();
 
         Tick++;
@@ -195,35 +199,164 @@ public sealed class GameWorld
             if (!enemy.IsAlive)
                 continue;
 
+            var arch = EnemyArchetypes.Of(enemy.Type);
             var target = NearestAlivePlayer(enemy.Position);
             if (target is null)
             {
-                enemy.Velocity = Vector3.Zero;
+                enemy.Aggroed = false;
+                ReturnHome(enemy, arch, dt);
                 continue;
             }
 
             var toTarget = target.Position - enemy.Position;
             var distance = toTarget.Length();
 
-            if (distance > SimConstants.EnemyAttackRange)
+            // Aggro state: enemies guard their post until a player comes close enough
+            // AND is visible — no spotting through walls. Once aggroed they pursue
+            // until the target outruns the leash, then walk back to their post
+            // (essential on large maps, or kited enemies pile up in travelled areas).
+            if (!enemy.Aggroed)
             {
-                var dir = distance > 0.0001f ? toTarget / distance : Vector3.Zero;
-                enemy.Velocity = dir * SimConstants.EnemyMoveSpeed;
-                enemy.Position = ResolveMove(enemy.Position, enemy.Velocity * dt);
+                if (distance <= arch.AggroRange && HasLineOfSight(enemy, target))
+                    enemy.Aggroed = true;
             }
-            else
+            else if (distance > arch.AggroRange * SimConstants.EnemyLeashFactor)
+            {
+                enemy.Aggroed = false;
+            }
+
+            if (!enemy.Aggroed)
+            {
+                ReturnHome(enemy, arch, dt);
+                continue;
+            }
+
+            // In striking distance AND visible → attack; otherwise close in (an enemy
+            // in range but behind a wall keeps advancing instead of zapping through it).
+            if (distance <= arch.AttackRange && HasLineOfSight(enemy, target))
             {
                 enemy.Velocity = Vector3.Zero;
                 if (enemy.AttackCooldown <= 0f)
                 {
-                    // Armor soaks part of the hit, but every hit lands for at least 1.
-                    var damage = Math.Max(1f, SimConstants.EnemyAttackDamage - target.DamageReduction);
-                    target.TakeDamage(damage);
-                    enemy.AttackCooldown = SimConstants.EnemyAttackCooldown;
+                    if (arch.ProjectileSpeed > 0f)
+                    {
+                        // Ranged: launch a bolt at where the target is now (dodgeable);
+                        // damage is dealt on impact by UpdateProjectiles, not here.
+                        SpawnProjectile(enemy.Position, target.Position, arch);
+                    }
+                    else
+                    {
+                        // Armor soaks part of the hit, but every hit lands for at least 1.
+                        var damage = Math.Max(1f, arch.AttackDamage - target.DamageReduction);
+                        target.TakeDamage(damage);
+                    }
+                    enemy.AttackCooldown = arch.AttackCooldown;
                     enemy.AttackAnimRemaining = SimConstants.AttackAnimDuration;
                 }
             }
+            else
+            {
+                var dir = distance > 0.0001f ? toTarget / distance : Vector3.Zero;
+                enemy.Velocity = dir * arch.MoveSpeed;
+                enemy.Position = ResolveMove(enemy.Position, enemy.Velocity * dt, arch.Radius);
+            }
         }
+    }
+
+    /// <summary>Walk an un-aggroed enemy back to its post, then stand guard.</summary>
+    private void ReturnHome(EnemyState enemy, in EnemyArchetype arch, float dt)
+    {
+        var toHome = enemy.HomePosition - enemy.Position;
+        var distance = toHome.Length();
+        if (distance <= SimConstants.EnemyHomeEpsilon)
+        {
+            enemy.Velocity = Vector3.Zero;
+            return;
+        }
+
+        var dir = toHome / distance;
+        enemy.Velocity = dir * arch.MoveSpeed;
+        enemy.Position = ResolveMove(enemy.Position, enemy.Velocity * dt, arch.Radius);
+    }
+
+    /// <summary>Sight line between two combatants, traced at eye height.</summary>
+    private bool HasLineOfSight(Combatant from, Combatant to)
+    {
+        if (Geometry is null)
+            return true; // open arena
+
+        var eye = new Vector3(0f, SimConstants.EyeHeight, 0f);
+        return Geometry.HasLineOfSight(from.Position + eye, to.Position + eye);
+    }
+
+    /// <summary>Launch a bolt from <paramref name="from"/> toward <paramref name="target"/> (both feet-space).</summary>
+    private void SpawnProjectile(Vector3 from, Vector3 target, in EnemyArchetype arch)
+    {
+        var dir = target - from;
+        dir.Y = 0f; // fly level across the ground plane
+        if (dir.LengthSquared() < 0.0001f)
+            return;
+        dir = Vector3.Normalize(dir);
+
+        var proj = new ProjectileState(_nextProjectileId++)
+        {
+            Position = from + new Vector3(0f, SimConstants.EyeHeight, 0f),
+            Velocity = dir * arch.ProjectileSpeed,
+            Damage = arch.AttackDamage,
+            Life = SimConstants.ProjectileLifetime,
+        };
+        _projectiles[proj.Id] = proj;
+    }
+
+    private void UpdateProjectiles(float dt)
+    {
+        if (_projectiles.Count == 0)
+            return;
+
+        var hitRadius = SimConstants.CharacterRadius + SimConstants.ProjectileRadius;
+        var hitRadiusSq = hitRadius * hitRadius;
+        List<int>? dead = null;
+
+        foreach (var proj in _projectiles.Values)
+        {
+            var next = proj.Position + proj.Velocity * dt;
+
+            // A wall in the flight path this tick stops the bolt (no damage).
+            if (Geometry is not null && !Geometry.HasLineOfSight(proj.Position, next))
+            {
+                (dead ??= new List<int>()).Add(proj.Id);
+                continue;
+            }
+
+            proj.Position = next;
+            proj.Life -= dt;
+
+            // First alive player the bolt overlaps takes the hit.
+            var struck = false;
+            foreach (var player in _players.Values)
+            {
+                if (!player.IsAlive)
+                    continue;
+
+                var dx = player.Position.X - proj.Position.X;
+                var dz = player.Position.Z - proj.Position.Z;
+                var withinColumn = proj.Position.Y >= player.Position.Y &&
+                                   proj.Position.Y <= player.Position.Y + SimConstants.CharacterHeight;
+                if (withinColumn && dx * dx + dz * dz <= hitRadiusSq)
+                {
+                    player.TakeDamage(Math.Max(1f, proj.Damage - player.DamageReduction));
+                    struck = true;
+                    break;
+                }
+            }
+
+            if (struck || proj.Life <= 0f)
+                (dead ??= new List<int>()).Add(proj.Id);
+        }
+
+        if (dead is not null)
+            foreach (var id in dead)
+                _projectiles.Remove(id);
     }
 
     private void RemoveDeadEnemies()
@@ -239,10 +372,21 @@ public sealed class GameWorld
         foreach (var id in dead)
         {
             var enemy = _enemies[id];
+            var arch = EnemyArchetypes.Of(enemy.Type);
 
-            var drop = LootGenerator.TryRollDrop(_rng);
-            if (drop is not null)
+            if (arch.GuaranteedDrops > 0)
+            {
+                // A boss always pays out — scatter the drops so they read as a pile.
+                for (var i = 0; i < arch.GuaranteedDrops; i++)
+                {
+                    var offset = new Vector3(MathF.Cos(i * 2.1f), 0f, MathF.Sin(i * 2.1f)) * 26f;
+                    DropItem(LootGenerator.RollDrop(_rng), enemy.Position + offset);
+                }
+            }
+            else if (LootGenerator.TryRollDrop(_rng) is { } drop)
+            {
                 DropItem(drop, enemy.Position);
+            }
 
             _enemies.Remove(id);
         }
@@ -325,8 +469,8 @@ public sealed class GameWorld
         }
     }
 
-    private Vector3 ResolveMove(Vector3 pos, Vector3 delta) =>
-        Geometry?.Move(pos, delta) ?? ClampToArena(pos + delta);
+    private Vector3 ResolveMove(Vector3 pos, Vector3 delta, float radius = SimConstants.CharacterRadius) =>
+        Geometry?.Move(pos, delta, radius) ?? ClampToArena(pos + delta);
 
     private static Vector3 ClampToArena(Vector3 p) => new(
         Math.Clamp(p.X, -SimConstants.WorldHalfWidth, SimConstants.WorldHalfWidth),

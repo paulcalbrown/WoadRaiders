@@ -74,9 +74,13 @@ two in lockstep if you upgrade Godot.
 2. An orthographic isometric camera eases after you (with directional shadows). **Arrows** move,
    **Space** attacks (a frontal melee strike — face your target), **I** opens the inventory
    (**1-9** to equip). You're a **Knight**,
-   other players are **Barbarians**, enemies are **Skeletons** — all animated KayKit
-   characters that face their movement and play idle/run/attack clips (enemies carry billboard
-   health bars). Loot spins and glows by rarity. Walls between you and the camera fade out.
+   other players are **Barbarians**, and the dead walk: **skeleton minions** chase you down,
+   **skeleton rogues** dart in fast, **skeleton mages** zap you from range, and the **Barrow
+   King** — a hulking armored skeleton — waits in his throne room at the far end of the map
+   (slay him for a guaranteed pile of loot; he rises again two minutes later). All animated
+   KayKit characters that face their movement and play idle/run/attack clips (enemies carry
+   billboard health bars). Loot spins and glows by rarity. Walls between you and the camera
+   fade out.
 
 ### 3. A two-player local test
 Start the server, then launch **two** client instances (Godot editor "Play" + an exported build,
@@ -106,8 +110,10 @@ core loop earns it.
       the past for smoothness (currently a simple ease-toward-latest).
 - [x] **Combat (first pass)** — server-authoritative directional melee (a frontal cleave: every
       enemy in front and within reach takes the hit — not a 360° area sweep), enemies with
-      seek/attack AI, damage, enemy death + respawn, player respawn. Logic in `Core`, unit-tested.
-      Client sends only the attack intent; the client predicts movement, never damage.
+      seek/attack AI, damage, enemy death + respawn, player respawn. **Mages fire authoritative
+      spell bolts** — a real projectile that travels, is blocked by walls, and can be side-stepped
+      (damage lands on impact, not on cast). Logic in `Core`, unit-tested. Client sends only the
+      attack intent; the client predicts movement, never damage.
 - [ ] **Combat polish** — directional/aimed attacks, on-screen health bars, downed state + revive,
       more enemy types, attack telegraphs. (Currently: frontal-cleave strike, immediate
       respawn at origin.)
@@ -120,7 +126,8 @@ core loop earns it.
       **cylinder-vs-box** test that is 3D-aware (walls block; beams above head height don't), sliding
       and shared verbatim by server and client prediction. Ships over the wire on join.
 - [x] **Hand-crafted maps from the Godot editor** — author any scene with `CollisionShape3D`/
-      `BoxShape3D` solids, a `Marker3D` named `PlayerSpawn`, and `EnemySpawn*` markers, then export
+      `BoxShape3D` solids, a `Marker3D` named `PlayerSpawn`, typed `EnemySpawn*` markers (name
+      contains `Rogue`/`Mage` for those types), and an optional `BossSpawn`, then export
       it with `tools/export_dungeon.gd` (runs headless) to JSON; serve it with
       `dotnet run --project WoadRaiders.Server -- --map maps/YourMap.json`. `maps/TestArena.tscn` is
       a working example, and the server defaults to it when run without `--map`. **Maps are the only
@@ -134,15 +141,26 @@ core loop earns it.
       transparency; opt out with a `no_fade` group). `TestArena.tscn` demos it with its own
       materials and torch-lit braziers.
 - [x] **Real map with a glTF kit** — the **KayKit Dungeon Remastered** kit (CC0, 203 glTF models)
-      is installed at `addons/kaykit_dungeon_remastered`, and `maps/Barrow.tscn` ("The Barrow") is a
-      sprawling seven-room dungeon built from it — entry hall, pillared great hall, shrine,
-      storeroom, barracks, treasury, and a long crypt, joined by looping corridors, with auto-placed
-      wall torches, banners, and props (241 floor tiles, 193 collision solids). Enemy density is
-      **map-driven**: the server targets 1 enemy per `EnemySpawn` marker (clamped 3–10), replenished
-      one every 6 s. Serve it with
+      is installed at `addons/kaykit_dungeon_remastered`, and `maps/Barrow.tscn` ("The Barrow") is
+      a sprawling dungeon built from it: entry hall, twin pillared halls, a north wing (shrine,
+      storeroom, mage reliquary), a south wing (columned crypt, rogue ossuary), and a grand
+      processional east to the antechamber and the **Barrow King's throne room** — all joined by
+      looping corridors, with auto-placed wall torches, banners, and props (918 floor tiles, 474
+      collision solids). Enemy density and **mix** are map-driven: the server spawns 1 enemy per
+      typed `EnemySpawn` marker (clamped 4–40), replenished one every 6 s. Serve it with
       `dotnet run --project WoadRaiders.Server -- --map WoadRaiders.Client/maps/Barrow.json`.
       Kit pieces are on a 4-unit grid, placed under a ×20-scaled `Visuals` node (1 kit tile = 80
       world units); collision boxes and markers are authored in world units as usual.
+- [x] **Enemy types & the first boss** — enemies are typed (`EnemyType` + an `EnemyArchetypes`
+      stat table in `Core`): **Minions** (baseline melee), **Rogues** (fast, fragile, quick
+      stabs), **Mages** (slow casters that strike from range), and the **Boss** (the Barrow
+      King: ~10× minion health, heavy hits, guaranteed triple loot, respawns 120 s after
+      falling). Enemies now **aggro by proximity** (idle at their posts until a player nears —
+      essential on a large map). Maps choose the mix with marker names (`EnemySpawn7_Rogue`,
+      `EnemySpawn12_Mage`, `BossSpawn`); the type ships as a byte on enemy snapshots and picks
+      the client model, scale, attack clip, and health-bar size. **Mages are ranged**: they fire
+      an authoritative spell bolt (a glowing projectile in the world snapshot) that flies, is
+      stopped by walls, and misses if you side-step — so you can dodge a mage but not a minion.
 - [x] **Animated characters** — players and enemies are rigged KayKit characters (Knight,
       Barbarian, Skeleton) at `addons/kaykit_character_pack_{adventures,skeletons}`. They
       face their movement direction and play **idle / run / attack** clips. Facing and movement are

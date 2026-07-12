@@ -17,9 +17,19 @@ public interface IDungeonGeometry
     /// Resolve an attempted move: apply <paramref name="delta"/> to
     /// <paramref name="position"/>, colliding with the dungeon (sliding along
     /// walls) and keeping the result on a walkable surface.
+    /// <paramref name="radius"/> is the mover's collision cylinder radius
+    /// (bosses are wider than regular characters).
     /// </summary>
-    Vector3 Move(Vector3 position, Vector3 delta);
+    Vector3 Move(Vector3 position, Vector3 delta, float radius = SimConstants.CharacterRadius);
 
     /// <summary>A random walkable position (enemy/loot placement).</summary>
     Vector3 RandomSpawnPosition(Random rng);
+
+    /// <summary>
+    /// True when nothing solid blocks the straight line between two points
+    /// (both world-space, typically at eye height). Attacks and aggro use this
+    /// so enemies do not spot or strike players through walls. Open-arena
+    /// providers can keep the default: always visible.
+    /// </summary>
+    bool HasLineOfSight(Vector3 from, Vector3 to) => true;
 }

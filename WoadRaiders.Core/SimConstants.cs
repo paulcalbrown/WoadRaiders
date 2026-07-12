@@ -66,4 +66,21 @@ public static class SimConstants
 
     /// <summary>Character body height; solids above this (relative to the feet) don't block.</summary>
     public const float CharacterHeight = 44f;
+
+    /// <summary>Height above the feet that sight lines are traced at (aggro / attack LOS).</summary>
+    public const float EyeHeight = 26f;
+
+    // --- Enemy aggro behaviour ---
+    /// <summary>An aggroed enemy gives up when its target exceeds AggroRange x this (the leash).</summary>
+    public const float EnemyLeashFactor = 1.6f;
+
+    /// <summary>How close (units) a returning enemy must get to its post before it settles.</summary>
+    public const float EnemyHomeEpsilon = 8f;
+
+    // --- Projectiles (mage spell bolts) ---
+    /// <summary>Bolt radius on the XZ plane (added to the target's radius for a hit).</summary>
+    public const float ProjectileRadius = 10f;
+
+    /// <summary>Seconds a bolt flies before fizzling (kills stray/dodged bolts).</summary>
+    public const float ProjectileLifetime = 2.5f;
 }

@@ -98,6 +98,7 @@ public struct EnemySnapshot : INetSerializable
     public float Z;
     public float Health;
     public bool Attacking;
+    public byte Type; // EnemyType — picks the client model and max health
 
     public void Serialize(NetDataWriter w)
     {
@@ -107,6 +108,7 @@ public struct EnemySnapshot : INetSerializable
         w.Put(Z);
         w.Put(Health);
         w.Put((byte)(Attacking ? 1 : 0));
+        w.Put(Type);
     }
 
     public void Deserialize(NetDataReader r)
@@ -117,6 +119,7 @@ public struct EnemySnapshot : INetSerializable
         Z = r.GetFloat();
         Health = r.GetFloat();
         Attacking = r.GetByte() != 0;
+        Type = r.GetByte();
     }
 }
 
@@ -148,6 +151,31 @@ public struct GroundItemSnapshot : INetSerializable
     }
 }
 
+/// <summary>One in-flight projectile inside a <see cref="WorldSnapshotPacket"/>. Positions are 3D, Y-up.</summary>
+public struct ProjectileSnapshot : INetSerializable
+{
+    public int Id;
+    public float X;
+    public float Y;
+    public float Z;
+
+    public void Serialize(NetDataWriter w)
+    {
+        w.Put(Id);
+        w.Put(X);
+        w.Put(Y);
+        w.Put(Z);
+    }
+
+    public void Deserialize(NetDataReader r)
+    {
+        Id = r.GetInt();
+        X = r.GetFloat();
+        Y = r.GetFloat();
+        Z = r.GetFloat();
+    }
+}
+
 /// <summary>Server → clients. The authoritative state of the world this tick.</summary>
 public sealed class WorldSnapshotPacket : INetSerializable
 {
@@ -155,6 +183,7 @@ public sealed class WorldSnapshotPacket : INetSerializable
     public PlayerSnapshot[] Players = System.Array.Empty<PlayerSnapshot>();
     public EnemySnapshot[] Enemies = System.Array.Empty<EnemySnapshot>();
     public GroundItemSnapshot[] GroundItems = System.Array.Empty<GroundItemSnapshot>();
+    public ProjectileSnapshot[] Projectiles = System.Array.Empty<ProjectileSnapshot>();
 
     public void Serialize(NetDataWriter w)
     {
@@ -171,6 +200,10 @@ public sealed class WorldSnapshotPacket : INetSerializable
         w.Put((ushort)GroundItems.Length);
         foreach (var g in GroundItems)
             g.Serialize(w);
+
+        w.Put((ushort)Projectiles.Length);
+        foreach (var p in Projectiles)
+            p.Serialize(w);
     }
 
     public void Deserialize(NetDataReader r)
@@ -202,6 +235,15 @@ public sealed class WorldSnapshotPacket : INetSerializable
             var g = new GroundItemSnapshot();
             g.Deserialize(r);
             GroundItems[i] = g;
+        }
+
+        int projectileCount = r.GetUShort();
+        Projectiles = new ProjectileSnapshot[projectileCount];
+        for (int i = 0; i < projectileCount; i++)
+        {
+            var p = new ProjectileSnapshot();
+            p.Deserialize(r);
+            Projectiles[i] = p;
         }
     }
 }

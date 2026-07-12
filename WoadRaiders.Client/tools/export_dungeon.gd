@@ -5,7 +5,10 @@
 #   - Solids:      CollisionShape3D nodes with a BoxShape3D (rotated boxes are
 #                  exported as their world AABB — keep them axis-aligned).
 #   - Player spawn: a Marker3D named exactly "PlayerSpawn".
-#   - Enemy spawns: Marker3D nodes whose names start with "EnemySpawn".
+#   - Enemy spawns: Marker3D nodes whose names start with "EnemySpawn". The enemy
+#                  type comes from the name: contains "Rogue" -> Rogue, "Mage" ->
+#                  Mage, anything else -> Minion (e.g. "EnemySpawn7_Mage").
+#   - Boss:        a Marker3D named "BossSpawn" (optional; at most one).
 #
 # Run headless (no editor needed):
 #   godot-mono --headless --path WoadRaiders.Client -s res://tools/export_dungeon.gd -- <scene.tscn> <out.json>
@@ -32,6 +35,7 @@ func _init() -> void:
 		"spawn": [0.0, 0.0, 0.0],
 		"solids": [],
 		"enemySpawns": [],
+		"enemySpawnTypes": [], # parallel to enemySpawns; WoadRaiders.Core.EnemyType values
 	}
 	_walk(root, Transform3D.IDENTITY, out)
 	root.free()
@@ -44,7 +48,9 @@ func _init() -> void:
 	file.store_string(JSON.stringify(out, "  "))
 	file.close()
 
-	print("exported %d solids, %d enemy spawns -> %s" % [out["solids"].size(), out["enemySpawns"].size(), args[1]])
+	print("exported %d solids, %d enemy spawns%s -> %s" % [
+		out["solids"].size(), out["enemySpawns"].size(),
+		" + boss" if out.has("bossSpawn") else "", args[1]])
 	quit(0)
 
 func _walk(node: Node, parent_xform: Transform3D, out: Dictionary) -> void:
@@ -68,10 +74,22 @@ func _walk(node: Node, parent_xform: Transform3D, out: Dictionary) -> void:
 		})
 	elif node is Marker3D:
 		var origin := xform.origin
-		if node.name == "PlayerSpawn":
+		var name := String(node.name)
+		if name == "PlayerSpawn":
 			out["spawn"] = [origin.x, origin.y, origin.z]
-		elif String(node.name).begins_with("EnemySpawn"):
+		elif name.begins_with("BossSpawn"):
+			if out.has("bossSpawn"):
+				push_warning("multiple BossSpawn markers; '%s' overrides the earlier one" % name)
+			out["bossSpawn"] = [origin.x, origin.y, origin.z]
+		elif name.begins_with("EnemySpawn"):
 			out["enemySpawns"].append([origin.x, origin.y, origin.z])
+			var lower := name.to_lower()
+			var type := 0 # Minion
+			if lower.contains("rogue"):
+				type = 1
+			elif lower.contains("mage"):
+				type = 2
+			out["enemySpawnTypes"].append(type)
 
 	for child in node.get_children():
 		_walk(child, xform, out)

@@ -58,6 +58,17 @@ public partial class NetworkClient : Node3D
     private const string AnimRun = "Running_A";
     private const string AnimAttack = "1H_Melee_Attack_Chop";
 
+    /// <summary>How each enemy type looks: model, size, swing, and health-bar placement.</summary>
+    private readonly record struct EnemyVisual(string SceneFile, float Scale, string AttackClip, float BarHeight, float BarScale);
+
+    private static readonly Dictionary<EnemyType, EnemyVisual> EnemyVisuals = new()
+    {
+        [EnemyType.Minion] = new("Skeleton_Minion.glb", 20f, "1H_Melee_Attack_Chop", 54f, 1f),
+        [EnemyType.Rogue] = new("Skeleton_Rogue.glb", 20f, "1H_Melee_Attack_Stab", 54f, 1f),
+        [EnemyType.Mage] = new("Skeleton_Mage.glb", 20f, "Spellcast_Shoot", 54f, 1f),
+        [EnemyType.Boss] = new("Skeleton_Warrior.glb", 44f, "2H_Melee_Attack_Chop", 122f, 2f),
+    };
+
     private EventBasedNetListener _listener = null!;
     private NetManager _net = null!;
     private NetPeer? _server;
@@ -79,10 +90,12 @@ public partial class NetworkClient : Node3D
 
     private Camera3D _camera = null!;
     private BoxMesh _lootMesh = null!;
+    private SphereMesh _boltMesh = null!;
+    private StandardMaterial3D _boltMaterial = null!;
     private QuadMesh _barMesh = null!;
     private PackedScene _localCharScene = null!;
     private PackedScene _remoteCharScene = null!;
-    private PackedScene _enemyCharScene = null!;
+    private readonly Dictionary<EnemyType, PackedScene> _enemyCharScenes = new();
 
     private MultiMesh? _wallMulti;
     private Vector3[] _wallMins = System.Array.Empty<Vector3>();
@@ -97,6 +110,8 @@ public partial class NetworkClient : Node3D
     private readonly Dictionary<int, CharacterView> _enemyViews = new();
     private readonly Dictionary<int, Vector3> _enemyTargets = new();
     private readonly Dictionary<int, MeshInstance3D> _lootViews = new();
+    private readonly Dictionary<int, MeshInstance3D> _projectileViews = new();
+    private readonly Dictionary<int, Vector3> _projectileTargets = new();
     private readonly Dictionary<int, Vector3> _lootBase = new(); // ground point each gem bobs above
 
     private readonly List<Item> _inventory = new();
@@ -124,6 +139,9 @@ public partial class NetworkClient : Node3D
         public float HealthFrac = 1f;      // current authoritative health (target for fill + chip)
         public float ChipFrac = 1f;        // lagging fraction the chip drains toward HealthFrac
         public float ChipHold;             // seconds to linger before the chip starts draining
+        public string AttackClip = AnimAttack;
+        public float BarHeight = HealthBarHeight;
+        public float BarScale = 1f;
         public Vector3 LastPos;
         public Vector3 SmoothVel;          // low-passed velocity used for facing (kills reconcile twitch)
         public string Clip = "";
@@ -155,13 +173,23 @@ public partial class NetworkClient : Node3D
     private void SetupScene()
     {
         _lootMesh = new BoxMesh { Size = new Vector3(16, 16, 16) };
+        _boltMesh = new SphereMesh { Radius = 9f, Height = 18f, RadialSegments = 8, Rings = 4 };
+        _boltMaterial = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.6f, 0.35f, 1f),  // arcane violet
+            EmissionEnabled = true,
+            Emission = new Color(0.7f, 0.45f, 1f),
+            EmissionEnergyMultiplier = 3f,
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        };
         _barMesh = new QuadMesh { Size = new Vector2(40, 6) };
 
         const string adv = "res://addons/kaykit_character_pack_adventures/Characters/gltf";
         const string skel = "res://addons/kaykit_character_pack_skeletons/Characters/gltf";
         _localCharScene = GD.Load<PackedScene>($"{adv}/Knight.glb");
         _remoteCharScene = GD.Load<PackedScene>($"{adv}/Barbarian.glb");
-        _enemyCharScene = GD.Load<PackedScene>($"{skel}/Skeleton_Minion.glb"); // bare-skull skeleton (Warrior's horned helm read as a barbarian)
+        foreach (var (type, visual) in EnemyVisuals)
+            _enemyCharScenes[type] = GD.Load<PackedScene>($"{skel}/{visual.SceneFile}");
 
         _camera = new Camera3D
         {
@@ -416,11 +444,14 @@ public partial class NetworkClient : Node3D
         {
             seenEnemies.Add(e.Id);
             var feet = new Vector3(e.X, e.Y, e.Z);
-            var view = GetOrCreateEnemyView(e.Id, feet);
+            // Tolerate an unknown Type byte (version-skewed server / corrupt stream)
+            // by falling back to Minion — never crash the receive path over cosmetics.
+            var type = e.Type <= (byte)EnemyType.Boss ? (EnemyType)e.Type : EnemyType.Minion;
+            var view = GetOrCreateEnemyView(e.Id, feet, type);
             view.Attacking = e.Attacking;
             _enemyTargets[e.Id] = feet;
 
-            var frac = Mathf.Clamp(e.Health / SimConstants.EnemyMaxHealth, 0f, 1f);
+            var frac = Mathf.Clamp(e.Health / EnemyArchetypes.Of(type).MaxHealth, 0f, 1f);
             if (frac < view.HealthFrac) view.ChipHold = ChipHoldTime; // took a hit → linger the chip
             view.HealthFrac = frac; // fill + chip are rendered per-frame in UpdateEnemyBar
         }
@@ -435,6 +466,16 @@ public partial class NetworkClient : Node3D
             GetOrCreateLootView(g.Id, g.Rarity, ground + Vector3.Up * LootY);
         }
         PruneLoot(seenLoot);
+
+        var seenBolts = new HashSet<int>();
+        foreach (var p in snapshot.Projectiles)
+        {
+            seenBolts.Add(p.Id);
+            var pos = new Vector3(p.X, p.Y, p.Z);
+            _projectileTargets[p.Id] = pos;
+            GetOrCreateProjectileView(p.Id, pos);
+        }
+        PruneProjectiles(seenBolts);
     }
 
     private void UpdateViews(double delta)
@@ -471,6 +512,12 @@ public partial class NetworkClient : Node3D
             UpdateEnemyBar(view, (float)delta);
         }
 
+        // Bolts move fast; ease hard toward the latest snapshot so 20 Hz steps read smoothly.
+        var boltFactor = Mathf.Clamp((float)delta * 30f, 0f, 1f);
+        foreach (var (id, view) in _projectileViews)
+            if (_projectileTargets.TryGetValue(id, out var target))
+                view.Position = view.Position.Lerp(target, boltFactor);
+
         // Loot gems spin and bob so drops catch the eye.
         var bob = Mathf.Sin((float)_elapsed * 3f) * 4f;
         foreach (var (lid, lview) in _lootViews)
@@ -506,19 +553,19 @@ public partial class NetworkClient : Node3D
         if (view.Anim is null)
             return;
 
-        var desired = view.Attacking ? AnimAttack : moving ? AnimRun : AnimIdle;
+        var desired = view.Attacking ? view.AttackClip : moving ? AnimRun : AnimIdle;
         if (desired != view.Clip || !view.Anim.IsPlaying())
         {
-            view.Anim.SpeedScale = desired == AnimAttack ? AttackSpeedScale(view.Anim) : 1f;
+            view.Anim.SpeedScale = desired == view.AttackClip ? AttackSpeedScale(view.Anim, view.AttackClip) : 1f;
             view.Anim.Play(desired);
             view.Clip = desired;
         }
     }
 
     // Speed the attack clip so its full swing fits the authoritative attack window.
-    private static float AttackSpeedScale(AnimationPlayer anim) =>
-        anim.HasAnimation(AnimAttack)
-            ? (float)anim.GetAnimation(AnimAttack).Length / SimConstants.AttackAnimDuration
+    private static float AttackSpeedScale(AnimationPlayer anim, string clip) =>
+        anim.HasAnimation(clip)
+            ? (float)anim.GetAnimation(clip).Length / SimConstants.AttackAnimDuration
             : 1f;
 
     private void UpdateCamera(double delta)
@@ -775,27 +822,32 @@ public partial class NetworkClient : Node3D
             return existing;
 
         var scene = id == _localPlayerId ? _localCharScene : _remoteCharScene;
-        var view = CreateCharacter(scene, feet, withHealthBar: false);
+        var view = CreateCharacter(scene, feet, CharScale);
         _playerViews[id] = view;
         return view;
     }
 
-    private CharacterView GetOrCreateEnemyView(int id, Vector3 feet)
+    private CharacterView GetOrCreateEnemyView(int id, Vector3 feet, EnemyType type)
     {
         if (_enemyViews.TryGetValue(id, out var existing))
             return existing;
 
-        var view = CreateCharacter(_enemyCharScene, feet, withHealthBar: true);
+        var visual = EnemyVisuals[type];
+        var view = CreateCharacter(_enemyCharScenes[type], feet, visual.Scale);
+        view.AttackClip = visual.AttackClip;
+        view.BarHeight = visual.BarHeight;
+        view.BarScale = visual.BarScale;
+        AttachHealthBar(view.Root, view);
         _enemyViews[id] = view;
         return view;
     }
 
-    private CharacterView CreateCharacter(PackedScene scene, Vector3 feet, bool withHealthBar)
+    private CharacterView CreateCharacter(PackedScene scene, Vector3 feet, float charScale)
     {
         var holder = new Node3D { Position = feet }; // snap to real spot (no lerp-in from origin)
         var pivot = new Node3D();
         var model = scene.Instantiate<Node3D>();
-        model.Scale = Vector3.One * CharScale;
+        model.Scale = Vector3.One * charScale;
         pivot.AddChild(model);
         holder.AddChild(pivot);
         AddChild(holder);
@@ -812,8 +864,6 @@ public partial class NetworkClient : Node3D
             view.Anim.Play(AnimIdle);
             view.Clip = AnimIdle;
         }
-        if (withHealthBar)
-            AttachHealthBar(holder, view);
         return view;
     }
 
@@ -832,7 +882,8 @@ public partial class NetworkClient : Node3D
         var bg = new MeshInstance3D
         {
             Mesh = _barMesh,
-            Position = new Vector3(0, HealthBarHeight, 0),
+            Position = new Vector3(0, view.BarHeight, 0),
+            Scale = new Vector3(view.BarScale, view.BarScale, 1f),
             MaterialOverride = BarMaterial(new Color(0.05f, 0.05f, 0.05f)),
         };
         holder.AddChild(bg);
@@ -842,7 +893,7 @@ public partial class NetworkClient : Node3D
         var chip = new MeshInstance3D
         {
             Mesh = _barMesh,
-            Position = new Vector3(0, HealthBarHeight, 0.1f),
+            Position = new Vector3(0, view.BarHeight, 0.1f),
             MaterialOverride = BarMaterial(new Color(1.0f, 0.7f, 0.7f)), // very light red trail
         };
         holder.AddChild(chip);
@@ -850,7 +901,7 @@ public partial class NetworkClient : Node3D
         var fill = new MeshInstance3D
         {
             Mesh = _barMesh,
-            Position = new Vector3(0, HealthBarHeight, 0.2f),
+            Position = new Vector3(0, view.BarHeight, 0.2f),
             MaterialOverride = BarMaterial(new Color(0.85f, 0.15f, 0.15f)), // solid red (hostile)
         };
         holder.AddChild(fill);
@@ -867,22 +918,24 @@ public partial class NetworkClient : Node3D
 
         AdvanceChip(ref view.ChipFrac, ref view.ChipHold, view.HealthFrac, delta);
 
-        PlaceBar(view.HealthChip, view.ChipFrac, 0.1f);
-        PlaceBar(view.HealthFill, view.HealthFrac, 0.2f);
+        PlaceBar(view, view.HealthChip, view.ChipFrac, 0.1f);
+        PlaceBar(view, view.HealthFill, view.HealthFrac, 0.2f);
     }
 
     // Scale a billboard bar to its fraction and left-anchor it. The quad billboards
     // (keep-scale), so its width shrinks along the camera's right axis; shifting the
     // centre left along that SAME axis by half the lost width keeps the left edge fixed
     // and drains from the right, like the HUD bar. (A world-X shift skews diagonally and
-    // reads as a detached second bar.)
-    private static void PlaceBar(MeshInstance3D? bar, float frac, float z)
+    // reads as a detached second bar.) Bar height/size come from the view (boss bars
+    // sit higher and are drawn larger).
+    private static void PlaceBar(CharacterView view, MeshInstance3D? bar, float frac, float z)
     {
         if (bar is null)
             return;
         frac = Mathf.Clamp(frac, 0f, 1f);
-        bar.Scale = new Vector3(Mathf.Max(frac, 0.001f), 1f, 1f);
-        bar.Position = new Vector3(0f, HealthBarHeight, z) - EnemyBarWidth * (1f - frac) / 2f * BillboardRight;
+        bar.Scale = new Vector3(Mathf.Max(frac, 0.001f) * view.BarScale, view.BarScale, 1f);
+        bar.Position = new Vector3(0f, view.BarHeight, z)
+                       - EnemyBarWidth * view.BarScale * (1f - frac) / 2f * BillboardRight;
     }
 
     // Chip easing shared by the HUD and enemy bars: snap up on heal, else linger
@@ -955,6 +1008,34 @@ public partial class NetworkClient : Node3D
             _lootViews[id].QueueFree();
             _lootViews.Remove(id);
             _lootBase.Remove(id);
+        }
+    }
+
+    private MeshInstance3D GetOrCreateProjectileView(int id, Vector3 spawn)
+    {
+        if (_projectileViews.TryGetValue(id, out var existing))
+            return existing;
+
+        var view = new MeshInstance3D
+        {
+            Mesh = _boltMesh,
+            Position = spawn, // snap the first frame; eased thereafter
+            MaterialOverride = _boltMaterial,
+        };
+        AddChild(view);
+        _projectileViews[id] = view;
+        return view;
+    }
+
+    private void PruneProjectiles(HashSet<int> seen)
+    {
+        foreach (var id in new List<int>(_projectileViews.Keys))
+        {
+            if (seen.Contains(id))
+                continue;
+            _projectileViews[id].QueueFree();
+            _projectileViews.Remove(id);
+            _projectileTargets.Remove(id);
         }
     }
 
