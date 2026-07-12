@@ -109,7 +109,7 @@ public partial class HudController : CanvasLayer
         _healthLabel.Text = $"{Mathf.RoundToInt(state.Health)} / {Mathf.RoundToInt(SimConstants.PlayerMaxHealth)}";
 
         _stats.Text = $"Items {state.Inventory.Count}   Atk {state.AttackDamage:0}   Armor {state.DamageReduction:0.0}   " +
-                      "[I] inventory   [Space] attack";
+                      "[I] inventory   [Space] attack   [Esc] menu";
 
         _status.Text = connection switch
         {

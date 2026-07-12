@@ -5,6 +5,32 @@ public static class NetConfig
 {
     public const int DefaultPort = 9050;
 
+    /// <summary>Default server endpoint for a client with no override (the local dev loop).</summary>
+    public const string DefaultHost = "127.0.0.1";
+
+    /// <summary>
+    /// Parse a user-supplied "host[:port]" endpoint (IPv4 or hostname; IPv6 is not
+    /// supported — the last ':' is taken as the port separator). This parses
+    /// title-screen and CLI input, so anything missing or malformed falls back to
+    /// the defaults instead of failing: best effort, never crash.
+    /// </summary>
+    public static (string Host, int Port) ParseEndpoint(string? text)
+    {
+        var value = (text ?? "").Trim();
+        if (value.Length == 0)
+            return (DefaultHost, DefaultPort);
+
+        var colon = value.LastIndexOf(':');
+        if (colon < 0)
+            return (value, DefaultPort);
+
+        var host = colon == 0 ? DefaultHost : value[..colon];
+        var port = int.TryParse(value[(colon + 1)..], out var parsed) && parsed is > 0 and <= 65535
+            ? parsed
+            : DefaultPort;
+        return (host, port);
+    }
+
     /// <summary>
     /// A trivial handshake key. It stops random UDP traffic from being treated as
     /// a client; it is NOT security. Real auth comes from the accounts/matchmaking

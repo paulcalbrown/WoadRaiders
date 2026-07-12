@@ -77,6 +77,34 @@ public class DungeonSnapshotTests
     }
 
     [Fact]
+    public void Fingerprint_is_stable_for_identical_maps()
+    {
+        // Two packets independently projected from the same dungeon must match —
+        // this is what lets a reconnect recognize "same map, keep the visuals".
+        Assert.Equal(
+            DungeonSnapshot.Fingerprint(DungeonSnapshot.From(SampleDungeon())),
+            DungeonSnapshot.Fingerprint(DungeonSnapshot.From(SampleDungeon())));
+    }
+
+    [Fact]
+    public void Fingerprint_changes_when_the_map_changes()
+    {
+        var baseline = DungeonSnapshot.Fingerprint(DungeonSnapshot.From(SampleDungeon()));
+
+        var movedSpawn = DungeonSnapshot.From(SampleDungeon());
+        movedSpawn.SpawnX += 1f;
+        Assert.NotEqual(baseline, DungeonSnapshot.Fingerprint(movedSpawn));
+
+        var movedWall = DungeonSnapshot.From(SampleDungeon());
+        movedWall.Boxes[3] += 1f;
+        Assert.NotEqual(baseline, DungeonSnapshot.Fingerprint(movedWall));
+
+        var otherScene = DungeonSnapshot.From(SampleDungeon());
+        otherScene.ScenePath = "res://maps/Other.tscn";
+        Assert.NotEqual(baseline, DungeonSnapshot.Fingerprint(otherScene));
+    }
+
+    [Fact]
     public void Packet_survives_a_serialize_round_trip()
     {
         var packet = DungeonSnapshot.From(SampleDungeon());

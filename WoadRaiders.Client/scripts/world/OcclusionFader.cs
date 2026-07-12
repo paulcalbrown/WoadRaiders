@@ -44,6 +44,15 @@ public sealed class OcclusionFader
         }
     }
 
+    /// <summary>Forget every tracked mesh — the map is being torn down for a rebuild.</summary>
+    public void Clear()
+    {
+        _sceneMeshes.Clear();
+        _wallMulti = null;
+        _wallMins = Array.Empty<SysVec3>();
+        _wallMaxs = Array.Empty<SysVec3>();
+    }
+
     /// <summary>Register the placeholder wall multimesh; each instance fades via its color alpha.</summary>
     public void TrackWalls(MultiMesh walls, IReadOnlyList<CoreAabb> solids)
     {

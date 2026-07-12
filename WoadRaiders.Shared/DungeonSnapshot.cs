@@ -58,4 +58,23 @@ public static class DungeonSnapshot
             ScenePath = string.IsNullOrEmpty(packet.ScenePath) ? null : packet.ScenePath,
         };
     }
+
+    /// <summary>
+    /// A fingerprint over everything the packet carries, so a client can tell
+    /// whether a re-sent geometry is the same map or a different one (a reconnect
+    /// can land on a restarted server serving a new arena). Process-local only —
+    /// System.HashCode is seeded per process — which is exactly the lifetime of
+    /// the comparison; never persist or send it.
+    /// </summary>
+    public static int Fingerprint(DungeonGeometryPacket packet)
+    {
+        var hash = new HashCode();
+        hash.Add(packet.SpawnX);
+        hash.Add(packet.SpawnY);
+        hash.Add(packet.SpawnZ);
+        hash.Add(packet.ScenePath);
+        foreach (var f in packet.Boxes)
+            hash.Add(f);
+        return hash.ToHashCode();
+    }
 }

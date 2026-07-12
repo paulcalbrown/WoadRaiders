@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b0woadraiders0main"]
+
+[ext_resource type="Script" path="res://scripts/GameScreen.cs" id="1_gamescreen"]
+
+[node name="Game" type="Node3D"]
+script = ExtResource("1_gamescreen")

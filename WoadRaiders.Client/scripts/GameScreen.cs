@@ -7,23 +7,28 @@ using SysVec3 = System.Numerics.Vector3; // Core simulates in 3D (Y-up), same co
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// Composition root for the 3D isometric client. This node only wires the pieces
-/// together and orchestrates the frame:
+/// The in-match screen and the client's composition root. Entered from the
+/// <see cref="TitleScreen"/> (Esc returns there); this node only wires the
+/// pieces together and orchestrates the frame:
 ///
 ///   <see cref="ClientConnection"/> (transport + lifecycle) feeds
 ///   <see cref="ClientState"/> (inventory/equipment/health replica) and
 ///   <see cref="LocalPlayer"/> (prediction + reconciliation), which drive
 ///   <see cref="WorldView"/> (entity views), <see cref="HudController"/>,
 ///   <see cref="CameraRig"/>, and <see cref="OcclusionFader"/>;
-///   <see cref="DungeonVisualBuilder"/> stands the map up when geometry arrives.
+///   <see cref="DungeonVisualBuilder"/> stands the map up under a dedicated
+///   root node when geometry arrives (and again if a reconnect lands on a
+///   different map).
 ///
 /// The simulation is fully 3D (System.Numerics, Y-up) — the same convention as
 /// Godot, so sim positions map to the scene 1:1.
 ///
-/// Arrows move · Space attacks · walk over loot · I = inventory · 1-9 = equip.
+/// Arrows move · Space attacks · walk over loot · I = inventory · 1-9 = equip · Esc = menu.
 /// </summary>
-public partial class NetworkClient : Node3D
+public partial class GameScreen : Node3D
 {
+    public const string ScenePath = "res://screens/GameScreen.tscn";
+
     private const float BodyHeight = 22f; // approx body-centre height, for camera/fade reference
 
     private readonly ClientState _state = new();
@@ -34,10 +39,12 @@ public partial class NetworkClient : Node3D
     private HudController _hud = null!;
     private CameraRig _camera = null!;
     private DungeonGeometry? _geometry;
-    private bool _dungeonBuilt;
+    private Node3D? _mapRoot;            // all dungeon visuals live under here, so a map swap can rebuild them
+    private int? _builtMapFingerprint;   // fingerprint of the map the visuals were built for
 
     public override void _Ready()
     {
+        ClientConfig.EnsureLoaded();
         ClientActions.EnsureRegistered();
 
         _worldView = new WorldView(this);
@@ -46,20 +53,22 @@ public partial class NetworkClient : Node3D
         _hud = new HudController();
         AddChild(_hud);
 
-        var (host, port) = ParseServerArg();
-        _connection = new ClientConnection(host, port, "Woad Raider");
+        _connection = new ClientConnection(ClientConfig.Host, ClientConfig.Port, ClientConfig.PlayerName);
         _localPlayer = new LocalPlayer(_connection);
 
         _connection.GeometryReceived += OnGeometry;
         _connection.Welcomed += OnWelcome;
         _connection.SnapshotReceived += OnSnapshot;
         _connection.ItemPickedUp += OnItemPickedUp;
-        _connection.EquipmentUpdated += p => _state.SetEquipment(p.WeaponItemId, p.ArmorItemId, p.TrinketItemId);
+        _connection.EquipmentUpdated += OnEquipmentUpdate;
         _connection.Start();
     }
 
     public override void _Process(double delta)
     {
+        // Frame order is load-bearing: Poll fires the reconcile/welcome handlers
+        // before Advance ticks prediction, and the views must move before the
+        // fader and camera read the render position.
         _connection.Poll(delta);
 
         // Freeze prediction while the link is down: the world is frozen too, and
@@ -86,6 +95,15 @@ public partial class NetworkClient : Node3D
 
     public override void _Input(InputEvent @event)
     {
+        if (@event.IsActionPressed("ui_cancel")) // Esc
+        {
+            if (_hud.InventoryOpen)
+                _hud.ToggleInventory(); // first Esc closes the panel, second leaves
+            else
+                GetTree().ChangeSceneToFile(TitleScreen.ScenePath); // _ExitTree closes the connection
+            return;
+        }
+
         if (@event.IsActionPressed(ClientActions.InventoryToggle))
         {
             _hud.ToggleInventory();
@@ -112,12 +130,23 @@ public partial class NetworkClient : Node3D
     {
         _geometry = DungeonSnapshot.ToGeometry(packet);
 
-        // A reconnect (same server, same match) re-sends the map; the visuals are
-        // already standing, so only the collision geometry above is refreshed.
-        if (_dungeonBuilt)
+        // A reconnect to the same match re-sends the same map — leave the standing
+        // visuals alone. But a client that outlives a server swap can land on a
+        // DIFFERENT map (server restarted with a new arena); rendering the old
+        // walls over the new collision geometry would mean invisible walls, so
+        // tear the map root down and rebuild.
+        var fingerprint = DungeonSnapshot.Fingerprint(packet);
+        if (_builtMapFingerprint == fingerprint)
             return;
-        _dungeonBuilt = true;
-        DungeonVisualBuilder.Build(this, _geometry, _fader);
+        if (_builtMapFingerprint is not null)
+            GD.Print("Server map changed — rebuilding the dungeon visuals.");
+        _builtMapFingerprint = fingerprint;
+
+        _fader.Clear();          // before the teardown, so no frame fades freed meshes
+        _mapRoot?.QueueFree();
+        _mapRoot = new Node3D { Name = "Map" };
+        AddChild(_mapRoot);
+        DungeonVisualBuilder.Build(_mapRoot, _geometry, _fader);
     }
 
     private void OnWelcome(WelcomePacket welcome)
@@ -150,26 +179,6 @@ public partial class NetworkClient : Node3D
         GD.Print($"Looted {loot.Name} (Power {loot.Power})");
     }
 
-    /// <summary>
-    /// Server address from <c>--server=host[:port]</c> in the user args (after
-    /// <c>--</c> on the Godot command line); defaults to loopback. Matchmaking
-    /// (PlayFab) will hand out real addresses later — this is the dev override.
-    /// </summary>
-    private static (string Host, int Port) ParseServerArg()
-    {
-        foreach (var arg in OS.GetCmdlineUserArgs())
-        {
-            if (!arg.StartsWith("--server="))
-                continue;
-            var value = arg["--server=".Length..];
-            var colon = value.LastIndexOf(':');
-            if (colon < 0)
-                return (value, NetConfig.DefaultPort);
-            if (int.TryParse(value[(colon + 1)..], out var port))
-                return (value[..colon], port);
-            GD.PrintErr($"Bad --server value '{value}' — using the default port.");
-            return (value[..colon], NetConfig.DefaultPort);
-        }
-        return ("127.0.0.1", NetConfig.DefaultPort);
-    }
+    private void OnEquipmentUpdate(EquipmentUpdatePacket packet) =>
+        _state.SetEquipment(packet.WeaponItemId, packet.ArmorItemId, packet.TrinketItemId);
 }
