@@ -200,15 +200,18 @@ public partial class NetworkClient : Node3D
         };
         AddChild(_camera);
 
-        // Key light casts shadows (main depth cue); a dim fill keeps back faces readable.
+        // Deliberately dim and cool-tinted so the map's warm torch pools carry the
+        // scene (a "dark torch-lit dungeon"). The key still casts shadows for shape;
+        // the fill + ambient are low so torches read as the dominant local light.
         var key = new DirectionalLight3D
         {
             RotationDegrees = new Vector3(-55, -50, 0),
-            LightEnergy = 1.1f,
+            LightEnergy = 0.22f,
+            LightColor = new Color(0.70f, 0.78f, 1.0f), // cool moonlight → contrasts the warm torches
             ShadowEnabled = true,
         };
         AddChild(key);
-        var fill = new DirectionalLight3D { RotationDegrees = new Vector3(-25, 130, 0), LightEnergy = 0.4f };
+        var fill = new DirectionalLight3D { RotationDegrees = new Vector3(-25, 130, 0), LightEnergy = 0.06f };
         AddChild(fill);
 
         AddChild(new WorldEnvironment { Environment = DungeonEnvironment() });
@@ -217,13 +220,13 @@ public partial class NetworkClient : Node3D
     private static Godot.Environment DungeonEnvironment() => new()
     {
         BackgroundMode = Godot.Environment.BGMode.Color,
-        BackgroundColor = new Color(0.02f, 0.02f, 0.03f),
+        BackgroundColor = new Color(0.015f, 0.015f, 0.025f),
         AmbientLightSource = Godot.Environment.AmbientSource.Color,
-        AmbientLightColor = new Color(0.40f, 0.40f, 0.50f),
-        AmbientLightEnergy = 0.4f,
+        AmbientLightColor = new Color(0.28f, 0.30f, 0.48f),
+        AmbientLightEnergy = 0.08f, // low, so torch pools stand out against the dark
         FogEnabled = true,
         FogLightColor = new Color(0.03f, 0.03f, 0.05f),
-        FogDensity = 0.0015f,
+        FogDensity = 0.0018f,
     };
 
     private void SetupHud()
