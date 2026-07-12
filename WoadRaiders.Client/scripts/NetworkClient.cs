@@ -764,22 +764,87 @@ public partial class NetworkClient : Node3D
             node.Transparency = 1f - OcclusionAlpha(player, min, max);
     }
 
-    // 1 = fully visible; falls toward fadedAlpha when the box occludes the player.
+    // 1 = fully visible; falls toward 1 - MaxFade when the wall box hides the
+    // character's body column from the camera. The question asked per box is "how much
+    // of the body column does this box cover on screen?": several rays are cast toward
+    // the camera from points along the character's height, each ray scores the box by
+    // its exact closest approach (distance to a sight ray IS screen-space distance
+    // under the fixed ortho camera), and the scores are averaged. Walls the character
+    // merely stands beside or in front of — including torch mounts and trims sticking
+    // out of camera-away walls — hide none of the body column and stay fully solid.
+    private static readonly float[] BodyFadeOffsets = { -18f, -7f, 4f, 15f, 26f }; // body column around body centre
+
     private static float OcclusionAlpha(Vector3 player, Vector3 boxMin, Vector3 boxMax)
     {
         var camDir = CameraOffset.Normalized(); // player → camera (fixed iso direction)
-        const float fadeRadius = 55f;
-        const float fadedAlpha = 0.18f;
+        const float rayRadius = 14f; // per-ray screen aura (body half-width ~16)
+        const float maxFade = 0.82f;
+        const float deadzone = 0.08f;
 
-        var closest = player.Clamp(boxMin, boxMax);
-        var v = closest - player;
-        var along = v.Dot(camDir);
-        if (along <= 0f) // box is behind the player relative to the camera
+        // Cheap cull. The sight rays climb as they travel; past tCap even the lowest
+        // ray has cleared the box top by more than the aura, so within the window a ray
+        // never gets farther than tCap from its origin — a box beyond that plus the
+        // aura and the body spread can never fade. Skips almost every mesh in the map.
+        var tCapAll = Mathf.Max(0f, (boxMax.Y - (player.Y - 18f)) / camDir.Y) + rayRadius / camDir.Y;
+        if (player.DistanceTo(player.Clamp(boxMin, boxMax)) > tCapAll + rayRadius + 26f)
             return 1f;
 
-        var perp = (v - camDir * along).Length(); // screen-space closeness (ortho)
-        return perp < fadeRadius ? Mathf.Lerp(fadedAlpha, 1f, perp / fadeRadius) : 1f;
+        var total = 0f;
+        foreach (var offset in BodyFadeOffsets)
+        {
+            var origin = new Vector3(player.X, player.Y + offset, player.Z);
+
+            // Last ray parameter at which any part of the box is still ahead of the ray.
+            var far = Mathf.Max((boxMin.X - origin.X) * camDir.X, (boxMax.X - origin.X) * camDir.X)
+                    + Mathf.Max((boxMin.Y - origin.Y) * camDir.Y, (boxMax.Y - origin.Y) * camDir.Y)
+                    + Mathf.Max((boxMin.Z - origin.Z) * camDir.Z, (boxMax.Z - origin.Z) * camDir.Z);
+            if (far <= 0f)
+                continue; // the whole box is behind this body point
+
+            // Ray-to-box distance is convex in the ray parameter, so a ternary search
+            // finds the true closest approach. Exactness matters: a fixed-count
+            // projection here left a seed-dependent residual on long walls, and that
+            // residual wobbling across the in-front threshold made them flicker. Ties
+            // walk `hi` down so t lands on the EARLIEST closest approach (t = 0 when
+            // the box surrounds the origin, e.g. a doorway arch — which stays solid).
+            var tCap = Mathf.Max(0f, (boxMax.Y - origin.Y) / camDir.Y) + rayRadius / camDir.Y;
+            float lo = 0f, hi = Mathf.Min(far, tCap);
+            for (var i = 0; i < 24; i++)
+            {
+                var m1 = lo + (hi - lo) / 3f;
+                var m2 = hi - (hi - lo) / 3f;
+                if (RayBoxDistSq(origin, camDir, m1, boxMin, boxMax) <=
+                    RayBoxDistSq(origin, camDir, m2, boxMin, boxMax))
+                    hi = m2;
+                else
+                    lo = m1;
+            }
+            var t = (lo + hi) * 0.5f;
+            var rayPoint = origin + camDir * t;
+            var dist = rayPoint.DistanceTo(rayPoint.Clamp(boxMin, boxMax));
+
+            // "In front" credit: beside/behind boxes close at t ≈ 0 and score nothing;
+            // genuine occluders sit at t ≳ 18 even when touched. A ramp (not a hard
+            // gate) keeps the score continuous under per-frame render-position wobble.
+            var inFront = Mathf.Clamp((t - 4f) / 14f, 0f, 1f);
+            total += inFront * Mathf.Max(0f, 1f - dist / rayRadius) * maxFade;
+        }
+
+        // Deadzone (rescaled so a full fade is unchanged): micro-fades are worse than
+        // no fade — any Transparency > 0 moves the mesh into the transparent pipeline,
+        // and a wall oscillating around "barely faded" visibly shimmers from the
+        // pipeline switch alone. Below the deadzone a wall renders exactly solid.
+        var fade = total / BodyFadeOffsets.Length;
+        fade = Mathf.Max(0f, fade - deadzone) * (maxFade / (maxFade - deadzone));
+        return 1f - fade;
     }
+
+    private static float RayBoxDistSq(Vector3 origin, Vector3 dir, float t, Vector3 boxMin, Vector3 boxMax)
+    {
+        var p = origin + dir * t;
+        return p.DistanceSquaredTo(p.Clamp(boxMin, boxMax));
+    }
+
 
     private static MultiMeshInstance3D MakeTileField(Mesh mesh, List<Vector3> positions, Material material)
     {
