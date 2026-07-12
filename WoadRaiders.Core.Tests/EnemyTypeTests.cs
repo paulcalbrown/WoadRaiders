@@ -74,7 +74,7 @@ public class EnemyTypeTests
         // Empty geometry = open, but no arena clamp (so the dodge sticks) and clear LOS.
         var world = new GameWorld
         {
-            Geometry = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<Vector3>()),
+            Geometry = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<EnemySpawnPoint>()),
         };
         var player = world.AddPlayer(1, "A"); // origin
         world.SpawnEnemy(new Vector3(160, 0, 0), EnemyType.Mage);
@@ -101,7 +101,7 @@ public class EnemyTypeTests
         var wall = new Aabb(new Vector3(150, 0, -200), new Vector3(170, 80, 200));
         var world = new GameWorld
         {
-            Geometry = new DungeonGeometry(Vector3.Zero, new[] { wall }, Array.Empty<Vector3>()),
+            Geometry = new DungeonGeometry(Vector3.Zero, new[] { wall }, Array.Empty<EnemySpawnPoint>()),
         };
         var mage = world.SpawnEnemy(Vector3.Zero, EnemyType.Mage);
         var player = world.AddPlayer(1, "A");
@@ -150,7 +150,7 @@ public class EnemyTypeTests
 
         var parsed = DungeonGeometryFile.Parse(DungeonGeometryFile.ToJson(geometry));
 
-        Assert.Equal(geometry.TypedEnemySpawns, parsed.TypedEnemySpawns);
+        Assert.Equal(geometry.EnemySpawns, parsed.EnemySpawns);
         Assert.Equal(geometry.BossSpawn, parsed.BossSpawn);
     }
 
@@ -161,7 +161,7 @@ public class EnemyTypeTests
         var wall = new Aabb(new Vector3(70, 0, -200), new Vector3(90, 80, 200));
         var world = new GameWorld
         {
-            Geometry = new DungeonGeometry(Vector3.Zero, new[] { wall }, Array.Empty<Vector3>()),
+            Geometry = new DungeonGeometry(Vector3.Zero, new[] { wall }, Array.Empty<EnemySpawnPoint>()),
         };
         var player = world.AddPlayer(1, "A"); // at the origin, west of the wall
         var standoff = EnemyArchetypes.Of(EnemyType.Mage).AttackRange - 20f;
@@ -205,7 +205,7 @@ public class EnemyTypeTests
     public void Boss_collides_with_its_wider_radius()
     {
         var wall = new Aabb(new Vector3(100, 0, -200), new Vector3(120, 80, 200));
-        var geo = new DungeonGeometry(Vector3.Zero, new[] { wall }, Array.Empty<Vector3>());
+        var geo = new DungeonGeometry(Vector3.Zero, new[] { wall }, Array.Empty<EnemySpawnPoint>());
         var nearWall = new Vector3(100 - 20f, 0, 0); // 20 units from the wall face
 
         Assert.False(geo.IsBlocked(nearWall));                                       // fine for a regular character (radius 14)
@@ -241,7 +241,7 @@ public class EnemyTypeTests
         var parsed = DungeonGeometryFile.Parse(legacy);
 
         Assert.Null(parsed.BossSpawn);
-        Assert.All(parsed.TypedEnemySpawns, s => Assert.Equal(EnemyType.Minion, s.Type));
-        Assert.Equal(2, parsed.TypedEnemySpawns.Count);
+        Assert.All(parsed.EnemySpawns, s => Assert.Equal(EnemyType.Minion, s.Type));
+        Assert.Equal(2, parsed.EnemySpawns.Count);
     }
 }

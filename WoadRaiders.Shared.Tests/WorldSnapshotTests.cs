@@ -15,7 +15,7 @@ public class WorldSnapshotTests
     {
         var world = new GameWorld
         {
-            Geometry = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<Vector3>()),
+            Geometry = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<EnemySpawnPoint>()),
         };
         player = world.AddPlayer(1, "Chief");
         player.Position = new Vector3(10, 0, 20);

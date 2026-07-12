@@ -84,7 +84,7 @@ public sealed class GameServer
             _session.Notice += e => _log.Info(e.Message); // relay match events; no domain knowledge here
 
             var spawned = _session.SpawnInitial();
-            _log.Info($"Spawned {spawned} enemies (map has {dungeon.TypedEnemySpawns.Count} spawn markers).");
+            _log.Info($"Spawned {spawned} enemies (map has {dungeon.EnemySpawns.Count} spawn markers).");
 
             // Only now, with the world fully built, open the socket — so a joining peer
             // can never race a half-initialized server.

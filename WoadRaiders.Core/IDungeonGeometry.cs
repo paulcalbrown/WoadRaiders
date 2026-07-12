@@ -22,9 +22,6 @@ public interface IDungeonGeometry
     /// </summary>
     Vector3 Move(Vector3 position, Vector3 delta, float radius = SimConstants.CharacterRadius);
 
-    /// <summary>A random walkable position (enemy/loot placement).</summary>
-    Vector3 RandomSpawnPosition(Random rng);
-
     /// <summary>
     /// True when nothing solid blocks the straight line between two points
     /// (both world-space, typically at eye height). Attacks and aggro use this

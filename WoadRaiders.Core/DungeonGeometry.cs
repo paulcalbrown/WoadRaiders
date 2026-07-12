@@ -26,13 +26,17 @@ public sealed class DungeonGeometry : IDungeonGeometry
     public Vector3 SpawnPoint { get; }
     public IReadOnlyList<Aabb> Solids { get; }
 
-    /// <summary>Enemy spawn positions (untyped view of <see cref="TypedEnemySpawns"/>).</summary>
-    public IReadOnlyList<Vector3> EnemySpawns { get; }
+    /// <summary>Regular enemy spawn markers — where each one is and what type it produces.</summary>
+    public IReadOnlyList<EnemySpawnPoint> EnemySpawns { get; }
 
-    /// <summary>Enemy spawn markers with the enemy type each one produces.</summary>
-    public IReadOnlyList<EnemySpawnPoint> TypedEnemySpawns { get; }
-
-    /// <summary>Where the map's boss stands, if the map has one.</summary>
+    /// <summary>
+    /// Where the map's boss stands, if it has one. The boss is a singleton with a
+    /// lifecycle unlike the regular population — spawned once, respawned on a long
+    /// delay, never counted toward the enemy target, wider collision — so it is a
+    /// single optional point rather than an <see cref="EnemySpawnPoint"/> in
+    /// <see cref="EnemySpawns"/>. The loader rejects Boss-typed markers to keep that
+    /// invariant: at most one boss, authored here.
+    /// </summary>
     public Vector3? BossSpawn { get; init; }
 
     /// <summary>
@@ -46,19 +50,11 @@ public sealed class DungeonGeometry : IDungeonGeometry
     /// <summary>World extent of all solids (used as a safety clamp and for rendering the floor).</summary>
     public Aabb Bounds { get; }
 
-    /// <summary>Untyped convenience ctor: every enemy spawn produces a Minion.</summary>
-    public DungeonGeometry(Vector3 spawnPoint, IReadOnlyList<Aabb> solids, IReadOnlyList<Vector3> enemySpawns)
-        : this(spawnPoint, solids,
-               enemySpawns.Select(p => new EnemySpawnPoint(p, EnemyType.Minion)).ToArray())
-    {
-    }
-
     public DungeonGeometry(Vector3 spawnPoint, IReadOnlyList<Aabb> solids, IReadOnlyList<EnemySpawnPoint> enemySpawns)
     {
         SpawnPoint = spawnPoint;
         Solids = solids;
-        TypedEnemySpawns = enemySpawns;
-        EnemySpawns = enemySpawns.Select(s => s.Position).ToArray();
+        EnemySpawns = enemySpawns;
 
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
@@ -159,13 +155,10 @@ public sealed class DungeonGeometry : IDungeonGeometry
         return true;
     }
 
-    public Vector3 RandomSpawnPosition(Random rng) =>
-        EnemySpawns.Count > 0 ? EnemySpawns[rng.Next(EnemySpawns.Count)] : SpawnPoint;
-
-    /// <summary>A random typed enemy spawn (respawns keep each marker's enemy type).</summary>
+    /// <summary>A random enemy spawn marker (respawns keep each marker's enemy type).</summary>
     public EnemySpawnPoint RandomEnemySpawn(Random rng) =>
-        TypedEnemySpawns.Count > 0
-            ? TypedEnemySpawns[rng.Next(TypedEnemySpawns.Count)]
+        EnemySpawns.Count > 0
+            ? EnemySpawns[rng.Next(EnemySpawns.Count)]
             : new EnemySpawnPoint(SpawnPoint, EnemyType.Minion);
 }
 

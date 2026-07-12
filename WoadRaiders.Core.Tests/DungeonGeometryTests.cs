@@ -14,7 +14,7 @@ public class DungeonGeometryTests
             // A wall plane at x ∈ [60, 100], full height, spanning far along z.
             new Aabb(new Vector3(60, 0, -2000), new Vector3(100, 70, 2000)),
         },
-        enemySpawns: Array.Empty<Vector3>());
+        enemySpawns: Array.Empty<EnemySpawnPoint>());
 
     [Fact]
     public void Wall_blocks_movement()
@@ -53,7 +53,7 @@ public class DungeonGeometryTests
                 // A beam above head height (character height is 44).
                 new Aabb(new Vector3(-50, 60, -50), new Vector3(50, 80, 50)),
             },
-            Array.Empty<Vector3>());
+            Array.Empty<EnemySpawnPoint>());
 
         Assert.False(geo.IsBlocked(Vector3.Zero));
         var pos = geo.Move(new Vector3(-80, 0, 0), new Vector3(30, 0, 0));
@@ -70,7 +70,7 @@ public class DungeonGeometryTests
                 // A floor slab whose top is exactly at the feet (y = 0).
                 new Aabb(new Vector3(-100, -10, -100), new Vector3(100, 0, 100)),
             },
-            Array.Empty<Vector3>());
+            Array.Empty<EnemySpawnPoint>());
 
         Assert.False(geo.IsBlocked(Vector3.Zero));
     }
@@ -85,7 +85,11 @@ public class DungeonGeometryTests
                 new Aabb(new Vector3(-10, 0, -10), new Vector3(10, 70, 10)),
                 new Aabb(new Vector3(50, 0, 50), new Vector3(90, 35, 60)),
             },
-            new List<Vector3> { new(5, 0, 5), new(-7, 0, 9) })
+            new[]
+            {
+                new EnemySpawnPoint(new Vector3(5, 0, 5), EnemyType.Minion),
+                new EnemySpawnPoint(new Vector3(-7, 0, 9), EnemyType.Rogue), // a non-default type proves the round-trip
+            })
         {
             ScenePath = "res://maps/Test.tscn",
         };
@@ -104,7 +108,7 @@ public class DungeonGeometryTests
     public void Json_without_scene_path_parses_as_null()
     {
         var geo = new DungeonGeometry(Vector3.Zero,
-            new[] { new Aabb(Vector3.Zero, new Vector3(1, 1, 1)) }, Array.Empty<Vector3>());
+            new[] { new Aabb(Vector3.Zero, new Vector3(1, 1, 1)) }, Array.Empty<EnemySpawnPoint>());
 
         var restored = DungeonGeometryFile.Parse(DungeonGeometryFile.ToJson(geo));
 

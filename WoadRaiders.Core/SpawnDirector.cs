@@ -45,7 +45,7 @@ public sealed class SpawnDirector
         _dungeon = dungeon;
         _rng = rng;
         // Map-driven density: target one enemy per typed marker, clamped to a sane band.
-        TargetEnemyCount = Math.Clamp(dungeon.TypedEnemySpawns.Count, 4, 40);
+        TargetEnemyCount = Math.Clamp(dungeon.EnemySpawns.Count, 4, 40);
     }
 
     /// <summary>The regular (non-boss) enemy population the director maintains.</summary>
@@ -61,7 +61,7 @@ public sealed class SpawnDirector
     /// </summary>
     public int SpawnInitial()
     {
-        var markers = _dungeon.TypedEnemySpawns;
+        var markers = _dungeon.EnemySpawns;
         for (var i = 0; i < TargetEnemyCount; i++)
         {
             var spawn = i < markers.Count ? markers[i] : RandomSpawnAwayFromPlayers();

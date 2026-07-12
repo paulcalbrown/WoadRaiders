@@ -77,8 +77,8 @@ public static class DungeonGeometryFile
                 Min = new[] { s.Min.X, s.Min.Y, s.Min.Z },
                 Max = new[] { s.Max.X, s.Max.Y, s.Max.Z },
             }).ToArray(),
-            EnemySpawns = g.TypedEnemySpawns.Select(s => new[] { s.Position.X, s.Position.Y, s.Position.Z }).ToArray(),
-            EnemySpawnTypes = g.TypedEnemySpawns.Select(s => (int)s.Type).ToArray(),
+            EnemySpawns = g.EnemySpawns.Select(s => new[] { s.Position.X, s.Position.Y, s.Position.Z }).ToArray(),
+            EnemySpawnTypes = g.EnemySpawns.Select(s => (int)s.Type).ToArray(),
             BossSpawn = g.BossSpawn is { } b ? new[] { b.X, b.Y, b.Z } : null,
         };
         return JsonSerializer.Serialize(doc, Options);

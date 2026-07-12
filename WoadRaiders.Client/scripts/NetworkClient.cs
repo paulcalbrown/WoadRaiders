@@ -389,7 +389,7 @@ public partial class NetworkClient : Node3D
                         new SysVec3(geoPacket.Boxes[i + 3], geoPacket.Boxes[i + 4], geoPacket.Boxes[i + 5])));
                 _geometry = new DungeonGeometry(
                     new SysVec3(geoPacket.SpawnX, geoPacket.SpawnY, geoPacket.SpawnZ),
-                    solids, System.Array.Empty<SysVec3>())
+                    solids, System.Array.Empty<EnemySpawnPoint>()) // client never spawns enemies
                 {
                     ScenePath = string.IsNullOrEmpty(geoPacket.ScenePath) ? null : geoPacket.ScenePath,
                 };
