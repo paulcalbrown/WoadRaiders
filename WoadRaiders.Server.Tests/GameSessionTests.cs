@@ -59,4 +59,33 @@ public class GameSessionTests
         Assert.Single(players);
         Assert.Equal(2, players[0].Id);
     }
+
+    [Fact]
+    public void Announces_the_boss_awaiting_at_startup()
+    {
+        var dungeon = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(),
+            new[] { new EnemySpawnPoint(new Vector3(400, 0, 0), EnemyType.Minion) })
+        {
+            BossSpawn = new Vector3(900, 0, 900),
+        };
+        var session = new GameSession(dungeon, new Random(1));
+        var events = new List<SessionEvent>();
+        session.Notice += events.Add;
+
+        session.SpawnInitial();
+
+        Assert.Contains(events, e => e.Kind == SessionEventKind.BossAwaits);
+    }
+
+    [Fact]
+    public void A_bossless_map_makes_no_boss_announcement()
+    {
+        var session = new GameSession(OpenArena(), new Random(1)); // OpenArena has no BossSpawn
+        var events = new List<SessionEvent>();
+        session.Notice += events.Add;
+
+        session.SpawnInitial();
+
+        Assert.DoesNotContain(events, e => e.Kind == SessionEventKind.BossAwaits);
+    }
 }

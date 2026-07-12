@@ -81,14 +81,10 @@ public sealed class GameServer
             // so it is built once here and reused for every join.
             _geometryPacket = DungeonSnapshot.From(dungeon);
             _session = new GameSession(dungeon, new Random());
-            _session.BossFell += () => _log.Info(
-                $"[boss] The Barrow King has fallen! He returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
-            _session.BossRose += () => _log.Info("[boss] The Barrow King rises again.");
+            _session.Notice += e => _log.Info(e.Message); // relay match events; no domain knowledge here
 
             var spawned = _session.SpawnInitial();
             _log.Info($"Spawned {spawned} enemies (map has {dungeon.TypedEnemySpawns.Count} spawn markers).");
-            if (dungeon.BossSpawn is not null)
-                _log.Info("The Barrow King waits in his chamber.");
 
             // Only now, with the world fully built, open the socket — so a joining peer
             // can never race a half-initialized server.

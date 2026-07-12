@@ -21,18 +21,32 @@ internal sealed class GameSession
         _dungeon = dungeon;
         _world = new GameWorld { Geometry = dungeon };
         _director = new SpawnDirector(_world, dungeon, rng);
+
+        // The session owns the wording of match events so the transport layer never has
+        // to know about the boss (its name, its respawn timing) — it just relays Notice.
+        _director.BossFell += () => Raise(SessionEventKind.BossFell,
+            $"The Barrow King has fallen! He returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
+        _director.BossRose += () => Raise(SessionEventKind.BossRose, "The Barrow King rises again.");
     }
 
-    /// <summary>Raised when the boss is first found dead / when it respawns (for logging).</summary>
-    public event Action? BossFell { add => _director.BossFell += value; remove => _director.BossFell -= value; }
-
-    public event Action? BossRose { add => _director.BossRose += value; remove => _director.BossRose -= value; }
+    /// <summary>
+    /// Notable match events (boss lifecycle now; waves, exits, downed players later) for
+    /// the host to log or relay. The session owns the wording, so the transport layer
+    /// stays free of any game-domain knowledge.
+    /// </summary>
+    public event Action<SessionEvent>? Notice;
 
     /// <summary>The current simulation tick.</summary>
     public int Tick => _world.Tick;
 
     /// <summary>Populate the map (one enemy per marker, plus the boss). Returns regulars spawned.</summary>
-    public int SpawnInitial() => _director.SpawnInitial();
+    public int SpawnInitial()
+    {
+        var spawned = _director.SpawnInitial();
+        if (_dungeon.BossSpawn is not null)
+            Raise(SessionEventKind.BossAwaits, "The Barrow King waits in his chamber.");
+        return spawned;
+    }
 
     public void AddPlayer(int id, string name)
     {
@@ -105,8 +119,20 @@ internal sealed class GameSession
 
     private static int EquippedId(PlayerState player, EquipSlot slot) =>
         player.Equipped.TryGetValue(slot, out var item) ? item.Id : 0;
+
+    private void Raise(SessionEventKind kind, string message) => Notice?.Invoke(new SessionEvent(kind, message));
 }
 
 /// <summary>A player's equipped item ids and derived combat stats after an equip.</summary>
 internal readonly record struct EquipOutcome(
     int WeaponId, int ArmorId, int TrinketId, float AttackDamage, float DamageReduction);
+
+/// <summary>A notable match event — for host logging now, telemetry or client notices later.</summary>
+internal readonly record struct SessionEvent(SessionEventKind Kind, string Message);
+
+internal enum SessionEventKind
+{
+    BossAwaits,
+    BossFell,
+    BossRose,
+}
