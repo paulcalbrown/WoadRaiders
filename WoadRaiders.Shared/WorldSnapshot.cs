@@ -42,7 +42,9 @@ public static class WorldSnapshot
             X = g.Position.X,
             Y = g.Position.Y,
             Z = g.Position.Z,
-            Rarity = (byte)g.Item.Rarity,
+            Rarity = (byte)(g.Item?.Rarity ?? ItemRarity.Common), // equipment rarity; gold/potions ignore it
+            Kind = (byte)g.Kind,
+            Type = (byte)(g.Item?.Type ?? default(ItemType)),     // which weapon mesh; gold/potions ignore it
         }).ToArray(),
         Projectiles = world.Projectiles.Values.Select(p => new ProjectileSnapshot
         {

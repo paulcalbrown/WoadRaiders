@@ -129,7 +129,9 @@ public class EnemyTypeTests
         world.Step();
 
         Assert.Empty(world.Enemies);
-        Assert.Equal(EnemyArchetypes.Of(EnemyType.Boss).GuaranteedDrops, world.GroundItems.Count);
+        // Guaranteed loot means equipment; gold/potions may drop on top of it.
+        Assert.Equal(EnemyArchetypes.Of(EnemyType.Boss).GuaranteedDrops,
+            world.GroundItems.Values.Count(g => g.Kind == LootKind.Equipment));
     }
 
     [Fact]

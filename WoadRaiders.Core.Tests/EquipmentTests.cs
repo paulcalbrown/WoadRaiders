@@ -28,7 +28,7 @@ public class EquipmentTests
         var player = world.AddPlayer(1, "A"); // faces +X by default
         var enemy = world.SpawnEnemy(new Vector3(40, 0, 0)); // in front, in reach
 
-        var blade = Make(10, ItemType.Blade, 20);
+        var blade = Make(10, ItemType.Sword, 20);
         player.Inventory.Add(blade);
         player.TryEquip(blade.Id);
 
@@ -60,10 +60,13 @@ public class EquipmentTests
     [Fact]
     public void Items_route_to_the_correct_slot()
     {
-        Assert.Equal(EquipSlot.Weapon, Equipment.SlotFor(ItemType.Blade));
-        Assert.Equal(EquipSlot.Weapon, Equipment.SlotFor(ItemType.Spear));
-        Assert.Equal(EquipSlot.Armor, Equipment.SlotFor(ItemType.Helm));
-        Assert.Equal(EquipSlot.Trinket, Equipment.SlotFor(ItemType.Torc));
+        // Every weapon in the kit goes to the Weapon slot; the shield is the only Armor.
+        Assert.Equal(EquipSlot.Weapon, Equipment.SlotFor(ItemType.Sword));
+        Assert.Equal(EquipSlot.Weapon, Equipment.SlotFor(ItemType.Greatsword));
+        Assert.Equal(EquipSlot.Weapon, Equipment.SlotFor(ItemType.Dagger));
+        Assert.Equal(EquipSlot.Weapon, Equipment.SlotFor(ItemType.Staff));
+        Assert.Equal(EquipSlot.Weapon, Equipment.SlotFor(ItemType.Crossbow));
+        Assert.Equal(EquipSlot.Armor, Equipment.SlotFor(ItemType.Shield));
     }
 
     [Fact]
@@ -72,7 +75,7 @@ public class EquipmentTests
         var world = new GameWorld(new Random(1));
         var player = world.AddPlayer(1, "A");
         var weak = Make(10, ItemType.Axe, 10);
-        var strong = Make(11, ItemType.Blade, 40);
+        var strong = Make(11, ItemType.Sword, 40);
         player.Inventory.Add(weak);
         player.Inventory.Add(strong);
 

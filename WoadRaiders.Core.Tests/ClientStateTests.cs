@@ -11,9 +11,9 @@ public class ClientStateTests
     public void Inventory_preserves_pickup_order()
     {
         var state = new ClientState();
-        state.AddItem(Make(5, ItemType.Blade, 10));
-        state.AddItem(Make(3, ItemType.Helm, 20));
-        state.AddItem(Make(9, ItemType.Torc, 30));
+        state.AddItem(Make(5, ItemType.Sword, 10));
+        state.AddItem(Make(3, ItemType.Shield, 20));
+        state.AddItem(Make(9, ItemType.Dagger, 30));
 
         Assert.Equal(new[] { 5, 3, 9 }, state.Inventory.Select(i => i.Id));
     }
@@ -24,7 +24,7 @@ public class ClientStateTests
         // The HUD must show what PlayerState.AttackDamage computes: base + weapon + trinket.
         var state = new ClientState();
         state.AddItem(Make(1, ItemType.Axe, 25));
-        state.AddItem(Make(2, ItemType.Torc, 7));
+        state.AddItem(Make(2, ItemType.Dagger, 7));
         state.SetEquipment(weaponId: 1, armorId: 0, trinketId: 2);
 
         Assert.Equal(SimConstants.PlayerAttackDamage + 25 + 7, state.AttackDamage, 3);
@@ -54,7 +54,7 @@ public class ClientStateTests
     public void IsEquipped_matches_slots_and_never_matches_empty()
     {
         var state = new ClientState();
-        state.AddItem(Make(1, ItemType.Blade, 10));
+        state.AddItem(Make(1, ItemType.Sword, 10));
         state.SetEquipment(weaponId: 1, armorId: 0, trinketId: 0);
 
         Assert.True(state.IsEquipped(1));
@@ -73,12 +73,22 @@ public class ClientStateTests
     }
 
     [Fact]
+    public void Gold_accumulates_across_pickups()
+    {
+        var state = new ClientState();
+        state.AddGold(12);
+        state.AddGold(8);
+        Assert.Equal(20, state.Gold);
+    }
+
+    [Fact]
     public void Reset_returns_to_a_fresh_join()
     {
         var state = new ClientState();
-        state.AddItem(Make(1, ItemType.Blade, 10));
+        state.AddItem(Make(1, ItemType.Sword, 10));
         state.SetEquipment(1, 0, 0);
         state.SetHealth(12f);
+        state.AddGold(50);
 
         state.Reset();
 
@@ -86,5 +96,6 @@ public class ClientStateTests
         Assert.False(state.IsEquipped(1));
         Assert.Equal(SimConstants.PlayerMaxHealth, state.Health);
         Assert.Equal(SimConstants.PlayerAttackDamage, state.AttackDamage, 3);
+        Assert.Equal(0, state.Gold);
     }
 }

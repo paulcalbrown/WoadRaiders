@@ -123,14 +123,16 @@ public struct EnemySnapshot : INetSerializable
     }
 }
 
-/// <summary>One dropped item on the ground inside a <see cref="WorldSnapshotPacket"/>.</summary>
+/// <summary>One piece of ground loot inside a <see cref="WorldSnapshotPacket"/>.</summary>
 public struct GroundItemSnapshot : INetSerializable
 {
     public int Id;
     public float X;
     public float Y;
     public float Z;
-    public byte Rarity;
+    public byte Rarity; // equipment rarity (drives the pickup log / future tint); 0 for gold/potions
+    public byte Kind;   // LootKind — picks the client visual family
+    public byte Type;   // ItemType — picks which weapon mesh to show (equipment only)
 
     public void Serialize(NetDataWriter w)
     {
@@ -139,6 +141,8 @@ public struct GroundItemSnapshot : INetSerializable
         w.Put(Y);
         w.Put(Z);
         w.Put(Rarity);
+        w.Put(Kind);
+        w.Put(Type);
     }
 
     public void Deserialize(NetDataReader r)
@@ -148,6 +152,8 @@ public struct GroundItemSnapshot : INetSerializable
         Y = r.GetFloat();
         Z = r.GetFloat();
         Rarity = r.GetByte();
+        Kind = r.GetByte();
+        Type = r.GetByte();
     }
 }
 
@@ -248,7 +254,12 @@ public sealed class WorldSnapshotPacket : INetSerializable
     }
 }
 
-/// <summary>Server → one client. Details of an item that client just picked up.</summary>
+/// <summary>
+/// Server → one client. Loot that client just collected. <see cref="Kind"/>
+/// (a LootKind) decides which fields matter: equipment fills the item fields;
+/// gold carries the coins in <see cref="Amount"/>; a potion carries the health
+/// actually restored there (the heal itself arrives in the next snapshot).
+/// </summary>
 public sealed class ItemPickedUpPacket : INetSerializable
 {
     public int ItemId;
@@ -256,6 +267,8 @@ public sealed class ItemPickedUpPacket : INetSerializable
     public byte Rarity;
     public byte Type;
     public int Power;
+    public byte Kind;
+    public int Amount;
 
     public void Serialize(NetDataWriter w)
     {
@@ -264,6 +277,8 @@ public sealed class ItemPickedUpPacket : INetSerializable
         w.Put(Rarity);
         w.Put(Type);
         w.Put(Power);
+        w.Put(Kind);
+        w.Put(Amount);
     }
 
     public void Deserialize(NetDataReader r)
@@ -273,6 +288,8 @@ public sealed class ItemPickedUpPacket : INetSerializable
         Rarity = r.GetByte();
         Type = r.GetByte();
         Power = r.GetInt();
+        Kind = r.GetByte();
+        Amount = r.GetInt();
     }
 }
 

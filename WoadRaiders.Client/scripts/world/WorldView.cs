@@ -34,8 +34,8 @@ public sealed class WorldView
 
     private sealed class LootView
     {
-        public MeshInstance3D Node = null!;
-        public Vector3 Ground; // point the gem bobs above
+        public Node3D Node = null!;    // a gem MeshInstance3D, or an instantiated KayKit prop scene
+        public Vector3 Ground;         // point the loot bobs above
     }
 
     private sealed class ProjectileView
@@ -50,7 +50,7 @@ public sealed class WorldView
     private readonly ViewMap<LootView> _loot = new(v => v.Node.QueueFree());
     private readonly ViewMap<ProjectileView> _projectiles = new(v => v.Node.QueueFree());
 
-    private readonly BoxMesh _lootMesh = new() { Size = new Vector3(16, 16, 16) };
+    private readonly BoxMesh _lootMesh = new() { Size = new Vector3(16, 16, 16) }; // equipment gem (rarity-colored)
     private readonly SphereMesh _boltMesh = new() { Radius = 9f, Height = 18f, RadialSegments = 8, Rings = 4 };
     private readonly QuadMesh _barMesh = new() { Size = new Vector2(40, 6) };
     private readonly StandardMaterial3D _boltMaterial = new()
@@ -66,6 +66,41 @@ public sealed class WorldView
     private readonly PackedScene _remoteCharScene;
     private readonly Dictionary<EnemyType, PackedScene> _enemyCharScenes = new();
 
+    // Authored KayKit props for the non-equipment loot, kept with their own
+    // materials (gold coins, green glass) rather than a tinted primitive.
+    private readonly PackedScene _goldScene;
+    private readonly PackedScene _potionScene;
+
+    // Equipment renders as the actual KayKit weapon mesh for its ItemType. Each
+    // weapon .gltf shares the knight texture atlas that's already imported.
+    private static readonly Dictionary<ItemType, string> WeaponMeshFiles = new()
+    {
+        [ItemType.Sword] = "sword_1handed.gltf",
+        [ItemType.Greatsword] = "sword_2handed.gltf",
+        [ItemType.Axe] = "axe_1handed.gltf",
+        [ItemType.Battleaxe] = "axe_2handed.gltf",
+        [ItemType.Dagger] = "dagger.gltf",
+        [ItemType.Staff] = "staff.gltf",
+        [ItemType.Crossbow] = "crossbow_1handed.gltf",
+        [ItemType.Shield] = "shield_round.gltf",
+    };
+
+    private readonly Dictionary<ItemType, PackedScene> _weaponScenes = new();
+
+    // KayKit props/weapons are authored on a ~1-unit grid, so they need scaling up
+    // to this world (a character is ~49 units). Each is fitted to this size by its
+    // own bounds, so every loot piece reads at a consistent, visible scale.
+    private const float LootPropSize = 26f;
+
+    // Every drop glows in a coloured pool so it reads as special in the dark dungeon:
+    // gold golden, potions green, equipment by rarity. A cheap shadowless point light
+    // sits inside the floating prop — it leaves the prop's own materials untouched.
+    private static readonly Color GoldGlow = new(1.0f, 0.78f, 0.15f);
+    private static readonly Color PotionGlow = new(0.30f, 1.0f, 0.40f);
+    private const float GlowRange = 100f;   // pool reaches the floor under the floating loot
+    private const float GlowEnergy = 4f;    // bright enough to read against the low dungeon ambient
+    private const float GlowHeight = 12f;    // sits within the fitted prop
+
     private double _elapsed; // drives the loot bob
 
     public WorldView(Node3D parent)
@@ -73,9 +108,15 @@ public sealed class WorldView
         _parent = parent;
 
         const string adv = "res://addons/kaykit_character_pack_adventures/Characters/gltf";
+        const string weapons = "res://addons/kaykit_character_pack_adventures/Assets/gltf";
         const string skel = "res://addons/kaykit_character_pack_skeletons/Characters/gltf";
+        const string dungeon = "res://addons/kaykit_dungeon_remastered/Assets/gltf";
         _localCharScene = GD.Load<PackedScene>($"{adv}/Knight.glb");
         _remoteCharScene = GD.Load<PackedScene>($"{adv}/Barbarian.glb");
+        _goldScene = GD.Load<PackedScene>($"{dungeon}/coin_stack_large.gltf.glb");
+        _potionScene = GD.Load<PackedScene>($"{dungeon}/bottle_A_green.gltf.glb");
+        foreach (var (itemType, file) in WeaponMeshFiles)
+            _weaponScenes[itemType] = GD.Load<PackedScene>($"{weapons}/{file}");
         foreach (var (type, visual) in EnemyVisuals)
             _enemyCharScenes[type] = GD.Load<PackedScene>($"{skel}/{visual.SceneFile}");
     }
@@ -122,7 +163,7 @@ public sealed class WorldView
             var ground = new Vector3(g.X, g.Y, g.Z);
             if (!_loot.Touch(g.Id, out var view))
             {
-                view = new LootView { Node = CreateLootNode(g.Rarity, ground + Vector3.Up * LootY) };
+                view = new LootView { Node = CreateLootNode(g.Kind, g.Type, g.Rarity, ground + Vector3.Up * LootY) };
                 _loot.Add(g.Id, view);
             }
             view.Ground = ground;
@@ -175,7 +216,7 @@ public sealed class WorldView
         foreach (var view in _projectiles.Items.Values)
             view.Node.Position = view.Node.Position.Lerp(view.Target, boltFactor);
 
-        // Loot gems spin and bob so drops catch the eye.
+        // Loot hovers, spins, and bobs so drops catch the eye.
         _elapsed += delta;
         var bob = Mathf.Sin((float)_elapsed * 3f) * 4f;
         foreach (var view in _loot.Items.Values)
@@ -185,8 +226,59 @@ public sealed class WorldView
         }
     }
 
-    private MeshInstance3D CreateLootNode(byte rarity, Vector3 spawn)
+    private Node3D CreateLootNode(byte kind, byte type, byte rarity, Vector3 spawn)
     {
+        var lootKind = (LootKind)kind;
+
+        // Gold and potions are their own KayKit props; equipment is the weapon mesh
+        // for its ItemType. Any unknown byte (version skew) falls through to the gem
+        // — never-crash-over-cosmetics, like unknown enemy types.
+        var scene = lootKind switch
+        {
+            LootKind.Gold => _goldScene,
+            LootKind.HealthPotion => _potionScene,
+            LootKind.Equipment => _weaponScenes.GetValueOrDefault((ItemType)type),
+            _ => null,
+        };
+        var node = scene is not null ? CreatePropLoot(scene, spawn) : CreateGemLoot(rarity, spawn);
+
+        // Colour the glow: gold golden, potions green, equipment (and the gem
+        // fallback) by rarity.
+        var glow = lootKind switch
+        {
+            LootKind.Gold => GoldGlow,
+            LootKind.HealthPotion => PotionGlow,
+            _ => RarityColor(rarity),
+        };
+        node.AddChild(new OmniLight3D
+        {
+            Position = new Vector3(0, GlowHeight, 0),
+            LightColor = glow,
+            LightEnergy = GlowEnergy,
+            OmniRange = GlowRange,
+            ShadowEnabled = false, // a pickup halo needs no shadows — keeps it cheap
+        });
+        return node;
+    }
+
+    // A KayKit prop scene, fitted to LootPropSize by its own bounds and spun in place.
+    private Node3D CreatePropLoot(PackedScene scene, Vector3 spawn)
+    {
+        var holder = new Node3D { Position = spawn };
+        var model = scene.Instantiate<Node3D>();
+        holder.AddChild(model);
+        _parent.AddChild(holder); // in-tree so the mesh bounds below are valid
+
+        var bounds = LocalMeshBounds(model, holder);
+        var maxDim = Mathf.Max(bounds.Size.X, Mathf.Max(bounds.Size.Y, bounds.Size.Z));
+        if (maxDim > 0.0001f)
+            model.Scale = Vector3.One * (LootPropSize / maxDim);
+        return holder;
+    }
+
+    private MeshInstance3D CreateGemLoot(byte rarity, Vector3 spawn)
+    {
+        var color = RarityColor(rarity);
         var node = new MeshInstance3D
         {
             Mesh = _lootMesh,
@@ -194,14 +286,31 @@ public sealed class WorldView
             RotationDegrees = new Vector3(0, 0, 45), // sit like a gem
             MaterialOverride = new StandardMaterial3D
             {
-                AlbedoColor = RarityColor(rarity),
+                AlbedoColor = color,
                 EmissionEnabled = true,
-                Emission = RarityColor(rarity),
+                Emission = color,
                 EmissionEnergyMultiplier = 0.4f,
             },
         };
         _parent.AddChild(node);
         return node;
+    }
+
+    // Union of every mesh's AABB in <paramref name="root"/>'s local space. The
+    // instance must be in-tree so global transforms are valid. (Godot.Aabb —
+    // disambiguated from the sim's Core.Aabb, which this file also uses.)
+    private static Godot.Aabb LocalMeshBounds(Node instance, Node3D root)
+    {
+        var toRoot = root.GlobalTransform.AffineInverse();
+        Godot.Aabb? total = null;
+        foreach (var node in instance.SelfAndDescendants())
+        {
+            if (node is not MeshInstance3D mesh || mesh.Mesh is null)
+                continue;
+            var box = toRoot * mesh.GlobalTransform * mesh.GetAabb();
+            total = total is { } t ? t.Merge(box) : box;
+        }
+        return total ?? new Godot.Aabb();
     }
 
     private MeshInstance3D CreateBoltNode(Vector3 spawn)

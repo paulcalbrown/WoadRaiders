@@ -37,9 +37,11 @@ public static class NetConfig
     /// layer (e.g. PlayFab) once that is wired in.
     /// Bump the version suffix whenever the wire format changes (it is the only
     /// build-compatibility gate at connect time): v1 = EnemySnapshot.Type byte,
-    /// v2 = ProjectileSnapshot array in WorldSnapshotPacket.
+    /// v2 = ProjectileSnapshot array in WorldSnapshotPacket,
+    /// v3 = loot kinds (GroundItemSnapshot.Kind, ItemPickedUpPacket.Kind/Amount),
+    /// v4 = weapon-kit item types + GroundItemSnapshot.Type byte.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v2";
+    public const string ConnectionKey = "WoadRaiders.v4";
 
     /// <summary>Co-op party size cap for a single dedicated-server instance.</summary>
     public const int MaxPlayers = 8;

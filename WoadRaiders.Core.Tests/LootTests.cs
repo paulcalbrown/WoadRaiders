@@ -15,7 +15,7 @@ public class LootTests
     }
 
     [Fact]
-    public void Drop_rate_is_near_the_configured_chance()
+    public void Equipment_drop_rate_is_near_the_configured_chance()
     {
         var rng = new Random(7);
         var drops = 0;
@@ -25,7 +25,111 @@ public class LootTests
                 drops++;
 
         var rate = drops / (double)rolls;
-        Assert.InRange(rate, SimConstants.EnemyDropChance - 0.03, SimConstants.EnemyDropChance + 0.03);
+        Assert.InRange(rate, SimConstants.EquipmentDropChance - 0.01, SimConstants.EquipmentDropChance + 0.01);
+    }
+
+    [Fact]
+    public void Common_enemy_kills_drop_each_kind_at_the_configured_rates()
+    {
+        var world = new GameWorld(new Random(41));
+        const int kills = 4000;
+        for (var i = 0; i < kills; i++)
+            world.SpawnEnemy(new Vector3(500 + i, 0, 500)).TakeDamage(SimConstants.EnemyMaxHealth);
+
+        world.Step(); // removes the dead, rolling drops; no player → nothing collected
+
+        var counts = world.GroundItems.Values
+            .GroupBy(g => g.Kind)
+            .ToDictionary(g => g.Key, g => g.Count());
+        Assert.InRange(counts.GetValueOrDefault(LootKind.Gold) / (double)kills,
+            SimConstants.GoldDropChance - 0.03, SimConstants.GoldDropChance + 0.03);
+        Assert.InRange(counts.GetValueOrDefault(LootKind.HealthPotion) / (double)kills,
+            SimConstants.PotionDropChance - 0.03, SimConstants.PotionDropChance + 0.03);
+        Assert.InRange(counts.GetValueOrDefault(LootKind.Equipment) / (double)kills,
+            SimConstants.EquipmentDropChance - 0.02, SimConstants.EquipmentDropChance + 0.02);
+
+        // Every dropped pile pays within the configured coin range.
+        Assert.All(world.GroundItems.Values.Where(g => g.Kind == LootKind.Gold),
+            g => Assert.InRange(g.Amount, SimConstants.GoldDropMin, SimConstants.GoldDropMax));
+    }
+
+    [Fact]
+    public void A_boss_always_drops_its_guaranteed_equipment()
+    {
+        var expected = EnemyArchetypes.Of(EnemyType.Boss).GuaranteedDrops;
+        for (var seed = 0; seed < 20; seed++)
+        {
+            var world = new GameWorld(new Random(seed));
+            world.SpawnEnemy(new Vector3(500, 0, 500), EnemyType.Boss)
+                 .TakeDamage(EnemyArchetypes.Of(EnemyType.Boss).MaxHealth);
+
+            world.Step();
+
+            var equipment = world.GroundItems.Values.Count(g => g.Kind == LootKind.Equipment);
+            Assert.Equal(expected, equipment);
+        }
+    }
+
+    [Fact]
+    public void Gold_pickup_fills_the_purse_and_leaves_the_inventory_alone()
+    {
+        var world = new GameWorld(new Random(1));
+        var player = world.AddPlayer(1, "A"); // at origin
+        world.DropGold(17, new Vector3(10, 0, 0));
+
+        world.Step();
+
+        Assert.Equal(17, player.Gold);
+        Assert.Empty(player.Inventory);
+        Assert.Empty(world.GroundItems);
+        var pickup = Assert.Single(world.ConsumePickups());
+        Assert.Equal(LootKind.Gold, pickup.Kind);
+        Assert.Equal(17, pickup.Amount);
+        Assert.Null(pickup.Item);
+    }
+
+    [Fact]
+    public void Potion_heals_the_injured_and_reports_the_amount()
+    {
+        var world = new GameWorld(new Random(1));
+        var player = world.AddPlayer(1, "A");
+        player.TakeDamage(50f);
+        world.DropPotion(new Vector3(10, 0, 0));
+
+        world.Step();
+
+        Assert.Equal(SimConstants.PlayerMaxHealth - 50f + SimConstants.PotionHealAmount, player.Health, 3);
+        Assert.Empty(world.GroundItems);
+        var pickup = Assert.Single(world.ConsumePickups());
+        Assert.Equal(LootKind.HealthPotion, pickup.Kind);
+        Assert.Equal((int)SimConstants.PotionHealAmount, pickup.Amount);
+    }
+
+    [Fact]
+    public void Potion_healing_caps_at_max_health()
+    {
+        var world = new GameWorld(new Random(1));
+        var player = world.AddPlayer(1, "A");
+        player.TakeDamage(10f); // barely hurt — the potion mostly overheals
+        world.DropPotion(new Vector3(10, 0, 0));
+
+        world.Step();
+
+        Assert.Equal(SimConstants.PlayerMaxHealth, player.Health, 3);
+        Assert.Equal(10, Assert.Single(world.ConsumePickups()).Amount); // only what was missing
+    }
+
+    [Fact]
+    public void A_full_health_player_leaves_potions_on_the_ground()
+    {
+        var world = new GameWorld(new Random(1));
+        world.AddPlayer(1, "A");
+        world.DropPotion(new Vector3(10, 0, 0));
+
+        world.Step();
+
+        Assert.Single(world.GroundItems); // still lying there for whoever needs it
+        Assert.Empty(world.ConsumePickups());
     }
 
     [Fact]
@@ -50,7 +154,7 @@ public class LootTests
     {
         var world = new GameWorld(new Random(1));
         var player = world.AddPlayer(1, "A"); // at origin
-        var dropped = world.DropItem(new Item(0, "Test Blade", ItemRarity.Rare, ItemType.Blade, 25), new Vector3(10, 0, 0));
+        var dropped = world.DropItem(new Item(0, "Test Sword", ItemRarity.Rare, ItemType.Sword, 25), new Vector3(10, 0, 0));
 
         world.Step();
 
@@ -64,7 +168,7 @@ public class LootTests
     {
         var world = new GameWorld(new Random(1));
         var player = world.AddPlayer(1, "A");
-        world.DropItem(new Item(0, "Far Torc", ItemRarity.Common, ItemType.Torc, 5), new Vector3(500, 0, 0));
+        world.DropItem(new Item(0, "Far Dagger", ItemRarity.Common, ItemType.Dagger, 5), new Vector3(500, 0, 0));
 
         world.Step();
 

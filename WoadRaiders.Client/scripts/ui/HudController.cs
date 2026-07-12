@@ -108,7 +108,8 @@ public partial class HudController : CanvasLayer
         _healthFillRect.Color = Color.FromHsv(0.33f * frac, 0.75f, 0.8f); // green when full → red when low
         _healthLabel.Text = $"{Mathf.RoundToInt(state.Health)} / {Mathf.RoundToInt(SimConstants.PlayerMaxHealth)}";
 
-        _stats.Text = $"Items {state.Inventory.Count}   Atk {state.AttackDamage:0}   Armor {state.DamageReduction:0.0}   " +
+        _stats.Text = $"Gold {state.Gold}   Items {state.Inventory.Count}   Atk {state.AttackDamage:0}   " +
+                      $"Armor {state.DamageReduction:0.0}   " +
                       "[I] inventory   [Space] attack   [Esc] menu";
 
         _status.Text = connection switch

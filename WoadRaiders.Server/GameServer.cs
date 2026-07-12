@@ -288,17 +288,24 @@ public sealed class GameServer
             if (!_connections.TryGetValue(pickup.PlayerId, out var connection))
                 continue;
 
-            var item = pickup.Item;
+            var item = pickup.Item; // null for gold and potions
             var packet = new ItemPickedUpPacket
             {
-                ItemId = item.Id,
-                Name = item.Name,
-                Rarity = (byte)item.Rarity,
-                Type = (byte)item.Type,
-                Power = item.Power,
+                Kind = (byte)pickup.Kind,
+                Amount = pickup.Amount,
+                ItemId = item?.Id ?? 0,
+                Name = item?.Name ?? "",
+                Rarity = (byte)(item?.Rarity ?? ItemRarity.Common),
+                Type = (byte)(item?.Type ?? default(ItemType)),
+                Power = item?.Power ?? 0,
             };
             connection.Peer.Send(NetProtocol.Frame(MessageType.ItemPickedUp, packet), Channel, DeliveryMethod.ReliableOrdered);
-            _log.Info($"[loot] Player {pickup.PlayerId} picked up {item.Name} (power {item.Power})");
+            _log.Info(pickup.Kind switch
+            {
+                LootKind.Gold => $"[loot] Player {pickup.PlayerId} picked up {pickup.Amount} gold",
+                LootKind.HealthPotion => $"[loot] Player {pickup.PlayerId} drank a potion (+{pickup.Amount} health)",
+                _ => $"[loot] Player {pickup.PlayerId} picked up {item!.Name} (power {item.Power})",
+            });
         }
     }
 

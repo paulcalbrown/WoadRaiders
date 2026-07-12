@@ -175,8 +175,23 @@ public partial class GameScreen : Node3D
 
     private void OnItemPickedUp(ItemPickedUpPacket loot)
     {
-        _state.AddItem(new Item(loot.ItemId, loot.Name, (ItemRarity)loot.Rarity, (ItemType)loot.Type, loot.Power));
-        GD.Print($"Looted {loot.Name} (Power {loot.Power})");
+        switch ((LootKind)loot.Kind)
+        {
+            case LootKind.Gold:
+                _state.AddGold(loot.Amount);
+                GD.Print($"Picked up {loot.Amount} gold ({_state.Gold} total)");
+                break;
+
+            case LootKind.HealthPotion:
+                // The heal itself arrives authoritatively in the next snapshot.
+                GD.Print($"Drank a health potion (+{loot.Amount} health)");
+                break;
+
+            default:
+                _state.AddItem(new Item(loot.ItemId, loot.Name, (ItemRarity)loot.Rarity, (ItemType)loot.Type, loot.Power));
+                GD.Print($"Looted {loot.Name} (Power {loot.Power})");
+                break;
+        }
     }
 
     private void OnEquipmentUpdate(EquipmentUpdatePacket packet) =>

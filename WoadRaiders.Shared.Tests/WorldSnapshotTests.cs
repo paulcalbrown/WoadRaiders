@@ -23,8 +23,10 @@ public class WorldSnapshotTests
         var range = EnemyArchetypes.Of(EnemyType.Mage).AttackRange - 20f;
         mage = world.SpawnEnemy(new Vector3(range, 0, 0), EnemyType.Mage);
         world.SpawnEnemy(new Vector3(-300, 0, 0), EnemyType.Minion);
-        // Far from the player so it isn't auto-collected on the step below.
-        drop = world.DropItem(new Item(7, "Woad Blade", ItemRarity.Rare, ItemType.Blade, 25), new Vector3(700, 0, 700));
+        // Far from the player so none of it is auto-collected on the step below.
+        drop = world.DropItem(new Item(7, "Woad Sword", ItemRarity.Rare, ItemType.Sword, 25), new Vector3(700, 0, 700));
+        world.DropGold(12, new Vector3(720, 0, 700));
+        world.DropPotion(new Vector3(740, 0, 700));
 
         world.Step(); // the mage casts — a projectile now exists
         return world;
@@ -60,12 +62,16 @@ public class WorldSnapshotTests
         Assert.Equal(mage.Position.X, es.X);
         Assert.Equal(mage.Health, es.Health);
 
-        // Ground item keeps its (world-assigned) id and rarity.
-        var gs = snap.GroundItems.Single();
-        Assert.Equal(drop.Id, gs.Id);
+        // Ground loot keeps its (world-assigned) id and carries kind + rarity:
+        // equipment colors its gem by rarity; gold and potions key off the kind.
+        var gs = snap.GroundItems.Single(g => g.Id == drop.Id);
+        Assert.Equal((byte)LootKind.Equipment, gs.Kind);
         Assert.Equal((byte)ItemRarity.Rare, gs.Rarity);
+        Assert.Equal((byte)ItemType.Sword, gs.Type); // client picks the weapon mesh from this
         Assert.Equal(700f, gs.X);
         Assert.Equal(700f, gs.Z);
+        Assert.Single(snap.GroundItems, g => g.Kind == (byte)LootKind.Gold);
+        Assert.Single(snap.GroundItems, g => g.Kind == (byte)LootKind.HealthPotion);
 
         // Projectile position matches the live bolt.
         var live = world.Projectiles.Values.Single();
@@ -95,8 +101,35 @@ public class WorldSnapshotTests
         Assert.Equal(snap.Projectiles.Length, back.Projectiles.Length);
 
         Assert.Equal((byte)EnemyType.Mage, back.Enemies.Single(e => e.Id == mage.Id).Type);
-        Assert.Equal((byte)ItemRarity.Rare, back.GroundItems[0].Rarity);
+        Assert.Equal(snap.GroundItems.Select(g => g.Kind), back.GroundItems.Select(g => g.Kind));
+        Assert.Equal(snap.GroundItems.Select(g => g.Rarity), back.GroundItems.Select(g => g.Rarity));
+        Assert.Equal(snap.GroundItems.Select(g => g.Type), back.GroundItems.Select(g => g.Type));
         Assert.Equal(snap.Players[0].X, back.Players[0].X);
         Assert.Equal(snap.Projectiles[0].Id, back.Projectiles[0].Id);
+    }
+
+    [Fact]
+    public void Pickup_packet_survives_a_serialize_round_trip_for_every_kind()
+    {
+        foreach (var packet in new[]
+        {
+            new ItemPickedUpPacket { Kind = (byte)LootKind.Equipment, ItemId = 7, Name = "Woad Blade", Rarity = 2, Type = 1, Power = 25 },
+            new ItemPickedUpPacket { Kind = (byte)LootKind.Gold, Amount = 17 },
+            new ItemPickedUpPacket { Kind = (byte)LootKind.HealthPotion, Amount = 30 },
+        })
+        {
+            var writer = new NetDataWriter();
+            packet.Serialize(writer);
+            var reader = new NetDataReader();
+            reader.SetSource(writer);
+            var back = new ItemPickedUpPacket();
+            back.Deserialize(reader);
+
+            Assert.Equal(packet.Kind, back.Kind);
+            Assert.Equal(packet.Amount, back.Amount);
+            Assert.Equal(packet.ItemId, back.ItemId);
+            Assert.Equal(packet.Name, back.Name);
+            Assert.Equal(packet.Power, back.Power);
+        }
     }
 }

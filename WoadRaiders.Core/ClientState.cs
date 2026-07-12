@@ -23,12 +23,18 @@ public sealed class ClientState
     /// <summary>Authoritative health from the latest snapshot; never predicted.</summary>
     public float Health { get; private set; } = SimConstants.PlayerMaxHealth;
 
+    /// <summary>Coins collected this session, mirroring the server's purse.</summary>
+    public int Gold { get; private set; }
+
     /// <summary>Record an item the server says we picked up.</summary>
     public void AddItem(Item item)
     {
         _items.Add(item);
         _byId[item.Id] = item;
     }
+
+    /// <summary>Record gold the server says we picked up.</summary>
+    public void AddGold(int amount) => Gold += amount;
 
     /// <summary>Record the equipped item id per slot (0 = empty), from an EquipmentUpdate.</summary>
     public void SetEquipment(int weaponId, int armorId, int trinketId)
@@ -63,6 +69,7 @@ public sealed class ClientState
         _byId.Clear();
         WeaponId = ArmorId = TrinketId = 0;
         Health = SimConstants.PlayerMaxHealth;
+        Gold = 0;
     }
 
     private float PowerOf(int itemId) => _byId.TryGetValue(itemId, out var item) ? item.Power : 0f;

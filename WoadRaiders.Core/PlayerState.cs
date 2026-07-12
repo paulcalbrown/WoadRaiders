@@ -24,6 +24,9 @@ public sealed class PlayerState : Combatant
     /// <summary>Items this player has collected. Authoritative, server-side.</summary>
     public List<Item> Inventory { get; } = new();
 
+    /// <summary>Coins collected this session. No spend sink yet — shops will come.</summary>
+    public int Gold;
+
     /// <summary>Currently equipped item per slot.</summary>
     public Dictionary<EquipSlot, Item> Equipped { get; } = new();
 

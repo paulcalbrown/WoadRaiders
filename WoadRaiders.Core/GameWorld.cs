@@ -91,6 +91,22 @@ public sealed class GameWorld
         return grounded;
     }
 
+    /// <summary>Place a pile of gold coins in the world.</summary>
+    public GroundItem DropGold(int amount, Vector3 position)
+    {
+        var pile = new GroundItem(_nextItemId++, LootKind.Gold, amount, position);
+        _groundItems[pile.Id] = pile;
+        return pile;
+    }
+
+    /// <summary>Place a health potion in the world (heals on walk-over).</summary>
+    public GroundItem DropPotion(Vector3 position)
+    {
+        var potion = new GroundItem(_nextItemId++, LootKind.HealthPotion, (int)SimConstants.PotionHealAmount, position);
+        _groundItems[potion.Id] = potion;
+        return potion;
+    }
+
     /// <summary>
     /// Returns the pickups that happened since the last call, then clears the
     /// buffer. The server drains this each tick to notify the collecting players.
@@ -117,7 +133,7 @@ public sealed class GameWorld
         ResolvePlayerAttacks();
         UpdateEnemies(dt);       // mages fire bolts
         UpdateProjectiles(dt);   // bolts travel and strike
-        RemoveDeadEnemies();     // may drop loot
+        ResolveEnemyDeaths();    // roll drops, then remove the slain
         ResolvePickups();        // players auto-collect nearby loot
         RespawnDeadPlayers();
 
@@ -368,7 +384,7 @@ public sealed class GameWorld
                 _projectiles.Remove(id);
     }
 
-    private void RemoveDeadEnemies()
+    private void ResolveEnemyDeaths()
     {
         List<int>? dead = null;
         foreach (var enemy in _enemies.Values)
@@ -385,7 +401,7 @@ public sealed class GameWorld
 
             if (arch.GuaranteedDrops > 0)
             {
-                // A boss always pays out — scatter the drops so they read as a pile.
+                // A boss always pays out equipment — scatter the drops so they read as a pile.
                 for (var i = 0; i < arch.GuaranteedDrops; i++)
                 {
                     var offset = new Vector3(MathF.Cos(i * 2.1f), 0f, MathF.Sin(i * 2.1f)) * 26f;
@@ -394,8 +410,17 @@ public sealed class GameWorld
             }
             else if (LootGenerator.TryRollDrop(_rng) is { } drop)
             {
+                // Common enemies only rarely part with equipment (EquipmentDropChance).
                 DropItem(drop, enemy.Position);
             }
+
+            // The everyday drops roll for every enemy, boss included. Fixed offsets
+            // keep them from stacking exactly on an equipment drop.
+            if (_rng.NextDouble() < SimConstants.GoldDropChance)
+                DropGold(_rng.Next(SimConstants.GoldDropMin, SimConstants.GoldDropMax + 1),
+                         enemy.Position + new Vector3(14f, 0f, -10f));
+            if (_rng.NextDouble() < SimConstants.PotionDropChance)
+                DropPotion(enemy.Position + new Vector3(-14f, 0f, 10f));
 
             _enemies.Remove(id);
         }
@@ -415,8 +440,27 @@ public sealed class GameWorld
             if (picker is null)
                 continue;
 
-            picker.Inventory.Add(ground.Item);
-            _pickups.Add(new LootPickup(picker.Id, ground.Item));
+            switch (ground.Kind)
+            {
+                case LootKind.Gold:
+                    picker.Gold += ground.Amount;
+                    _pickups.Add(new LootPickup(picker.Id, LootKind.Gold, null, ground.Amount));
+                    break;
+
+                case LootKind.HealthPotion:
+                    // A potion is wasted on the unhurt: it stays on the ground
+                    // until someone who needs it walks over.
+                    if (picker.Health >= picker.MaxHealth)
+                        continue;
+                    var healed = picker.Heal(SimConstants.PotionHealAmount);
+                    _pickups.Add(new LootPickup(picker.Id, LootKind.HealthPotion, null, (int)MathF.Round(healed)));
+                    break;
+
+                default:
+                    picker.Inventory.Add(ground.Item!);
+                    _pickups.Add(new LootPickup(picker.Id, LootKind.Equipment, ground.Item, 0));
+                    break;
+            }
             (collected ??= new List<int>()).Add(ground.Id);
         }
 

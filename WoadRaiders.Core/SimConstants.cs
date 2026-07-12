@@ -47,8 +47,24 @@ public static class SimConstants
     public const float EnemyAttackCooldown = 1.5f;
 
     // --- Loot ---
-    /// <summary>Chance (0..1) that a slain enemy drops an item.</summary>
-    public const double EnemyDropChance = 0.6;
+    /// <summary>
+    /// Chance (0..1) that a slain common enemy drops equipment. Bosses always pay
+    /// out equipment regardless (<see cref="EnemyArchetype.GuaranteedDrops"/>).
+    /// </summary>
+    public const double EquipmentDropChance = 0.50;
+
+    /// <summary>Chance (0..1) that a slain enemy drops a pile of gold.</summary>
+    public const double GoldDropChance = 0.75;
+
+    /// <summary>Coins in a dropped gold pile (inclusive range).</summary>
+    public const int GoldDropMin = 5;
+    public const int GoldDropMax = 24;
+
+    /// <summary>Chance (0..1) that a slain enemy drops a health potion.</summary>
+    public const double PotionDropChance = 0.50;
+
+    /// <summary>Health a potion restores when walked over (capped at max health).</summary>
+    public const float PotionHealAmount = 30f;
 
     /// <summary>How close a player must be to auto-collect a ground item.</summary>
     public const float ItemPickupRadius = 40f;

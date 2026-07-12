@@ -39,4 +39,12 @@ public abstract class Combatant
     }
 
     public void TakeDamage(float amount) => Health = Math.Max(0f, Health - amount);
+
+    /// <summary>Restore health, capped at max. Returns the amount actually restored.</summary>
+    public float Heal(float amount)
+    {
+        var healed = Math.Clamp(amount, 0f, MaxHealth - Health);
+        Health += healed;
+        return healed;
+    }
 }

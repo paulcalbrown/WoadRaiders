@@ -24,10 +24,13 @@ public static class LootGenerator
     // Relative weights, Common → Legendary.
     private static readonly int[] RarityWeights = { 60, 25, 10, 4, 1 };
 
-    /// <summary>Roll a drop for a slain enemy. Returns null when nothing drops.</summary>
+    /// <summary>
+    /// Roll an equipment drop for a slain common enemy. Returns null when nothing
+    /// drops — which is most of the time (gold and potions are the everyday loot).
+    /// </summary>
     public static Item? TryRollDrop(Random rng)
     {
-        if (rng.NextDouble() > SimConstants.EnemyDropChance)
+        if (rng.NextDouble() > SimConstants.EquipmentDropChance)
             return null;
 
         return RollDrop(rng);

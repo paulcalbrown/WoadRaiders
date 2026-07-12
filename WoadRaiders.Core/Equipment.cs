@@ -10,12 +10,14 @@ public enum EquipSlot : byte
 
 public static class Equipment
 {
-    /// <summary>Which slot an item type occupies.</summary>
+    /// <summary>
+    /// Which slot an item type occupies. Every weapon in the kit equips to the
+    /// Weapon slot; the shield is the only Armor piece. The Trinket slot has no
+    /// items yet (the kit ships no amulet mesh) — it stays in the enum for when it does.
+    /// </summary>
     public static EquipSlot SlotFor(ItemType type) => type switch
     {
-        ItemType.Blade or ItemType.Axe or ItemType.Spear => EquipSlot.Weapon,
-        ItemType.Shield or ItemType.Helm => EquipSlot.Armor,
-        ItemType.Torc => EquipSlot.Trinket,
-        _ => EquipSlot.Trinket,
+        ItemType.Shield => EquipSlot.Armor,
+        _ => EquipSlot.Weapon,
     };
 }
