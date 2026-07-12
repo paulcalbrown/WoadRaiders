@@ -206,12 +206,12 @@ public partial class NetworkClient : Node3D
         var key = new DirectionalLight3D
         {
             RotationDegrees = new Vector3(-55, -50, 0),
-            LightEnergy = 0.22f,
+            LightEnergy = 0.28f,
             LightColor = new Color(0.70f, 0.78f, 1.0f), // cool moonlight → contrasts the warm torches
             ShadowEnabled = true,
         };
         AddChild(key);
-        var fill = new DirectionalLight3D { RotationDegrees = new Vector3(-25, 130, 0), LightEnergy = 0.06f };
+        var fill = new DirectionalLight3D { RotationDegrees = new Vector3(-25, 130, 0), LightEnergy = 0.08f };
         AddChild(fill);
 
         AddChild(new WorldEnvironment { Environment = DungeonEnvironment() });
@@ -223,10 +223,12 @@ public partial class NetworkClient : Node3D
         BackgroundColor = new Color(0.015f, 0.015f, 0.025f),
         AmbientLightSource = Godot.Environment.AmbientSource.Color,
         AmbientLightColor = new Color(0.28f, 0.30f, 0.48f),
-        AmbientLightEnergy = 0.08f, // low, so torch pools stand out against the dark
+        AmbientLightEnergy = 0.12f, // low, so torch pools stand out against the dark
+        // Very light fog only — at the far ortho camera (~1100 units) even a small
+        // density greatly flattens the scene and washes out the torch pools.
         FogEnabled = true,
         FogLightColor = new Color(0.03f, 0.03f, 0.05f),
-        FogDensity = 0.0018f,
+        FogDensity = 0.0005f,
     };
 
     private void SetupHud()
