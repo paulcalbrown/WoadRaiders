@@ -1,0 +1,167 @@
+using Godot;
+using WoadRaiders.Core;
+
+namespace WoadRaiders.Client;
+
+/// <summary>
+/// Builds the dungeon's visuals once the geometry arrives. Hand-crafted maps
+/// render their authored scene; a missing scene falls back to placeholder boxes
+/// built from the collision solids. Either way, the fade-eligible meshes are
+/// registered with the <see cref="OcclusionFader"/>.
+/// </summary>
+public static class DungeonVisualBuilder
+{
+    public static void Build(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
+    {
+        if (TryLoadAuthoredScene(parent, geometry, fader))
+            return;
+        BuildPlaceholderMeshes(parent, geometry, fader);
+    }
+
+    private static bool TryLoadAuthoredScene(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
+    {
+        var path = geometry.ScenePath;
+        if (string.IsNullOrEmpty(path) || !ResourceLoader.Exists(path))
+            return false;
+        if (ResourceLoader.Load<PackedScene>(path) is not { } packed)
+            return false;
+
+        var scene = packed.Instantiate<Node>();
+        parent.AddChild(scene); // must be in-tree before reading global transforms
+        fader.TrackSceneMeshes(scene);
+        var selfLit = scene.FindDescendant<WorldEnvironment>() is not null;
+        if (!selfLit)
+            AddDefaultLighting(parent); // map brings no WorldEnvironment → light it with the default
+        GD.Print($"Rendering authored map scene '{path}' ({fader.TrackedSceneMeshCount} fade-aware meshes, " +
+                 $"{(selfLit ? "self-lit" : "default lighting")})");
+        return true;
+    }
+
+    private static void BuildPlaceholderMeshes(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
+    {
+        AddDefaultLighting(parent); // placeholder rendering brings no scene, so light it here
+
+        // One floor slab spanning the world extent (authored scenes bring their own floors).
+        var bounds = geometry.Bounds;
+        var size = bounds.Size.ToGodot();
+        var center = bounds.Center.ToGodot();
+        var floorMesh = new BoxMesh { Size = new Vector3(size.X, 4f, size.Z) };
+        var floorPositions = new List<Vector3> { new(center.X, -2f, center.Z) };
+        parent.AddChild(MakeTileField(floorMesh, floorPositions, FloorMaterial()));
+
+        BuildSolids(parent, geometry, fader);
+    }
+
+    private static void BuildSolids(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
+    {
+        var solids = geometry.Solids;
+
+        // One unit cube, scaled per instance to each solid's size.
+        var mesh = new BoxMesh { Size = Vector3.One };
+        var walls = new MultiMesh
+        {
+            TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+            UseColors = true, // must be set before InstanceCount
+            Mesh = mesh,
+            InstanceCount = solids.Count,
+        };
+        for (var i = 0; i < solids.Count; i++)
+        {
+            var basis = Basis.Identity.Scaled(solids[i].Size.ToGodot());
+            walls.SetInstanceTransform(i, new Transform3D(basis, solids[i].Center.ToGodot()));
+            walls.SetInstanceColor(i, Colors.White); // white = full stone texture; alpha = fade
+        }
+
+        parent.AddChild(new MultiMeshInstance3D { Multimesh = walls, MaterialOverride = WallMaterial() });
+        fader.TrackWalls(walls, solids);
+    }
+
+    // Fallback lighting for placeholder rendering, or an authored scene that has no
+    // WorldEnvironment of its own — the dim, cool "dark torch-lit dungeon" default.
+    private static void AddDefaultLighting(Node3D parent)
+    {
+        var key = new DirectionalLight3D
+        {
+            RotationDegrees = new Vector3(-55, -50, 0),
+            LightEnergy = 0.28f,
+            LightColor = new Color(0.70f, 0.78f, 1.0f), // cool moonlight → contrasts warm torches
+            ShadowEnabled = true,
+        };
+        parent.AddChild(key);
+        parent.AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-25, 130, 0), LightEnergy = 0.08f });
+        parent.AddChild(new WorldEnvironment { Environment = DungeonEnvironment() });
+    }
+
+    private static Godot.Environment DungeonEnvironment() => new()
+    {
+        BackgroundMode = Godot.Environment.BGMode.Color,
+        BackgroundColor = new Color(0.015f, 0.015f, 0.025f),
+        AmbientLightSource = Godot.Environment.AmbientSource.Color,
+        AmbientLightColor = new Color(0.28f, 0.30f, 0.48f),
+        AmbientLightEnergy = 0.12f, // low, so torch pools stand out against the dark
+        // Very light fog only — at the far ortho camera (~1100 units) even a small
+        // density greatly flattens the scene and washes out the torch pools.
+        FogEnabled = true,
+        FogLightColor = new Color(0.03f, 0.03f, 0.05f),
+        FogDensity = 0.0005f,
+    };
+
+    private static MultiMeshInstance3D MakeTileField(Mesh mesh, List<Vector3> positions, Material material)
+    {
+        var multi = new MultiMesh
+        {
+            TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+            Mesh = mesh,
+            InstanceCount = positions.Count,
+        };
+        for (var i = 0; i < positions.Count; i++)
+            multi.SetInstanceTransform(i, new Transform3D(Basis.Identity, positions[i]));
+
+        return new MultiMeshInstance3D { Multimesh = multi, MaterialOverride = material };
+    }
+
+    private static StandardMaterial3D FloorMaterial() => StoneMaterial(
+        albedoSeed: 1, normalSeed: 2,
+        dark: new Color(0.14f, 0.14f, 0.17f), light: new Color(0.34f, 0.33f, 0.37f), fadeable: false);
+
+    private static StandardMaterial3D WallMaterial() => StoneMaterial(
+        albedoSeed: 3, normalSeed: 4,
+        dark: new Color(0.06f, 0.06f, 0.09f), light: new Color(0.20f, 0.19f, 0.25f), fadeable: true);
+
+    private static StandardMaterial3D StoneMaterial(int albedoSeed, int normalSeed, Color dark, Color light, bool fadeable)
+    {
+        var ramp = new Gradient();
+        ramp.SetColor(0, dark);
+        ramp.SetColor(1, light);
+
+        var albedoNoise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, Frequency = 0.05f, Seed = albedoSeed };
+        var albedo = new NoiseTexture2D { Noise = albedoNoise, Width = 256, Height = 256, Seamless = true, ColorRamp = ramp };
+
+        var normalNoise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, Frequency = 0.08f, Seed = normalSeed };
+        var normal = new NoiseTexture2D
+        {
+            Noise = normalNoise, Width = 256, Height = 256, Seamless = true, AsNormalMap = true, BumpStrength = 3f,
+        };
+
+        var material = new StandardMaterial3D
+        {
+            AlbedoColor = Colors.White,
+            AlbedoTexture = albedo,
+            NormalEnabled = true,
+            NormalTexture = normal,
+            Roughness = 0.95f,
+            Metallic = 0f,
+            Uv1Triplanar = true,
+            Uv1WorldTriplanar = true,
+            Uv1Scale = new Vector3(0.012f, 0.012f, 0.012f),
+        };
+
+        if (fadeable)
+        {
+            material.VertexColorUseAsAlbedo = true;
+            material.Transparency = BaseMaterial3D.TransparencyEnum.AlphaHash;
+        }
+
+        return material;
+    }
+}

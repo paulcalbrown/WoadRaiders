@@ -45,6 +45,38 @@ public class DungeonSnapshotTests
     }
 
     [Fact]
+    public void Geometry_survives_the_full_wire_round_trip()
+    {
+        // Server side: project + serialize. Client side: deserialize + rebuild.
+        // This is the invariant prediction depends on: the client must collide
+        // against exactly the solids the server authored.
+        var dungeon = SampleDungeon();
+
+        var writer = new NetDataWriter();
+        DungeonSnapshot.From(dungeon).Serialize(writer);
+        var reader = new NetDataReader();
+        reader.SetSource(writer);
+        var packet = new DungeonGeometryPacket();
+        packet.Deserialize(reader);
+
+        var back = DungeonSnapshot.ToGeometry(packet);
+
+        Assert.Equal(dungeon.SpawnPoint, back.SpawnPoint);
+        Assert.Equal(dungeon.ScenePath, back.ScenePath);
+        Assert.Equal(dungeon.Solids, back.Solids); // Aabb is a record struct — value equality
+        Assert.Empty(back.EnemySpawns);            // spawns are server-only, never on the wire
+    }
+
+    [Fact]
+    public void ToGeometry_maps_an_empty_scene_path_to_null()
+    {
+        // "" on the wire means "no authored scene"; the client's fallback rendering
+        // keys off a null ScenePath.
+        var bare = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<EnemySpawnPoint>());
+        Assert.Null(DungeonSnapshot.ToGeometry(DungeonSnapshot.From(bare)).ScenePath);
+    }
+
+    [Fact]
     public void Packet_survives_a_serialize_round_trip()
     {
         var packet = DungeonSnapshot.From(SampleDungeon());
