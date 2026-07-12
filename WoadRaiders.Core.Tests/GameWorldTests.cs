@@ -86,4 +86,25 @@ public class GameWorldTests
         Assert.False(world.Players.ContainsKey(1));
         Assert.True(world.Players.ContainsKey(2));
     }
+
+    [Fact]
+    public void Non_finite_input_is_neutralized_at_the_simulation_boundary()
+    {
+        // A hostile client can put NaN/∞ in a well-formed input packet. NaN slips
+        // through the magnitude cap (NaN > 1 is false), so without the SetInput
+        // guard it would poison the player's position — broadcast to everyone.
+        var world = new GameWorld();
+        var player = world.AddPlayer(1, "A");
+        var start = player.Position;
+
+        foreach (var evil in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity })
+        {
+            world.SetInput(1, new PlayerInput { MoveX = evil, MoveZ = evil, Sequence = 1 });
+            world.Step();
+        }
+
+        Assert.True(float.IsFinite(player.Position.X) && float.IsFinite(player.Position.Z),
+                    $"position must stay finite (got {player.Position})");
+        Assert.Equal(start, player.Position); // neutralized to zero intent = no movement
+    }
 }

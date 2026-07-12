@@ -59,8 +59,17 @@ public sealed class GameWorld
     /// <summary>Record the latest intent for a player; applied on the next <see cref="Step"/>.</summary>
     public void SetInput(int id, PlayerInput input)
     {
-        if (_players.ContainsKey(id))
-            _inputs[id] = input;
+        if (!_players.ContainsKey(id))
+            return;
+
+        // The transport hands us raw client floats. Non-finite intent (NaN/∞) would
+        // sail through the magnitude cap (NaN > 1 is false) and poison the player's
+        // position — which then broadcasts to every client. Neutralize it here, at
+        // the simulation boundary, so no transport has to remember to.
+        if (!float.IsFinite(input.MoveX)) input.MoveX = 0f;
+        if (!float.IsFinite(input.MoveZ)) input.MoveZ = 0f;
+
+        _inputs[id] = input;
     }
 
     // --- enemies ---

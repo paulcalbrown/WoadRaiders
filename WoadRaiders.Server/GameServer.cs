@@ -37,7 +37,9 @@ public sealed class GameServer
     public GameServer(string mapPath)
     {
         _mapPath = mapPath;
-        _net = new NetManager(_listener);
+        // AutoRecycle returns each NetPacketReader to LiteNetLib's pool after the
+        // receive event — without it every received packet allocates fresh garbage.
+        _net = new NetManager(_listener) { AutoRecycle = true };
     }
 
     /// <summary>Locates the bundled test arena for map-less dev runs (repo root or bin dir).</summary>
@@ -55,6 +57,17 @@ public sealed class GameServer
     /// <summary>Runs the server until stopped. Returns false if startup failed.</summary>
     public bool Run(int port = NetConfig.DefaultPort)
     {
+        // Validate the map before binding the port — fail fast with no side effects.
+        try
+        {
+            _dungeon = DungeonGeometryFile.Load(_mapPath);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Failed to load map '{_mapPath}': {e.Message}");
+            return false;
+        }
+
         WireEvents();
 
         if (!_net.Start(port))
@@ -69,17 +82,6 @@ public sealed class GameServer
         Console.WriteLine(
             $"WoadRaiders dedicated server listening on udp/{port} " +
             $"(sim {SimConstants.TickRate}Hz, snapshots {NetConfig.SnapshotsPerSecond}Hz). Ctrl+C to stop.");
-
-        try
-        {
-            _dungeon = DungeonGeometryFile.Load(_mapPath);
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"Failed to load map '{_mapPath}': {e.Message}");
-            _net.Stop();
-            return false;
-        }
         Console.WriteLine($"Loaded map '{_mapPath}' " +
                           $"({_dungeon.Solids.Count} solids, {_dungeon.EnemySpawns.Count} enemy spawns" +
                           $"{(_dungeon.ScenePath is null ? "" : $", scene {_dungeon.ScenePath}")}).");
@@ -90,7 +92,7 @@ public sealed class GameServer
 
         Loop();
 
-        _net.Stop();
+        _net.Stop(sendDisconnectMessages: true); // clients see a clean disconnect, not a timeout
         Console.WriteLine("Server stopped.");
         return true;
     }
@@ -132,6 +134,22 @@ public sealed class GameServer
 
     private void OnReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)
     {
+        // The wire is hostile territory: a truncated or malicious packet must never
+        // take the server down. Anything that fails to parse costs the sender their
+        // connection, nothing more.
+        try
+        {
+            HandleMessage(peer, reader);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"[!] Bad packet from player {peer.Id} — disconnecting ({e.GetType().Name}: {e.Message})");
+            peer.Disconnect();
+        }
+    }
+
+    private void HandleMessage(NetPeer peer, NetPacketReader reader)
+    {
         var type = (MessageType)reader.GetByte();
         switch (type)
         {
@@ -140,7 +158,7 @@ public sealed class GameServer
                 var join = new JoinRequest();
                 join.Deserialize(reader);
                 if (_world.Players.TryGetValue(peer.Id, out var player))
-                    player.Name = join.Name;
+                    player.Name = SanitizeName(join.Name, peer.Id);
                 break;
             }
 
@@ -173,6 +191,16 @@ public sealed class GameServer
         }
     }
 
+    /// <summary>Client-supplied names are untrusted: strip control chars, cap the length.</summary>
+    private static string SanitizeName(string name, int playerId)
+    {
+        const int maxLength = 24;
+        var cleaned = string.Concat(name.Where(c => !char.IsControl(c))).Trim();
+        if (cleaned.Length > maxLength)
+            cleaned = cleaned[..maxLength];
+        return cleaned.Length == 0 ? $"Raider-{playerId}" : cleaned;
+    }
+
     private void Loop()
     {
         var tickInterval = TimeSpan.FromSeconds(SimConstants.TickDelta);
@@ -189,17 +217,29 @@ public sealed class GameServer
 
             var now = clock.Elapsed;
 
-            // Fixed-step simulation, catching up if the loop fell behind.
-            while (now >= nextTick)
+            // Fixed-step simulation, catching up if the loop fell behind — but bounded.
+            // After a long stall (GC pause, debugger break, machine sleep) replaying
+            // every missed tick would only stall the loop further, so drop the lost
+            // time and resume at the normal cadence instead.
+            const int maxCatchUpTicks = 10; // ~1/3 s at 30 Hz
+            var ticksRun = 0;
+            while (now >= nextTick && ticksRun++ < maxCatchUpTicks)
             {
                 ApplyBufferedInputs();
                 _world.Step();
                 nextTick += tickInterval;
             }
+            if (now >= nextTick)
+            {
+                Console.WriteLine($"[!] Sim stalled {(now - nextTick).TotalMilliseconds:0} ms beyond the catch-up cap — dropping the lost time.");
+                nextTick = now;
+            }
 
             DeliverPickups();
 
             // Top the enemy population back up over time (the boss is separate).
+            // Scheduled from "now" rather than accumulated, so a stall can never
+            // bank a burst of overdue spawns.
             if (now >= nextEnemyCheck)
             {
                 var regulars = _world.Enemies.Values.Count(e => e.Type != EnemyType.Boss);
@@ -209,13 +249,13 @@ public sealed class GameServer
                     _world.SpawnEnemy(spawn.Position, spawn.Type);
                 }
                 UpdateBoss(now);
-                nextEnemyCheck += EnemyRespawnInterval;
+                nextEnemyCheck = now + EnemyRespawnInterval;
             }
 
             if (now >= nextSnapshot)
             {
                 BroadcastSnapshot();
-                nextSnapshot += snapshotInterval;
+                nextSnapshot = now + snapshotInterval; // same: no post-stall snapshot burst
             }
 
             Thread.Sleep(1);

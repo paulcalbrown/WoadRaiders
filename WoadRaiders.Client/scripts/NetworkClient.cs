@@ -155,7 +155,8 @@ public partial class NetworkClient : Node3D
         SetupHud();
 
         _listener = new EventBasedNetListener();
-        _net = new NetManager(_listener);
+        // AutoRecycle pools packet readers instead of allocating per received packet.
+        _net = new NetManager(_listener) { AutoRecycle = true };
         _net.Start();
 
         _listener.NetworkReceiveEvent += OnReceive;
