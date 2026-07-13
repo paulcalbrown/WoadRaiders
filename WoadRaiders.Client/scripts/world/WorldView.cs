@@ -32,6 +32,11 @@ public sealed class WorldView
         [EnemyType.Boss] = new("Skeleton_Warrior.glb", 44f, "2H_Melee_Attack_Chop", 122f, 2f),
     };
 
+    // Every character carries a light. Players glow warm (torch-lit raiders);
+    // the undead enemies give off a cold spectral light — a clear friend/foe read.
+    private static readonly Color PlayerLight = new(1.0f, 0.62f, 0.32f);
+    private static readonly Color EnemyLight = new(0.45f, 0.72f, 1.0f);
+
     private sealed class LootView
     {
         public Node3D Node = null!;    // a gem MeshInstance3D, or an instantiated KayKit prop scene
@@ -130,7 +135,7 @@ public sealed class WorldView
             if (!_players.Touch(p.Id, out var view))
             {
                 var scene = p.Id == localPlayerId ? _localCharScene : _remoteCharScene;
-                view = CharacterView.Spawn(_parent, scene, feet, CharScale);
+                view = CharacterView.Spawn(_parent, scene, feet, CharScale, PlayerLight);
                 _players.Add(p.Id, view);
             }
             view.Attacking = p.Attacking; // the local view's flag is re-derived from prediction each frame
@@ -147,7 +152,7 @@ public sealed class WorldView
             if (!_enemies.Touch(e.Id, out var view))
             {
                 var visual = EnemyVisuals[type];
-                view = CharacterView.Spawn(_parent, _enemyCharScenes[type], feet, visual.Scale);
+                view = CharacterView.Spawn(_parent, _enemyCharScenes[type], feet, visual.Scale, EnemyLight);
                 view.AttackClip = visual.AttackClip;
                 view.AttachHealthBar(_barMesh, visual.BarHeight, visual.BarScale);
                 _enemies.Add(e.Id, view);

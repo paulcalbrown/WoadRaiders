@@ -22,6 +22,16 @@ public partial class CharacterView : Node3D
     private const float ModelYawOffset = 0f;  // KayKit chars face +Z (glTF convention); flip to Mathf.Pi if they moonwalk
     private const float BarWidth = 40f;       // matches the shared bar QuadMesh width
 
+    // Every character is a moving light source in the dark dungeon: a cheap,
+    // shadowless spotlight aimed straight down, so it reads as a circular pool on
+    // the ground around the body rather than an omnidirectional sphere. The circle's
+    // radius is roughly LightHeight * tan(LightConeAngle); the mount needs some
+    // height for the cone to spread that far.
+    private const float LightHeight = 60f;      // mount above the feet
+    private const float LightRange = 200f;      // cone reach (well past the floor below)
+    private const float LightEnergy = 4f;
+    private const float LightConeAngle = 50f;   // half-cone degrees; widen for a bigger ground circle
+
     /// <summary>Play the attack clip this frame? Snapshot flag for remotes, predicted for the local player.</summary>
     public bool Attacking { get; set; }
 
@@ -45,7 +55,7 @@ public partial class CharacterView : Node3D
     private float _yaw;
 
     /// <summary>Instantiate the model, snap to its real spot (no lerp-in from the origin), and enter the tree.</summary>
-    public static CharacterView Spawn(Node parent, PackedScene scene, Vector3 feet, float scale)
+    public static CharacterView Spawn(Node parent, PackedScene scene, Vector3 feet, float scale, Color lightColor)
     {
         var view = new CharacterView { Position = feet, Target = feet, _lastPos = feet };
         view._pivot = new Node3D();
@@ -53,6 +63,20 @@ public partial class CharacterView : Node3D
         model.Scale = Vector3.One * scale;
         view._pivot.AddChild(model);
         view.AddChild(view._pivot);
+
+        // Light lives on the (unrotated) holder, not the pivot, so it stays put as the
+        // body turns and its height is independent of the model's scale. Aimed straight
+        // down for a circular pool on the ground.
+        view.AddChild(new SpotLight3D
+        {
+            Position = new Vector3(0, LightHeight, 0),
+            RotationDegrees = new Vector3(-90, 0, 0), // point -Z straight down
+            LightColor = lightColor,
+            LightEnergy = LightEnergy,
+            SpotRange = LightRange,
+            SpotAngle = LightConeAngle,
+            ShadowEnabled = false, // many characters on screen — keep each light cheap
+        });
         parent.AddChild(view);
 
         view._anim = model.FindDescendant<AnimationPlayer>();
