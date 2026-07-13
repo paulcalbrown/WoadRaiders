@@ -3,7 +3,7 @@ using Godot;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// A title-menu button in the screen's Celtic/gothic dress: heavy small-caps
+/// A menu button in the game's Celtic/gothic dress: heavy small-caps
 /// serif in a faint frame that ignites radioactive green when highlighted —
 /// glow border, knot spearheads sliding in from the sides, a woven underline
 /// growing from the centre, the text itself turning green, and a slight
@@ -26,13 +26,13 @@ public partial class GothicButton : Button
         CustomMinimumSize = new Vector2(0, 54);
         MouseDefaultCursorShape = CursorShape.PointingHand;
 
-        AddThemeFontOverride("font", TitleTheme.DisplayFont());
+        AddThemeFontOverride("font", UiTheme.DisplayFont());
         AddThemeFontSizeOverride("font_size", 27);
 
         var idle = new StyleBoxFlat
         {
             BgColor = new Color(1f, 1f, 1f, 0.02f),
-            BorderColor = new Color(TitleTheme.WoadDim, 0.25f),
+            BorderColor = new Color(UiTheme.WoadDim, 0.25f),
         };
         idle.SetBorderWidthAll(1);
         idle.SetContentMarginAll(8);
@@ -40,8 +40,8 @@ public partial class GothicButton : Button
         var hot = new StyleBoxFlat
         {
             BgColor = new Color(0.05f, 0.10f, 0.05f, 0.55f),
-            BorderColor = new Color(TitleTheme.OozeGreen, 0.85f),
-            ShadowColor = new Color(TitleTheme.OozeGreen, 0.22f), // the radioactive glow
+            BorderColor = new Color(UiTheme.OozeGreen, 0.85f),
+            ShadowColor = new Color(UiTheme.OozeGreen, 0.22f), // the radioactive glow
             ShadowSize = 16,
         };
         hot.SetBorderWidthAll(1);
@@ -50,8 +50,8 @@ public partial class GothicButton : Button
         var pressed = new StyleBoxFlat
         {
             BgColor = new Color(0.10f, 0.20f, 0.08f, 0.70f),
-            BorderColor = TitleTheme.OozeGreen,
-            ShadowColor = new Color(TitleTheme.OozeGreen, 0.30f),
+            BorderColor = UiTheme.OozeGreen,
+            ShadowColor = new Color(UiTheme.OozeGreen, 0.30f),
             ShadowSize = 18,
         };
         pressed.SetBorderWidthAll(1);
@@ -86,7 +86,7 @@ public partial class GothicButton : Button
         Scale = Vector2.One * (1f + 0.035f * value);
         // The Button picks a different theme color per draw state; pin them all
         // to the tweened value so the text never snaps between states.
-        var color = TitleTheme.BoneSilver.Lerp(TitleTheme.OozeGreen, value);
+        var color = UiTheme.BoneSilver.Lerp(UiTheme.OozeGreen, value);
         foreach (var state in FontColorStates)
             AddThemeColorOverride(state, color);
         QueueRedraw();
@@ -96,8 +96,8 @@ public partial class GothicButton : Button
     {
         if (_highlight <= 0.001f)
             return;
-        var green = new Color(TitleTheme.OozeGreen, _highlight);
-        var woad = new Color(TitleTheme.WoadBlue, 0.7f * _highlight);
+        var green = new Color(UiTheme.OozeGreen, _highlight);
+        var woad = new Color(UiTheme.WoadBlue, 0.7f * _highlight);
 
         // Woven underline growing out from the centre: two thin strands
         // crossing each other, a miniature of the knotwork divider.

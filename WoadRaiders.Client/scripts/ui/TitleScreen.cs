@@ -8,8 +8,9 @@ namespace WoadRaiders.Client;
 /// the game screen returns here on Esc. Launching with <c>--play</c> skips
 /// straight into the game (dev/headless convenience); <c>--screenshot</c> saves
 /// stills of this screen and exits. Code-first like the rest of the client —
-/// the .tscn is just this script on an empty Control; the Celtic/gothic dress
-/// (fog backdrop, knotwork, oozing title, glowing menu) lives in scripts/ui/title.
+/// the .tscn is just this script on an empty Control; the shared Celtic/gothic
+/// dress (theme, fog backdrop, knotwork, glowing menu widgets) lives in
+/// scripts/ui/common, and the oozing wordmark in scripts/ui/title.
 /// </summary>
 public partial class TitleScreen : Control
 {
@@ -45,7 +46,7 @@ public partial class TitleScreen : Control
     {
         SetAnchorsPreset(LayoutPreset.FullRect);
 
-        AddChild(new TitleBackground());
+        AddChild(new FogBackground());
         AddChild(new CelticFrame());
 
         var center = new CenterContainer();
@@ -65,7 +66,7 @@ public partial class TitleScreen : Control
 
         // Tracked-out small caps in light woad, dark-edged with a faint green
         // halo — legible even against a stray drop.
-        var taglineFont = new FontVariation { BaseFont = TitleTheme.BodyFont(), SpacingGlyph = 8 };
+        var taglineFont = new FontVariation { BaseFont = UiTheme.BodyFont(), SpacingGlyph = 8 };
         var tagline = new Label
         {
             Text = "CO-OP DUNGEON RAIDING",
@@ -74,9 +75,9 @@ public partial class TitleScreen : Control
         tagline.AddThemeFontOverride("font", taglineFont);
         tagline.AddThemeFontSizeOverride("font_size", 24);
         tagline.AddThemeColorOverride("font_color", new Color(0.74f, 0.85f, 1f));
-        tagline.AddThemeColorOverride("font_outline_color", new Color(TitleTheme.Night, 0.95f));
+        tagline.AddThemeColorOverride("font_outline_color", new Color(UiTheme.Night, 0.95f));
         tagline.AddThemeConstantOverride("outline_size", 6);
-        tagline.AddThemeColorOverride("font_shadow_color", new Color(TitleTheme.OozeGreen, 0.30f));
+        tagline.AddThemeColorOverride("font_shadow_color", new Color(UiTheme.OozeGreen, 0.30f));
         tagline.AddThemeConstantOverride("shadow_outline_size", 8);
         tagline.AddThemeConstantOverride("shadow_offset_x", 0);
         tagline.AddThemeConstantOverride("shadow_offset_y", 0);
@@ -126,36 +127,13 @@ public partial class TitleScreen : Control
             CustomMinimumSize = new Vector2(92, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        caption.AddThemeFontOverride("font", TitleTheme.BodyFont());
+        caption.AddThemeFontOverride("font", UiTheme.BodyFont());
         caption.AddThemeFontSizeOverride("font_size", 19);
-        caption.AddThemeColorOverride("font_color", new Color(TitleTheme.WoadDim, 0.9f));
+        caption.AddThemeColorOverride("font_color", new Color(UiTheme.WoadDim, 0.9f));
         row.AddChild(caption);
 
-        var normal = new StyleBoxFlat
-        {
-            BgColor = new Color(0.03f, 0.05f, 0.08f, 0.85f),
-            BorderColor = new Color(TitleTheme.WoadDim, 0.4f),
-        };
-        normal.SetBorderWidthAll(1);
-        normal.SetContentMarginAll(8);
-        var focus = new StyleBoxFlat
-        {
-            BgColor = new Color(0.04f, 0.08f, 0.06f, 0.9f),
-            BorderColor = new Color(TitleTheme.OozeGreen, 0.8f),
-            ShadowColor = new Color(TitleTheme.OozeGreen, 0.18f),
-            ShadowSize = 10,
-        };
-        focus.SetBorderWidthAll(1);
-        focus.SetContentMarginAll(8);
-
         var edit = new LineEdit { Text = initial, SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        edit.AddThemeStyleboxOverride("normal", normal);
-        edit.AddThemeStyleboxOverride("focus", focus);
-        edit.AddThemeFontOverride("font", TitleTheme.BodyFont());
-        edit.AddThemeFontSizeOverride("font_size", 20);
-        edit.AddThemeColorOverride("font_color", TitleTheme.BoneSilver);
-        edit.AddThemeColorOverride("caret_color", TitleTheme.OozeGreen);
-        edit.AddThemeColorOverride("selection_color", new Color(TitleTheme.OozeGreen, 0.3f));
+        UiTheme.StyleInput(edit);
         row.AddChild(edit);
 
         column.AddChild(row);

@@ -3,7 +3,7 @@ using Godot;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The decorative frame around the whole title screen: a doubled border line
+/// A decorative frame around a full-screen menu: a doubled border line
 /// inset from the edges with a triskele — the Celtic triple spiral — set in a
 /// ring medallion at each corner. Purely ornamental; ignores the mouse and
 /// redraws only on resize.
@@ -25,8 +25,8 @@ public partial class CelticFrame : Control
 
     public override void _Draw()
     {
-        var line = new Color(TitleTheme.WoadDim, 0.35f);
-        var faint = new Color(TitleTheme.WoadDim, 0.18f);
+        var line = new Color(UiTheme.WoadDim, 0.35f);
+        var faint = new Color(UiTheme.WoadDim, 0.18f);
         DrawRect(new Rect2(OuterInset, OuterInset, Size.X - 2 * OuterInset, Size.Y - 2 * OuterInset),
             line, filled: false, width: 2f);
         DrawRect(new Rect2(InnerInset, InnerInset, Size.X - 2 * InnerInset, Size.Y - 2 * InnerInset),
@@ -45,11 +45,11 @@ public partial class CelticFrame : Control
     private void DrawMedallion(Vector2 center)
     {
         // Clear the frame lines beneath so the medallion sits "on" the frame.
-        DrawCircle(center, 32f, TitleTheme.Night);
-        DrawArc(center, 26f, 0, Mathf.Tau, 64, new Color(TitleTheme.WoadDim, 0.55f), 1.5f, true);
-        DrawArc(center, 30f, 0, Mathf.Tau, 64, new Color(TitleTheme.WoadDim, 0.25f), 1f, true);
-        DrawTriskele(center, 20f, new Color(TitleTheme.WoadDim, 0.85f));
-        DrawCircle(center, 2.2f, new Color(TitleTheme.OozeGreen, 0.9f));
+        DrawCircle(center, 32f, UiTheme.Night);
+        DrawArc(center, 26f, 0, Mathf.Tau, 64, new Color(UiTheme.WoadDim, 0.55f), 1.5f, true);
+        DrawArc(center, 30f, 0, Mathf.Tau, 64, new Color(UiTheme.WoadDim, 0.25f), 1f, true);
+        DrawTriskele(center, 20f, new Color(UiTheme.WoadDim, 0.85f));
+        DrawCircle(center, 2.2f, new Color(UiTheme.OozeGreen, 0.9f));
     }
 
     private void DrawTriskele(Vector2 center, float radius, Color color)

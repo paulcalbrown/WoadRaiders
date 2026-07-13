@@ -20,7 +20,7 @@ public partial class CelticKnotDivider : Control
     public override void _Draw()
     {
         var strandA = new Color(0.50f, 0.68f, 0.95f, 0.90f); // woad
-        var strandB = new Color(TitleTheme.Verdigris, 0.85f);
+        var strandB = new Color(UiTheme.Verdigris, 0.85f);
         float cy = Size.Y * 0.5f;
         float amp = Size.Y * 0.30f;
         float span = Size.X - 2f * Margin;
@@ -55,14 +55,14 @@ public partial class CelticKnotDivider : Control
         // End medallions and the centre jewel.
         foreach (var x in new[] { Margin, Margin + span })
         {
-            DrawCircle(new Vector2(x, cy), 3f, TitleTheme.OozeGreen);
-            DrawArc(new Vector2(x, cy), 7f, 0, Mathf.Tau, 32, new Color(TitleTheme.WoadDim, 0.8f), 1.3f, true);
+            DrawCircle(new Vector2(x, cy), 3f, UiTheme.OozeGreen);
+            DrawArc(new Vector2(x, cy), 7f, 0, Mathf.Tau, 32, new Color(UiTheme.WoadDim, 0.8f), 1.3f, true);
         }
         var c = new Vector2(Margin + span * 0.5f, cy);
         DrawColoredPolygon(
             [c + new Vector2(-6, 0), c + new Vector2(0, -6), c + new Vector2(6, 0), c + new Vector2(0, 6)],
-            new Color(TitleTheme.OozeGreen, 0.95f));
-        DrawArc(c, 9f, 0, Mathf.Tau, 32, new Color(TitleTheme.WoadDim, 0.6f), 1.2f, true);
+            new Color(UiTheme.OozeGreen, 0.95f));
+        DrawArc(c, 9f, 0, Mathf.Tau, 32, new Color(UiTheme.WoadDim, 0.6f), 1.2f, true);
     }
 
     private void DrawStrand(Func<float, Vector2> point, float from, float to, Color color, bool casing)
@@ -76,7 +76,7 @@ public partial class CelticKnotDivider : Control
             highlight[i] = points[i] + new Vector2(0, -1f);
         }
         if (casing)
-            DrawPolyline(points, TitleTheme.Night, 9f);
+            DrawPolyline(points, UiTheme.Night, 9f);
         DrawPolyline(points, color, 3.6f, true);
         DrawPolyline(highlight, new Color(color.Lightened(0.35f), 0.55f), 1.2f, true);
     }

@@ -3,12 +3,12 @@ using Godot;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// Full-screen backdrop for the title screen: a near-black vertical gradient
+/// Full-screen backdrop for menu screens: a near-black vertical gradient
 /// with slow banks of woad-blue and sickly green fog, a sourceless moon-glow
 /// from above, and a heavy vignette. All of it lives in one canvas shader;
 /// the node is just the ColorRect carrying it.
 /// </summary>
-public partial class TitleBackground : ColorRect
+public partial class FogBackground : ColorRect
 {
     private const string ShaderCode = """
         shader_type canvas_item;

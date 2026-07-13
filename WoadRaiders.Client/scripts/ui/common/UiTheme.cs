@@ -3,14 +3,14 @@ using Godot;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// Shared palette and fonts for the title screen's Celtic/gothic dress. The
-/// colors run the game's woad blue against a radioactive ooze green over a
-/// near-black night. The display face prefers a real blackletter font file —
+/// Shared palette, fonts and widget dressing for the game's Celtic/gothic UI.
+/// The colors run the game's woad blue against a radioactive ooze green over
+/// a near-black night. The display face prefers a real blackletter font file —
 /// drop any .ttf/.otf into res://assets/fonts and it is picked up without a
 /// code change — and otherwise condenses and emboldens the best installed
 /// serif toward blackletter weight.
 /// </summary>
-public static class TitleTheme
+public static class UiTheme
 {
     public static readonly Color Night = new(0.012f, 0.016f, 0.024f); // matches the dungeon sky
     public static readonly Color WoadBlue = new(0.55f, 0.75f, 1f);
@@ -23,10 +23,10 @@ public static class TitleTheme
     private static Font? _display;
     private static Font? _body;
 
-    /// <summary>Heavy display face: the title and the menu entries.</summary>
+    /// <summary>Heavy display face: titles and menu entries.</summary>
     public static Font DisplayFont() => _display ??= BuildDisplayFont();
 
-    /// <summary>Book face: field labels, inputs, and the tagline.</summary>
+    /// <summary>Book face: field labels, inputs, and body text.</summary>
     public static Font BodyFont() => _body ??= new SystemFont
     {
         FontNames = ["Palatino Linotype", "Constantia", "Georgia", "Times New Roman"],
@@ -51,6 +51,36 @@ public static class TitleTheme
             VariationEmbolden = 0.30f,
             VariationTransform = new Transform2D(new Vector2(0.86f, 0f), new Vector2(0f, 1f), Vector2.Zero),
         };
+    }
+
+    /// <summary>Dress an input in the shared dark-panel look: woad border at
+    /// rest; radioactive green border, glow and caret when focused.</summary>
+    public static void StyleInput(LineEdit edit)
+    {
+        var normal = new StyleBoxFlat
+        {
+            BgColor = new Color(0.03f, 0.05f, 0.08f, 0.85f),
+            BorderColor = new Color(WoadDim, 0.4f),
+        };
+        normal.SetBorderWidthAll(1);
+        normal.SetContentMarginAll(8);
+        var focus = new StyleBoxFlat
+        {
+            BgColor = new Color(0.04f, 0.08f, 0.06f, 0.9f),
+            BorderColor = new Color(OozeGreen, 0.8f),
+            ShadowColor = new Color(OozeGreen, 0.18f),
+            ShadowSize = 10,
+        };
+        focus.SetBorderWidthAll(1);
+        focus.SetContentMarginAll(8);
+
+        edit.AddThemeStyleboxOverride("normal", normal);
+        edit.AddThemeStyleboxOverride("focus", focus);
+        edit.AddThemeFontOverride("font", BodyFont());
+        edit.AddThemeFontSizeOverride("font_size", 20);
+        edit.AddThemeColorOverride("font_color", BoneSilver);
+        edit.AddThemeColorOverride("caret_color", OozeGreen);
+        edit.AddThemeColorOverride("selection_color", new Color(OozeGreen, 0.3f));
     }
 
     private static Font? LoadBundledFont()

@@ -153,7 +153,7 @@ public partial class OozeTitle : Control
         AddChild(viewport);
 
         const string wordmark = "WOAD RAIDERS";
-        var font = TitleTheme.DisplayFont();
+        var font = UiTheme.DisplayFont();
         // As big as the texture allows: the bundled blackletter is narrow and
         // takes the full 265, the system-serif fallback is wider and shrinks.
         var fontSize = 265;
@@ -173,7 +173,7 @@ public partial class OozeTitle : Control
         label.OffsetTop = -15;
         label.AddThemeFontOverride("font", font);
         label.AddThemeFontSizeOverride("font_size", fontSize);
-        label.AddThemeColorOverride("font_color", TitleTheme.BoneSilver);
+        label.AddThemeColorOverride("font_color", UiTheme.BoneSilver);
         label.AddThemeColorOverride("font_outline_color", new Color(0.02f, 0.04f, 0.03f));
         label.AddThemeConstantOverride("outline_size", 14);
         viewport.AddChild(label);
