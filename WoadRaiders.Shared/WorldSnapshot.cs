@@ -19,6 +19,7 @@ public static class WorldSnapshot
         Players = world.Players.Values.Select(p => new PlayerSnapshot
         {
             Id = p.Id,
+            Name = p.Name,
             X = p.Position.X,
             Y = p.Position.Y,
             Z = p.Position.Z,

@@ -7,15 +7,33 @@ namespace WoadRaiders.Client;
 /// Builds the dungeon's visuals once the geometry arrives. Hand-crafted maps
 /// render their authored scene; a missing scene falls back to placeholder boxes
 /// built from the collision solids. Either way, the fade-eligible meshes are
-/// registered with the <see cref="OcclusionFader"/>.
+/// registered with the <see cref="OcclusionFader"/>, and a blue entrance portal
+/// is stood at the spawn — the mirror of the boss's green exit.
 /// </summary>
 public static class DungeonVisualBuilder
 {
+    /// <summary>How far behind the spawn (away from the camera) the entrance portal
+    /// stands, so raiders come to rest clearly in front of it rather than in its mouth.</summary>
+    private const float PortalSetback = 80f;
+
     public static void Build(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
     {
-        if (TryLoadAuthoredScene(parent, geometry, fader))
-            return;
-        BuildPlaceholderMeshes(parent, geometry, fader);
+        if (!TryLoadAuthoredScene(parent, geometry, fader))
+            BuildPlaceholderMeshes(parent, geometry, fader);
+
+        // The entrance portal stands at the dungeon mouth, set back BEHIND the spawn
+        // (away from the iso camera) so raiders come to rest in front of it — a blue
+        // twin of the boss's green exit, so they arrive through a gate and leave
+        // through one. The spawn walk-out (LocalPlayer) starts the character further
+        // back still, so they emerge through the gate and stop ahead of it. Purely a
+        // landmark — no sim meaning — so it lives with the map visuals, rebuilt and
+        // torn down with them.
+        var toCamera = new Vector3(CameraRig.Offset.X, 0f, CameraRig.Offset.Z).Normalized();
+        parent.AddChild(new PortalView
+        {
+            Tint = UiTheme.WoadBlue,
+            Position = geometry.SpawnPoint.ToGodot() - toCamera * PortalSetback,
+        });
     }
 
     private static bool TryLoadAuthoredScene(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)

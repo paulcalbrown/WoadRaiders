@@ -3,15 +3,16 @@ using Godot;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The exit portal that tears open when the boss falls: a standing ring of
-/// radioactive green (the UI kit's ooze green, so it reads as "the way out" in
-/// the same voice as the menus), a dark void disc inside it, tilted inner rings
-/// precessing around the mouth like a gyroscope, sparks swirling with them, and
-/// a green glow pooling on the chamber floor. Entirely code-built like the rest
-/// of the world views. It animates itself: scales in when it spawns, churns in
-/// its own plane (the portal itself stands still, angled toward the fixed iso
-/// camera), and its light breathes. <see cref="WorldView"/> spawns/frees it from
-/// the snapshot's portal state; the sim decides what walking into it means.
+/// A standing dungeon portal: a ring of light around a dark void disc, tilted
+/// inner rings precessing around the mouth like a gyroscope, sparks swirling
+/// with them, and a glow pooling on the floor. Two wear it in different colours —
+/// the green EXIT torn open when the boss falls (<see cref="WorldView"/> spawns
+/// it from the snapshot; walking in ends the run), and the blue ENTRANCE standing
+/// at the dungeon mouth where raiders arrive (<see cref="DungeonVisualBuilder"/>
+/// stands it at the spawn; purely a landmark). Set <see cref="Tint"/> before
+/// adding it to the tree. Entirely code-built like the rest of the world views:
+/// it scales in when it spawns, churns in its own plane (the gate itself stands
+/// still, angled toward the fixed iso camera), and its light breathes.
 /// </summary>
 public partial class PortalView : Node3D
 {
@@ -24,7 +25,9 @@ public partial class PortalView : Node3D
     // the ground plane), so the mouth always reads as a mouth, never edge-on.
     private const float FaceCameraYawDegrees = 45f;
 
-    private static readonly Color PortalGreen = UiTheme.OozeGreen;
+    /// <summary>The portal's colour. Green (default) = the boss exit; woad blue =
+    /// the entrance. Set in the object initializer, before the node enters the tree.</summary>
+    public Color Tint { get; init; } = UiTheme.OozeGreen;
 
     private OmniLight3D _light = null!;
     private Node3D _rotorA = null!; // tilted inner rings; precessing them around
@@ -44,17 +47,17 @@ public partial class PortalView : Node3D
             RotationDegrees = new Vector3(90, 0, 0), // torus lies flat by default; stand it up
             MaterialOverride = new StandardMaterial3D
             {
-                AlbedoColor = PortalGreen,
+                AlbedoColor = Tint,
                 EmissionEnabled = true,
-                Emission = PortalGreen,
+                Emission = Tint,
                 EmissionEnergyMultiplier = 2.5f,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             },
         };
         AddChild(ring);
 
-        // The void inside the mouth: a squashed dark sphere, faintly green at the
-        // rim, translucent enough that the chamber glimmers through.
+        // The void inside the mouth: a squashed dark sphere in a deep shade of the
+        // tint, translucent enough that the chamber glimmers through.
         var voidDisc = new MeshInstance3D
         {
             Mesh = new SphereMesh { Radius = RingRadius - 2f, Height = (RingRadius - 2f) * 2f },
@@ -62,10 +65,10 @@ public partial class PortalView : Node3D
             Scale = new Vector3(1f, 1f, 0.10f),
             MaterialOverride = new StandardMaterial3D
             {
-                AlbedoColor = new Color(0.01f, 0.10f, 0.04f, 0.82f),
+                AlbedoColor = new Color(Tint.Darkened(0.9f), 0.82f),
                 Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
                 EmissionEnabled = true,
-                Emission = new Color(PortalGreen, 1f),
+                Emission = Tint,
                 EmissionEnergyMultiplier = 0.35f,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             },
@@ -101,25 +104,25 @@ public partial class PortalView : Node3D
                 Gravity = Vector3.Zero,
                 ScaleMin = 0.5f,
                 ScaleMax = 1.3f,
-                Color = PortalGreen,
+                Color = Tint,
             },
         };
-        // Unshaded emissive sparks — vertex color carries the green.
+        // Unshaded emissive sparks — vertex color carries the tint.
         swirl.MaterialOverride = new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
             EmissionEnabled = true,
-            Emission = PortalGreen,
+            Emission = Tint,
             EmissionEnergyMultiplier = 2f,
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
         };
         AddChild(swirl);
 
-        // The glow that pools on the boss-chamber floor and walls.
+        // The glow that pools on the floor and walls around the mouth.
         _light = new OmniLight3D
         {
             Position = new Vector3(0, CenterHeight, 0),
-            LightColor = PortalGreen,
+            LightColor = Tint,
             LightEnergy = 5f,
             OmniRange = 320f,
             ShadowEnabled = false,
@@ -141,10 +144,10 @@ public partial class PortalView : Node3D
             RotationDegrees = new Vector3(90 + tiltDegrees, 0, 0), // stood up, then tipped off-plane
             MaterialOverride = new StandardMaterial3D
             {
-                AlbedoColor = new Color(PortalGreen, 0.85f),
+                AlbedoColor = new Color(Tint, 0.85f),
                 Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
                 EmissionEnabled = true,
-                Emission = PortalGreen,
+                Emission = Tint,
                 EmissionEnergyMultiplier = 1.6f,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             },

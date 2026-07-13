@@ -19,6 +19,8 @@ public sealed class LocalPlayer
     private const float MaxSnapError = 120f;  // above this, snap (respawn/teleport) not smooth
     private const int MaxCatchUpTicks = 5;    // per frame; a longer stall drops the lost time
     private const float ArriveRadius = 10f;   // click-to-move stops once this close to the target
+    private const float SpawnWalkDistance = 105f; // render starts this far behind the spawn (behind the set-back portal)
+    private const float SpawnWalkSeconds = 1.1f; // how long the cosmetic walk-out of the portal takes
 
     private readonly ClientConnection _connection;
     private readonly CameraRig _camera;
@@ -33,6 +35,8 @@ public sealed class LocalPlayer
     private Vector3 _attackFacing; // _aim captured when the current swing fired — held for the whole swing
     private Vector3? _moveTarget;  // ground point the player is pathing toward (right-click), if any
     private bool _moveClickHeld;   // right button down last tick, to detect the press edge
+    private SysVec3 _spawnWalkDir; // unit ground heading the emerging character walks (out of the portal)
+    private float _spawnWalkRemaining; // seconds left in the cosmetic spawn walk-out; 0 when done
 
     /// <summary>Fired on a right-click, with the ground point clicked — the game drops a marker there.</summary>
     public event Action<Vector3>? MoveClicked;
@@ -73,6 +77,15 @@ public sealed class LocalPlayer
         _tickAccumulator = 0;
         _moveTarget = null;
         _moveClickHeld = false;
+
+        // Cosmetic spawn intro: pull the RENDER position back behind the entrance
+        // portal and ease it forward to the spawn, so the character walks out of the
+        // portal. Prediction and reconciliation are untouched — only what's drawn
+        // shifts. "Out of the portal" is the iso camera's ground heading (toward the
+        // viewer), matching the portal's camera-facing angle.
+        var camGround = new SysVec3(CameraRig.Offset.X, 0f, CameraRig.Offset.Z);
+        _spawnWalkDir = camGround.LengthSquared() > 0.0001f ? SysVec3.Normalize(camGround) : SysVec3.UnitX;
+        _spawnWalkRemaining = SpawnWalkSeconds;
     }
 
     /// <summary>Run the fixed-tick loop for this frame: sample, predict, send.</summary>
@@ -120,6 +133,17 @@ public sealed class LocalPlayer
             _renderError = SysVec3.Zero;
         _renderError *= Mathf.Exp(-ErrorDecayRate * (float)delta);
         _renderPos = SysVec3.Lerp(_prevTickPos, _prediction.Position, alpha) + _renderError;
+
+        // Spawn walk-out: subtract a decaying offset so the render emerges from
+        // behind the portal and settles at the spawn. f² eases it — quick out of
+        // the gate, slowing to a stop — and the CharacterView reads the forward
+        // motion as a walk (run clip + facing) on its own.
+        if (_spawnWalkRemaining > 0f)
+        {
+            _spawnWalkRemaining = Mathf.Max(0f, _spawnWalkRemaining - (float)delta);
+            var f = _spawnWalkRemaining / SpawnWalkSeconds;
+            _renderPos -= _spawnWalkDir * (SpawnWalkDistance * f * f);
+        }
     }
 
     private void Tick()

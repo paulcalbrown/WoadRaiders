@@ -71,6 +71,7 @@ public class ClassProtocolTests
         back.Deserialize(reader);
 
         Assert.Equal((byte)CharacterClass.Mage, back.Players.Single().Class);
+        Assert.Equal("M", back.Players.Single().Name); // drives fellow raiders' nameplates
         Assert.Equal((byte)ProjectileKind.MagicBolt, back.Projectiles.Single().Kind);
     }
 }

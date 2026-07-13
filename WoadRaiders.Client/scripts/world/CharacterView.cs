@@ -51,8 +51,9 @@ public partial class CharacterView : Node3D
 
     private Node3D _pivot = null!;      // yaw rotation for facing
     private AnimationPlayer? _anim;
-    private MeshInstance3D? _healthFill; // enemies only
-    private MeshInstance3D? _healthChip; // enemies only — the lagging "recently lost" trail
+    private MeshInstance3D? _healthFill; // enemies and fellow raiders (never the local player)
+    private MeshInstance3D? _healthChip; // the lagging "recently lost" trail behind the fill
+    private Label3D? _nameplate;         // fellow raiders wear their name overhead
     private DamageChip _chip = DamageChip.Full;
     private float _healthFrac = 1f;      // current authoritative health (target for fill + chip)
     private float _barHeight;
@@ -103,6 +104,18 @@ public partial class CharacterView : Node3D
     }
 
     /// <summary>
+    /// Erase the motion history so the next <see cref="Animate"/> derives zero velocity.
+    /// Call after repositioning the view discontinuously (the spawn walk-out starts the
+    /// local player behind the portal) so no phantom facing or run-clip results from the
+    /// one-frame teleport.
+    /// </summary>
+    public void SnapMotionHistory()
+    {
+        _lastPos = Position;
+        _smoothVel = Vector3.Zero;
+    }
+
+    /// <summary>
     /// Faces the character along its movement and plays idle/run/attack. Replaying a
     /// clip once it finishes makes every clip loop without touching import settings.
     /// </summary>
@@ -146,8 +159,9 @@ public partial class CharacterView : Node3D
         }
     }
 
-    /// <summary>Give this view (an enemy) a billboard health bar above its head.</summary>
-    public void AttachHealthBar(QuadMesh barMesh, float barHeight, float barScale)
+    /// <summary>Give this view a billboard health bar above its head. The fill is
+    /// hostile red unless a color is given (fellow raiders wear woad blue).</summary>
+    public void AttachHealthBar(QuadMesh barMesh, float barHeight, float barScale, Color? fillColor = null)
     {
         _barHeight = barHeight;
         _barScale = barScale;
@@ -175,9 +189,34 @@ public partial class CharacterView : Node3D
         {
             Mesh = barMesh,
             Position = new Vector3(0, barHeight, 0.2f),
-            MaterialOverride = BarMaterial(new Color(0.85f, 0.15f, 0.15f)), // solid red (hostile)
+            MaterialOverride = BarMaterial(fillColor ?? new Color(0.85f, 0.15f, 0.15f)), // hostile red by default
         };
         AddChild(_healthFill);
+    }
+
+    /// <summary>Float this raider's name above their health bar, billboarded like it.</summary>
+    public void AttachNameplate(string name, float height)
+    {
+        _nameplate = new Label3D
+        {
+            Text = name,
+            Position = new Vector3(0, height, 0),
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            Font = UiTheme.BodyFont(),
+            FontSize = 96,       // with PixelSize, ~11 world units tall — readable, not shouty
+            PixelSize = 0.12f,
+            Modulate = UiTheme.BoneSilver,
+            OutlineModulate = new Color(0.02f, 0.04f, 0.03f),
+            OutlineSize = 22,    // dark edge so the name reads over bright loot glow
+        };
+        AddChild(_nameplate);
+    }
+
+    /// <summary>Keep the nameplate current — a re-join can rename a raider mid-run.</summary>
+    public void SetNameplate(string name)
+    {
+        if (_nameplate is not null && _nameplate.Text != name)
+            _nameplate.Text = name;
     }
 
     /// <summary>Record the authoritative health fraction; a drop arms the chip's linger.</summary>

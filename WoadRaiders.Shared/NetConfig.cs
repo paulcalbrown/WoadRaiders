@@ -49,9 +49,10 @@ public static class NetConfig
     ///      catalog dungeon at once),
     /// v10 = dungeon instances (JoinRequest create/join mode + instance fields,
     ///       WelcomePacket.InstanceId, instance list and join-denied packets),
-    /// v11 = the boss portal (WorldSnapshotPacket portal fields, RunComplete).
+    /// v11 = the boss portal (WorldSnapshotPacket portal fields, RunComplete),
+    /// v12 = PlayerSnapshot.Name (fellow raiders' overhead nameplates).
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v11";
+    public const string ConnectionKey = "WoadRaiders.v12";
 
     /// <summary>Co-op party size cap for one dungeon instance.</summary>
     public const int MaxPlayersPerInstance = 8;

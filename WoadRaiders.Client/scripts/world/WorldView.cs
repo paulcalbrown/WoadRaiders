@@ -47,6 +47,13 @@ public sealed class WorldView
     private static readonly Color PlayerLight = new(1.0f, 0.62f, 0.32f);
     private static readonly Color EnemyLight = new(0.45f, 0.72f, 1.0f);
 
+    // Fellow raiders wear a nameplate and health bar overhead (the local player
+    // reads their own from the HUD). Woad blue marks the bar as friendly against
+    // the enemies' hostile red.
+    private static readonly Color AllyHealthColor = new(0.30f, 0.55f, 0.95f);
+    private const float PlayerBarHeight = 54f;  // matches the same-scale enemy bars
+    private const float NameplateHeight = 68f;  // clears the bar
+
     private sealed class LootView
     {
         public Node3D Node = null!;    // a gem MeshInstance3D, or an instantiated KayKit prop scene
@@ -89,7 +96,7 @@ public sealed class WorldView
     private const float ArrowLength = 34f;   // KayKit arrow prop, fitted to this world length
 
     private readonly Dictionary<CharacterClass, PackedScene> _classScenes = new();
-    private readonly Dictionary<int, byte> _playerClassSeen = new(); // class each player view was built as
+    private readonly Dictionary<int, (byte Class, bool Remote)> _playerSeen = new(); // what each player view was built as
     private readonly List<int> _classLedgerScratch = new();          // reused; keeps Apply allocation-free
     private readonly PackedScene _arrowScene;
     private readonly Dictionary<EnemyType, PackedScene> _enemyCharScenes = new();
@@ -131,6 +138,7 @@ public sealed class WorldView
 
     private double _elapsed; // drives the loot bob
     private PortalView? _portal; // the exit portal, standing while the snapshot says it is open
+    private CharacterView? _localView; // the local player's view, to detect a fresh (re)spawn
 
     public WorldView(Node3D parent)
     {
@@ -160,31 +168,45 @@ public sealed class WorldView
             // Tolerate an unknown Class byte the same way as enemy types: fall back
             // to Knight — never crash the receive path over cosmetics.
             var cls = p.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)p.Class : CharacterClass.Knight;
+            var isRemote = p.Id != localPlayerId;
 
             // A player's class can change on the same id (the server honors the join
-            // profile a tick after it creates them) — rebuild the view for the new body.
-            if (_playerClassSeen.TryGetValue(p.Id, out var seen) && seen != (byte)cls)
+            // profile a tick after it creates them), and a recycled id can flip between
+            // local and remote — either way, rebuild the view for the new body.
+            if (_playerSeen.TryGetValue(p.Id, out var seen) && seen != ((byte)cls, isRemote))
                 _players.Remove(p.Id);
 
             if (!_players.Touch(p.Id, out var view))
             {
                 view = CharacterView.Spawn(_parent, _classScenes[cls], feet, CharScale, PlayerLight, cls);
                 view.AttackClip = ClassVisuals[cls].AttackClip;
+                if (isRemote)
+                {
+                    // Fellow raiders wear their name and health overhead; the local
+                    // player reads their own from the HUD instead.
+                    view.AttachHealthBar(_barMesh, PlayerBarHeight, 1f, AllyHealthColor);
+                    view.AttachNameplate(p.Name, NameplateHeight);
+                }
                 _players.Add(p.Id, view);
-                _playerClassSeen[p.Id] = (byte)cls;
+                _playerSeen[p.Id] = ((byte)cls, isRemote);
             }
             view.Attacking = p.Attacking; // the local view's flag is re-derived from prediction each frame
             view.Target = feet;           // ignored for the local view — prediction drives it
+            if (isRemote)
+            {
+                view.SetHealthFraction(p.Health / ClassArchetypes.Of(cls).MaxHealth);
+                view.SetNameplate(p.Name); // a re-join can rename
+            }
         }
         _players.Prune();
 
-        // Keep the class ledger in step with the pruned views (ids leave and recycle).
+        // Keep the ledger in step with the pruned views (ids leave and recycle).
         _classLedgerScratch.Clear();
-        foreach (var id in _playerClassSeen.Keys)
+        foreach (var id in _playerSeen.Keys)
             if (!_players.Items.ContainsKey(id))
                 _classLedgerScratch.Add(id);
         foreach (var id in _classLedgerScratch)
-            _playerClassSeen.Remove(id);
+            _playerSeen.Remove(id);
 
         foreach (var e in snapshot.Enemies)
         {
@@ -258,6 +280,14 @@ public sealed class WorldView
             if (id == localPlayerId)
             {
                 view.Position = localRenderPos;
+                // A freshly (re)spawned local view starts behind the entrance portal
+                // (the spawn walk-out): erase the one-frame teleport from its spawn
+                // point so it doesn't read as a backward lunge before walking out.
+                if (!ReferenceEquals(_localView, view))
+                {
+                    _localView = view;
+                    view.SnapMotionHistory();
+                }
                 view.Attacking = localSwinging; // predicted (instant), not the snapshot flag
                 if (localSwinging && localAttackFacing.LengthSquared() > 0.0001f)
                     view.FaceToward(localAttackFacing); // hold the click direction through the swing
@@ -267,6 +297,7 @@ public sealed class WorldView
                 view.Position = view.Position.Lerp(view.Target, factor);
             }
             view.Animate(delta);
+            view.UpdateBar((float)delta); // no-op for the bar-less local view
         }
 
         foreach (var view in _enemies.Items.Values)

@@ -185,6 +185,7 @@ public sealed class InputPacket : INetSerializable
 public struct PlayerSnapshot : INetSerializable
 {
     public int Id;
+    public string Name; // shown on fellow raiders' overhead nameplates
     public float X;
     public float Y;
     public float Z;
@@ -203,6 +204,7 @@ public struct PlayerSnapshot : INetSerializable
     public void Serialize(NetDataWriter w)
     {
         w.Put(Id);
+        w.Put(Name ?? "");
         w.Put(X);
         w.Put(Y);
         w.Put(Z);
@@ -217,6 +219,7 @@ public struct PlayerSnapshot : INetSerializable
     public void Deserialize(NetDataReader r)
     {
         Id = r.GetInt();
+        Name = r.GetString();
         X = r.GetFloat();
         Y = r.GetFloat();
         Z = r.GetFloat();

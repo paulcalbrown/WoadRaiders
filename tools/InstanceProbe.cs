@@ -78,6 +78,8 @@ PumpUntil(() => b.LatestPlayerIds.Length == 2);
 Check("B's snapshots hold both raiders",
     b.LatestPlayerIds.Length == 2
     && b.LatestPlayerIds.Contains(a.PlayerId) && b.LatestPlayerIds.Contains(b.PlayerId));
+Check("B's snapshots carry raider names (for nameplates)",
+    b.LatestPlayerNames.Contains("Probe-A") && b.LatestPlayerNames.Contains("Probe-B"));
 
 // C forges its own raid — a different instance holding only C.
 c.Start();
@@ -125,6 +127,7 @@ sealed class Probe
     public JoinDeniedPacket? Denial { get; private set; }
     public int SnapshotsSeen { get; private set; }
     public int[] LatestPlayerIds { get; private set; } = [];
+    public string[] LatestPlayerNames { get; private set; } = [];
 
     /// <summary>True if any post-welcome snapshot ever contained a player other than us.</summary>
     public bool SawForeignPlayer { get; private set; }
@@ -176,6 +179,7 @@ sealed class Probe
                     {
                         SnapshotsSeen++;
                         LatestPlayerIds = snapshot.Players.Select(p => p.Id).ToArray();
+                        LatestPlayerNames = snapshot.Players.Select(p => p.Name).ToArray();
                         if (snapshot.Players.Any(p => p.Id != PlayerId))
                             SawForeignPlayer = true;
                     }

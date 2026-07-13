@@ -55,9 +55,9 @@ via `NetProtocol.Frame` (Mode=Create + Dungeon forges an instance; Mode=Join +
 InstanceId enters one — the Welcome echoes the instance id), then feed received
 `WorldSnapshot` packets (after the type byte) into `SnapshotAssembler.TryAdd`.
 Track ticks to assert no stale delivery. Run several probe processes to add
-players (33 bytes each) in ONE instance (join the first probe's instance id)
-when you need the snapshot to cross the single-packet MTU budget and split
-into chunks.
+players (~37 bytes + name each) in ONE instance (join the first probe's
+instance id) when you need the snapshot to cross the single-packet MTU budget
+and split into chunks.
 
 Gotchas:
 - The ConnectionKey is version-gated (`WoadRaiders.vN`) — a stale probe build
