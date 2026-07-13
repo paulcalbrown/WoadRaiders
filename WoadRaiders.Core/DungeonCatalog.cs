@@ -15,7 +15,7 @@ public readonly record struct DungeonInfo(
     DungeonId Id,
     string Name,
     string Tagline,
-    string MapFile,   // geometry JSON under the client's maps directory
+    string MapFile,   // geometry JSON in the maps directory (canonical copy: WoadRaiders.Client/maps)
     string ScenePath, // authored visuals (res://)
     string MusicKey); // assets/audio/<key>_theme.wav
 

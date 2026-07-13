@@ -75,8 +75,10 @@ dotnet run --project WoadRaiders.Server
 # → WoadRaiders dedicated server listening on udp/9050 (2 maps, up to 16 instances
 #   of 8 raiders; sim 30Hz, snapshots 20Hz). Ctrl+C to stop.
 ```
-Without arguments it loads **every catalog dungeon** (The Barrow, The Cairn) from the client's
-`maps/` directory and lets players forge/join instances of them. Options: a bare number sets the
+Without arguments it loads **every catalog dungeon** (The Barrow, The Cairn) from the `maps/`
+directory beside its binary (the build copies the canonical JSON there from
+`WoadRaiders.Client/maps/`, so a published server is self-contained) and lets players
+forge/join instances of them. Options: a bare number sets the
 port (`… -- 9060`); `--map path/to/map.json` pins every instance to one map (dev convenience
 for map work, e.g. `--map WoadRaiders.Client/maps/TestArena.json`).
 

@@ -3,9 +3,10 @@ using WoadRaiders.Server;
 using WoadRaiders.Shared;
 
 // Usage: WoadRaiders.Server [port] [--map path/to/map.json]
-// Without --map, every catalog dungeon found in the client's maps directory is
-// loaded and players forge/join instances of them. With --map, only that map
-// is loaded and every forged instance uses it (dev convenience for map work).
+// Without --map, every catalog dungeon found in the maps directory beside the
+// binary (the build copies it there; see GameServer.MapsDirectory) is loaded
+// and players forge/join instances of them. With --map, only that map is
+// loaded and every forged instance uses it (dev convenience for map work).
 // Maps are authored in the Godot editor (tools/export_dungeon.gd) or generated
 // (tools/GenerateDungeon.cs).
 int port = NetConfig.DefaultPort;
@@ -26,10 +27,12 @@ if (mapPath is not null)
 }
 else
 {
-    var mapsDir = GameServer.FindMapsDirectory();
-    if (mapsDir is null)
+    var mapsDir = GameServer.MapsDirectory;
+    if (!Directory.Exists(mapsDir))
     {
-        Console.Error.WriteLine("No maps directory found. Usage: WoadRaiders.Server [port] --map <map.json>");
+        Console.Error.WriteLine(
+            $"Maps directory not found at '{mapsDir}' — the build copies WoadRaiders.Client/maps/*.json " +
+            "beside the binary. Usage: WoadRaiders.Server [port] --map <map.json>");
         return 1;
     }
     foreach (var info in DungeonCatalog.All)
