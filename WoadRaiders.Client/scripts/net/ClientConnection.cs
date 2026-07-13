@@ -37,6 +37,7 @@ public sealed class ClientConnection
 
     private readonly EventBasedNetListener _listener = new();
     private readonly NetManager _net;
+    private readonly SnapshotAssembler _snapshots = new(); // rebuilds chunked snapshots
     private readonly Dictionary<MessageType, Action<NetPacketReader>> _handlers;
     private readonly string _host;
     private readonly int _port;
@@ -74,14 +75,16 @@ public sealed class ClientConnection
             },
             [MessageType.WorldSnapshot] = r =>
             {
-                // Snapshots ride Sequenced while the Welcome rides ReliableOrdered —
+                // Snapshots ride Unreliable while the Welcome rides ReliableOrdered —
                 // independent delivery streams with no cross-ordering guarantee. A
                 // snapshot that outraces the Welcome (e.g. the Welcome was lost and is
                 // being retransmitted) would be applied with no/a stale local player
                 // id, wrongly creating the local player's view with the remote skin.
                 // Pre-Welcome snapshots carry nothing usable, so drop them.
-                if (State == ConnectionState.Playing)
-                    SnapshotReceived?.Invoke(Read<WorldSnapshotPacket>(r));
+                // Each packet is one chunk of a possibly-split snapshot; the assembler
+                // fires once the snapshot is whole and never delivers a stale tick.
+                if (State == ConnectionState.Playing && _snapshots.TryAdd(r, out var snapshot))
+                    SnapshotReceived?.Invoke(snapshot);
             },
             [MessageType.ItemPickedUp] = r => ItemPickedUp?.Invoke(Read<ItemPickedUpPacket>(r)),
             [MessageType.EquipmentUpdate] = r => EquipmentUpdated?.Invoke(Read<EquipmentUpdatePacket>(r)),
@@ -91,6 +94,10 @@ public sealed class ClientConnection
         {
             _server = peer;
             State = ConnectionState.Joining;
+            // A fresh connection can be to a restarted server whose ticks begin
+            // again at zero — stale-tick tracking from the old session would
+            // swallow every snapshot, so it starts over too.
+            _snapshots.Reset();
             Send(MessageType.JoinRequest, new JoinRequest { Name = _playerName }, DeliveryMethod.ReliableOrdered);
         };
 

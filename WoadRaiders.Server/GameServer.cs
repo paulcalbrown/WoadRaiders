@@ -276,11 +276,21 @@ public sealed class GameServer
 
     private void BroadcastSnapshot()
     {
-        if (_net.ConnectedPeersCount == 0)
+        if (_connections.Count == 0)
             return;
 
-        // Sequenced: unreliable but never delivers a stale snapshot after a newer one.
-        _net.SendToAll(NetProtocol.Frame(MessageType.WorldSnapshot, _session.Snapshot()), Channel, DeliveryMethod.Sequenced);
+        // Unreliable delivery tops out at one MTU and never fragments, while the
+        // world (and so the snapshot) grows without bound — so each snapshot is
+        // split into as many packets as it needs, sized to the smallest connected
+        // peer's limit so one send plan fits everyone. The client's assembler
+        // rebuilds it and drops stale ticks, which is what Sequenced used to buy
+        // us; losing any chunk just costs that one snapshot.
+        var budget = int.MaxValue;
+        foreach (var connection in _connections.Values)
+            budget = Math.Min(budget, connection.Peer.GetMaxSinglePacketSize(DeliveryMethod.Unreliable));
+
+        foreach (var chunk in SnapshotChunks.Split(_session.Snapshot(), budget))
+            _net.SendToAll(chunk, Channel, DeliveryMethod.Unreliable);
     }
 
     private void DeliverPickups()

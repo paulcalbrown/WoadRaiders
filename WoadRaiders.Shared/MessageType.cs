@@ -16,7 +16,10 @@ public enum MessageType : byte
     /// <summary>Client → server: one frame of input (sent every client tick).</summary>
     Input = 3,
 
-    /// <summary>Server → clients: authoritative snapshot of the whole world.</summary>
+    /// <summary>
+    /// Server → clients: one chunk of the authoritative world snapshot (framed by
+    /// <see cref="SnapshotChunks"/>; most snapshots fit in a single chunk).
+    /// </summary>
     WorldSnapshot = 4,
 
     /// <summary>Server → one client: you just collected this item.</summary>
