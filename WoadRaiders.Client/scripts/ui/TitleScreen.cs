@@ -4,10 +4,11 @@ namespace WoadRaiders.Client;
 
 /// <summary>
 /// The entry screen: title, player name, server endpoint, Play/Quit. Play stores
-/// the choices in <see cref="ClientConfig"/> and switches to the game screen;
-/// the game screen returns here on Esc. Launching with <c>--play</c> skips
-/// straight into the game (dev/headless convenience); <c>--screenshot</c> saves
-/// stills of this screen and exits. Code-first like the rest of the client —
+/// the choices in <see cref="ClientConfig"/> and moves on to the character-select
+/// screen; the game screen returns here on Esc. Launching with <c>--play</c> skips
+/// straight into the game and <c>--select</c> straight to the class picker
+/// (dev/headless conveniences); <c>--screenshot</c> saves stills of this screen
+/// and exits. Code-first like the rest of the client —
 /// the .tscn is just this script on an empty Control; the shared Celtic/gothic
 /// dress (theme, fog backdrop, knotwork, glowing menu widgets) lives in
 /// scripts/ui/common, and the oozing wordmark in scripts/ui/title.
@@ -24,18 +25,24 @@ public partial class TitleScreen : Control
     {
         ClientConfig.EnsureLoaded();
 
-        if (ClientConfig.ScreenshotPath is { } screenshotPath)
+        if (ClientConfig.AutoSelect)
         {
-            BuildUi();
-            CaptureScreenshots(screenshotPath);
+            // A scene change can't run while the tree is still mid-add of this
+            // scene (_Ready), so defer it to the end of the frame.
+            Callable.From(() => GetTree().ChangeSceneToFile(CharacterSelectScreen.ScenePath)).CallDeferred();
             return;
         }
 
         if (ClientConfig.AutoPlay)
         {
-            // A scene change can't run while the tree is still mid-add of this
-            // scene (_Ready), so defer it to the end of the frame.
             Callable.From(() => GetTree().ChangeSceneToFile(GameScreen.ScenePath)).CallDeferred();
+            return;
+        }
+
+        if (ClientConfig.ScreenshotPath is { } screenshotPath)
+        {
+            BuildUi();
+            CaptureScreenshots(screenshotPath);
             return;
         }
 
@@ -147,7 +154,7 @@ public partial class TitleScreen : Control
         // user text is fine to send as-is.
         ClientConfig.PlayerName = _nameEdit.Text.Trim();
         ClientConfig.SetServer(_serverEdit.Text);
-        GetTree().ChangeSceneToFile(GameScreen.ScenePath);
+        GetTree().ChangeSceneToFile(CharacterSelectScreen.ScenePath);
     }
 
     /// <summary>Dev helper behind --screenshot: let the animations run, save a

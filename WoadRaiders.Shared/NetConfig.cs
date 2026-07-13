@@ -42,9 +42,11 @@ public static class NetConfig
     /// v4 = weapon-kit item types + GroundItemSnapshot.Type byte,
     /// v5 = InputPacket aim (AimX/AimZ) for cursor-aimed attacks,
     /// v6 = PlayerSnapshot attack timers (AttackAnim/AttackCooldown) for reconcile,
-    /// v7 = WorldSnapshot chunk framing (tick/index/count header, rides Unreliable).
+    /// v7 = WorldSnapshot chunk framing (tick/index/count header, rides Unreliable),
+    /// v8 = character classes (JoinRequest.Class, PlayerSnapshot.Class,
+    ///      ProjectileSnapshot.Kind).
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v7";
+    public const string ConnectionKey = "WoadRaiders.v8";
 
     /// <summary>Co-op party size cap for a single dedicated-server instance.</summary>
     public const int MaxPlayers = 8;

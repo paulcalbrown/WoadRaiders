@@ -9,11 +9,20 @@ namespace WoadRaiders.Core;
 /// </summary>
 public struct AttackPrediction
 {
-    private float _cooldown; // mirrors the server's PlayerAttackCooldown timer
+    private readonly float _classCooldown; // the class's seconds-between-attacks
+    private float _cooldown; // mirrors the server's per-class cooldown timer
     private float _animTime; // predicted attack-anim window still open
+
+    /// <summary>Predict a specific class's cadence (its per-attack cooldown).</summary>
+    public AttackPrediction(float attackCooldown) : this() => _classCooldown = attackCooldown;
 
     /// <summary>True while the predicted swing animation window is open.</summary>
     public readonly bool Swinging => _animTime > 0f;
+
+    // A default-constructed instance predicts the classic (knight) cadence, so
+    // class-unaware callers and tests keep their old behavior.
+    private readonly float Cooldown =>
+        _classCooldown > 0f ? _classCooldown : SimConstants.PlayerAttackCooldown;
 
     /// <summary>
     /// Advance one fixed simulation tick with this tick's attack intent. The
@@ -28,7 +37,7 @@ public struct AttackPrediction
         if (attackHeld && _cooldown <= 0f)
         {
             _animTime = SimConstants.AttackAnimDuration;
-            _cooldown = SimConstants.PlayerAttackCooldown;
+            _cooldown = Cooldown;
             return true;
         }
         return false;

@@ -140,13 +140,12 @@ public sealed class GameServer
         _listener.PeerConnectedEvent += peer =>
         {
             _connections[peer.Id] = new Connection(peer, _clock.Elapsed);
-            _session.AddPlayer(peer.Id, $"Raider-{peer.Id}");
-            _log.Info($"[+] Player {peer.Id} joined  ({_net.ConnectedPeersCount} online)");
+            _log.Info($"[+] Player {peer.Id} connected  ({_net.ConnectedPeersCount} online)");
 
-            // Send the dungeon first, then the welcome (both reliable-ordered on the same channel).
+            // The dungeon can start crossing the wire now; the player itself is
+            // spawned by HandleJoin, once the join request says who they are —
+            // so no snapshot ever shows a placeholder body with the wrong class.
             peer.Send(NetProtocol.Frame(MessageType.DungeonGeometry, _geometryPacket), Channel, DeliveryMethod.ReliableOrdered);
-            var welcome = new WelcomePacket { PlayerId = peer.Id, ServerTick = _session.Tick };
-            peer.Send(NetProtocol.Frame(MessageType.Welcome, welcome), Channel, DeliveryMethod.ReliableOrdered);
         };
 
         _listener.PeerDisconnectedEvent += (peer, _) =>
@@ -193,7 +192,17 @@ public sealed class GameServer
     {
         var join = new JoinRequest();
         join.Deserialize(reader);
-        _session.SetName(peer.Id, SanitizeName(join.Name, peer.Id));
+        // Class is client-supplied and untrusted like the name: an unknown byte
+        // (version skew, tampering) falls back to Knight rather than faulting.
+        var cls = join.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)join.Class : CharacterClass.Knight;
+        var name = SanitizeName(join.Name, peer.Id);
+        _session.AddPlayer(peer.Id, name, cls);
+
+        // The welcome follows the join, so by the time the client starts playing
+        // its player exists — classed — in every snapshot from the first one.
+        var welcome = new WelcomePacket { PlayerId = peer.Id, ServerTick = _session.Tick };
+        peer.Send(NetProtocol.Frame(MessageType.Welcome, welcome), Channel, DeliveryMethod.ReliableOrdered);
+        _log.Info($"[join] Player {peer.Id} raids as a {cls} named \"{name}\"");
     }
 
     private void HandleInput(NetPeer peer, NetPacketReader reader)

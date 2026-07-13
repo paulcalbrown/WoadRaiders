@@ -48,24 +48,31 @@ internal sealed class GameSession
         return spawned;
     }
 
-    public void AddPlayer(int id, string name)
+    /// <summary>
+    /// Spawn a joining player with their chosen class. Players are created on the
+    /// JoinRequest, not the connect, so the class is known from the first tick
+    /// they exist — no snapshot ever carries an unclassed placeholder. A repeated
+    /// JoinRequest mid-match renames at most — never a fresh body, so it can't be
+    /// abused as a free heal or teleport to spawn.
+    /// </summary>
+    public void AddPlayer(int id, string name, CharacterClass cls = CharacterClass.Knight)
     {
-        var player = _world.AddPlayer(id, name);
+        if (_world.Players.TryGetValue(id, out var existing))
+        {
+            existing.Name = name;
+            return;
+        }
+
+        var player = _world.AddPlayer(id, name, cls);
         player.Position = _dungeon.SpawnPoint;
         _inputBuffers[id] = new ServerInputBuffer();
     }
 
+    /// <summary>Tolerates a peer that connected but never joined (no player exists yet).</summary>
     public void RemovePlayer(int id)
     {
         _world.RemovePlayer(id);
         _inputBuffers.Remove(id);
-    }
-
-    /// <summary>Set an already-connected player's (sanitized) display name.</summary>
-    public void SetName(int id, string name)
-    {
-        if (_world.Players.TryGetValue(id, out var player))
-            player.Name = name;
     }
 
     /// <summary>Buffer a player's input intent; it is applied one-per-tick by <see cref="Step"/>.</summary>

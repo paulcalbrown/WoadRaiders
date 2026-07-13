@@ -23,11 +23,14 @@ public sealed class ClientPrediction
     private readonly List<PlayerInput> _pending = new();
     private readonly int _localPlayerId;
 
-    public ClientPrediction(int localPlayerId, Vector3 startPosition, IDungeonGeometry? geometry = null)
+    public ClientPrediction(int localPlayerId, Vector3 startPosition, IDungeonGeometry? geometry = null,
+                            CharacterClass cls = CharacterClass.Knight)
     {
         _world.Geometry = geometry; // predict against the same geometry the server uses
         _localPlayerId = localPlayerId;
-        var player = _world.AddPlayer(localPlayerId, "local");
+        // The class must match the server's (move speed and the attack root differ
+        // per class), or every replayed input would predict a different position.
+        var player = _world.AddPlayer(localPlayerId, "local", cls);
         player.Position = startPosition;
     }
 

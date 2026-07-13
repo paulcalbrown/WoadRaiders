@@ -32,6 +32,16 @@ public sealed class WorldView
         [EnemyType.Boss] = new("Skeleton_Warrior.glb", 44f, "2H_Melee_Attack_Chop", 122f, 2f),
     };
 
+    /// <summary>How each player class looks: the KayKit adventurer model and its strike clip.
+    /// The Ranger borrows the hooded rogue body — the pack ships no dedicated ranger.</summary>
+    private static readonly Dictionary<CharacterClass, (string SceneFile, string AttackClip)> ClassVisuals = new()
+    {
+        [CharacterClass.Knight] = ("Knight.glb", "1H_Melee_Attack_Chop"),
+        [CharacterClass.Rogue] = ("Rogue.glb", "1H_Melee_Attack_Stab"),
+        [CharacterClass.Mage] = ("Mage.glb", "Spellcast_Shoot"),
+        [CharacterClass.Ranger] = ("Rogue_Hooded.glb", "2H_Ranged_Shoot"),
+    };
+
     // Every character carries a light. Players glow warm (torch-lit raiders);
     // the undead enemies give off a cold spectral light — a clear friend/foe read.
     private static readonly Color PlayerLight = new(1.0f, 0.62f, 0.32f);
@@ -45,8 +55,9 @@ public sealed class WorldView
 
     private sealed class ProjectileView
     {
-        public MeshInstance3D Node = null!;
+        public Node3D Node = null!;
         public Vector3 Target;
+        public bool Oriented; // arrows point along their flight; bolts are round and don't care
     }
 
     private readonly Node3D _parent;
@@ -58,17 +69,29 @@ public sealed class WorldView
     private readonly BoxMesh _lootMesh = new() { Size = new Vector3(16, 16, 16) }; // equipment gem (rarity-colored)
     private readonly SphereMesh _boltMesh = new() { Radius = 9f, Height = 18f, RadialSegments = 8, Rings = 4 };
     private readonly QuadMesh _barMesh = new() { Size = new Vector2(40, 6) };
-    private readonly StandardMaterial3D _boltMaterial = new()
+    private readonly StandardMaterial3D _enemyBoltMaterial = new()
     {
-        AlbedoColor = new Color(0.6f, 0.35f, 1f),  // arcane violet
+        AlbedoColor = new Color(0.6f, 0.35f, 1f),  // arcane violet — hostile
         EmissionEnabled = true,
         Emission = new Color(0.7f, 0.45f, 1f),
         EmissionEnergyMultiplier = 3f,
         ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
     };
+    private readonly StandardMaterial3D _magicBoltMaterial = new()
+    {
+        AlbedoColor = new Color(0.35f, 0.85f, 1f), // cold woad-fire — the player mage's
+        EmissionEnabled = true,
+        Emission = new Color(0.45f, 0.9f, 1f),
+        EmissionEnergyMultiplier = 3f,
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+    };
 
-    private readonly PackedScene _localCharScene;
-    private readonly PackedScene _remoteCharScene;
+    private const float ArrowLength = 34f;   // KayKit arrow prop, fitted to this world length
+
+    private readonly Dictionary<CharacterClass, PackedScene> _classScenes = new();
+    private readonly Dictionary<int, byte> _playerClassSeen = new(); // class each player view was built as
+    private readonly List<int> _classLedgerScratch = new();          // reused; keeps Apply allocation-free
+    private readonly PackedScene _arrowScene;
     private readonly Dictionary<EnemyType, PackedScene> _enemyCharScenes = new();
 
     // Authored KayKit props for the non-equipment loot, kept with their own
@@ -116,8 +139,9 @@ public sealed class WorldView
         const string weapons = "res://addons/kaykit_character_pack_adventures/Assets/gltf";
         const string skel = "res://addons/kaykit_character_pack_skeletons/Characters/gltf";
         const string dungeon = "res://addons/kaykit_dungeon_remastered/Assets/gltf";
-        _localCharScene = GD.Load<PackedScene>($"{adv}/Knight.glb");
-        _remoteCharScene = GD.Load<PackedScene>($"{adv}/Barbarian.glb");
+        foreach (var (cls, visual) in ClassVisuals)
+            _classScenes[cls] = GD.Load<PackedScene>($"{adv}/{visual.SceneFile}");
+        _arrowScene = GD.Load<PackedScene>($"{weapons}/arrow.gltf");
         _goldScene = GD.Load<PackedScene>($"{dungeon}/coin_stack_large.gltf.glb");
         _potionScene = GD.Load<PackedScene>($"{dungeon}/bottle_A_green.gltf.glb");
         foreach (var (itemType, file) in WeaponMeshFiles)
@@ -132,16 +156,34 @@ public sealed class WorldView
         foreach (var p in snapshot.Players)
         {
             var feet = new Vector3(p.X, p.Y, p.Z);
+            // Tolerate an unknown Class byte the same way as enemy types: fall back
+            // to Knight — never crash the receive path over cosmetics.
+            var cls = p.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)p.Class : CharacterClass.Knight;
+
+            // A player's class can change on the same id (the server honors the join
+            // profile a tick after it creates them) — rebuild the view for the new body.
+            if (_playerClassSeen.TryGetValue(p.Id, out var seen) && seen != (byte)cls)
+                _players.Remove(p.Id);
+
             if (!_players.Touch(p.Id, out var view))
             {
-                var scene = p.Id == localPlayerId ? _localCharScene : _remoteCharScene;
-                view = CharacterView.Spawn(_parent, scene, feet, CharScale, PlayerLight);
+                view = CharacterView.Spawn(_parent, _classScenes[cls], feet, CharScale, PlayerLight);
+                view.AttackClip = ClassVisuals[cls].AttackClip;
                 _players.Add(p.Id, view);
+                _playerClassSeen[p.Id] = (byte)cls;
             }
             view.Attacking = p.Attacking; // the local view's flag is re-derived from prediction each frame
             view.Target = feet;           // ignored for the local view — prediction drives it
         }
         _players.Prune();
+
+        // Keep the class ledger in step with the pruned views (ids leave and recycle).
+        _classLedgerScratch.Clear();
+        foreach (var id in _playerClassSeen.Keys)
+            if (!_players.Items.ContainsKey(id))
+                _classLedgerScratch.Add(id);
+        foreach (var id in _classLedgerScratch)
+            _playerClassSeen.Remove(id);
 
         foreach (var e in snapshot.Enemies)
         {
@@ -180,7 +222,7 @@ public sealed class WorldView
             var pos = new Vector3(p.X, p.Y, p.Z);
             if (!_projectiles.Touch(p.Id, out var view))
             {
-                view = new ProjectileView { Node = CreateBoltNode(pos) }; // snap the first frame; eased thereafter
+                view = CreateProjectileView(p.Kind, pos); // snap the first frame; eased thereafter
                 _projectiles.Add(p.Id, view);
             }
             view.Target = pos;
@@ -221,7 +263,12 @@ public sealed class WorldView
 
         var boltFactor = Mathf.Clamp((float)delta * BoltSmoothing, 0f, 1f);
         foreach (var view in _projectiles.Items.Values)
+        {
+            // Arrows face where they're going; do it before the lerp eats the offset.
+            if (view.Oriented && view.Node.Position.DistanceSquaredTo(view.Target) > 1f)
+                view.Node.LookAt(view.Target);
             view.Node.Position = view.Node.Position.Lerp(view.Target, boltFactor);
+        }
 
         // Loot hovers, spins, and bobs so drops catch the eye.
         _elapsed += delta;
@@ -320,16 +367,43 @@ public sealed class WorldView
         return total ?? new Godot.Aabb();
     }
 
-    private MeshInstance3D CreateBoltNode(Vector3 spawn)
+    private ProjectileView CreateProjectileView(byte kind, Vector3 spawn)
+    {
+        // Unknown kinds render as the classic enemy bolt — never-crash-over-cosmetics.
+        if ((ProjectileKind)kind == ProjectileKind.Arrow)
+            return new ProjectileView { Node = CreateArrowNode(spawn), Oriented = true };
+        return new ProjectileView { Node = CreateBoltNode(spawn, kind) };
+    }
+
+    private MeshInstance3D CreateBoltNode(Vector3 spawn, byte kind)
     {
         var node = new MeshInstance3D
         {
             Mesh = _boltMesh,
             Position = spawn,
-            MaterialOverride = _boltMaterial,
+            MaterialOverride = (ProjectileKind)kind == ProjectileKind.MagicBolt
+                ? _magicBoltMaterial
+                : _enemyBoltMaterial,
         };
         _parent.AddChild(node);
         return node;
+    }
+
+    // The KayKit arrow prop is authored lying along +Y; pitching it -90° maps
+    // that onto -Z, the axis LookAt points down the flight path.
+    private Node3D CreateArrowNode(Vector3 spawn)
+    {
+        var holder = new Node3D { Position = spawn };
+        var model = _arrowScene.Instantiate<Node3D>();
+        model.RotationDegrees = new Vector3(-90f, 0f, 0f);
+        holder.AddChild(model);
+        _parent.AddChild(holder); // in-tree so the mesh bounds below are valid
+
+        var bounds = LocalMeshBounds(model, holder);
+        var maxDim = Mathf.Max(bounds.Size.X, Mathf.Max(bounds.Size.Y, bounds.Size.Z));
+        if (maxDim > 0.0001f)
+            model.Scale = Vector3.One * (ArrowLength / maxDim);
+        return holder;
     }
 
     private static Color RarityColor(byte rarity) => rarity switch

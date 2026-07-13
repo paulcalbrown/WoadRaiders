@@ -42,9 +42,9 @@ public sealed class GameWorld
 
     // --- players ---
 
-    public PlayerState AddPlayer(int id, string name)
+    public PlayerState AddPlayer(int id, string name, CharacterClass cls = CharacterClass.Knight)
     {
-        var player = new PlayerState(id, name);
+        var player = new PlayerState(id, name, cls);
         _players[id] = player;
         _inputs[id] = default;
         return player;
@@ -183,15 +183,13 @@ public sealed class GameWorld
             if (moveLenSq > 0.0001f)
                 player.Facing = Vector3.Normalize(move);
 
-            player.Velocity = move * SimConstants.PlayerMoveSpeed;
+            player.Velocity = move * player.Archetype.MoveSpeed;
             player.Position = ResolveMove(player.Position, player.Velocity * dt);
         }
     }
 
     private void ResolvePlayerAttacks()
     {
-        var rangeSq = SimConstants.PlayerAttackRange * SimConstants.PlayerAttackRange;
-
         foreach (var player in _players.Values)
         {
             if (!player.IsAlive)
@@ -201,18 +199,29 @@ public sealed class GameWorld
             if (!input.Attack || !player.AttackReady)
                 continue;
 
-            player.AttackCooldown = SimConstants.PlayerAttackCooldown;
+            var arch = player.Archetype;
+            player.AttackCooldown = arch.AttackCooldown;
             player.AttackAnimRemaining = SimConstants.AttackAnimDuration;
 
-            // Aim the swing where the player pointed (cursor), not where they last
+            // Aim the strike where the player pointed (cursor), not where they last
             // moved. A zero aim (no cursor sent) leaves the movement facing intact.
             var aim = new Vector3(input.AimX, 0f, input.AimZ);
             if (aim.LengthSquared() > 0.0001f)
                 player.Facing = Vector3.Normalize(aim);
 
+            // Ranged classes loose a bolt along their facing; damage lands on impact
+            // (UpdateProjectiles), so a shot is dodgeable like the enemy mages' are.
+            if (arch.ProjectileSpeed > 0f)
+            {
+                SpawnProjectile(player.Position, player.Facing, arch.ProjectileSpeed, player.AttackDamage,
+                    player.Class == CharacterClass.Mage ? ProjectileKind.MagicBolt : ProjectileKind.Arrow);
+                continue;
+            }
+
             // Frontal cleave: every enemy within reach AND in front of you (the damage
             // arc) takes the hit — a swing through the arc, not a single target, but
             // still not a 360° sweep.
+            var rangeSq = arch.AttackRange * arch.AttackRange;
             foreach (var enemy in _enemies.Values)
             {
                 if (!enemy.IsAlive)
@@ -283,7 +292,8 @@ public sealed class GameWorld
                     {
                         // Ranged: launch a bolt at where the target is now (dodgeable);
                         // damage is dealt on impact by UpdateProjectiles, not here.
-                        SpawnProjectile(enemy.Position, target.Position, arch);
+                        SpawnProjectile(enemy.Position, target.Position - enemy.Position,
+                            arch.ProjectileSpeed, arch.AttackDamage, ProjectileKind.EnemyBolt);
                     }
                     else
                     {
@@ -330,21 +340,21 @@ public sealed class GameWorld
         return Geometry.HasLineOfSight(from.Position + eye, to.Position + eye);
     }
 
-    /// <summary>Launch a bolt from <paramref name="from"/> toward <paramref name="target"/> (both feet-space).</summary>
-    private void SpawnProjectile(Vector3 from, Vector3 target, in EnemyArchetype arch)
+    /// <summary>Launch a bolt from <paramref name="from"/> (feet-space) along <paramref name="direction"/>.</summary>
+    private void SpawnProjectile(Vector3 from, Vector3 direction, float speed, float damage, ProjectileKind kind)
     {
-        var dir = target - from;
-        dir.Y = 0f; // fly level across the ground plane
-        if (dir.LengthSquared() < 0.0001f)
+        direction.Y = 0f; // fly level across the ground plane
+        if (direction.LengthSquared() < 0.0001f)
             return;
-        dir = Vector3.Normalize(dir);
+        direction = Vector3.Normalize(direction);
 
         var proj = new ProjectileState(_nextProjectileId++)
         {
             Position = from + new Vector3(0f, SimConstants.EyeHeight, 0f),
-            Velocity = dir * arch.ProjectileSpeed,
-            Damage = arch.AttackDamage,
+            Velocity = direction * speed,
+            Damage = damage,
             Life = SimConstants.ProjectileLifetime,
+            Kind = kind,
         };
         _projectiles[proj.Id] = proj;
     }
@@ -354,8 +364,6 @@ public sealed class GameWorld
         if (_projectiles.Count == 0)
             return;
 
-        var hitRadius = SimConstants.CharacterRadius + SimConstants.ProjectileRadius;
-        var hitRadiusSq = hitRadius * hitRadius;
         List<int>? dead = null;
 
         foreach (var proj in _projectiles.Values)
@@ -372,25 +380,9 @@ public sealed class GameWorld
             proj.Position = next;
             proj.Life -= dt;
 
-            // First alive player the bolt overlaps takes the hit.
-            var struck = false;
-            foreach (var player in _players.Values)
-            {
-                if (!player.IsAlive)
-                    continue;
-
-                var dx = player.Position.X - proj.Position.X;
-                var dz = player.Position.Z - proj.Position.Z;
-                var withinColumn = proj.Position.Y >= player.Position.Y &&
-                                   proj.Position.Y <= player.Position.Y + SimConstants.CharacterHeight;
-                if (withinColumn && dx * dx + dz * dz <= hitRadiusSq)
-                {
-                    player.TakeDamage(Math.Max(1f, proj.Damage - player.DamageReduction));
-                    struck = true;
-                    break;
-                }
-            }
-
+            // First alive combatant on the opposing side the bolt overlaps takes the
+            // hit — an enemy bolt flies through enemies, a player's through players.
+            var struck = proj.HostileToPlayers ? StrikePlayer(proj) : StrikeEnemy(proj);
             if (struck || proj.Life <= 0f)
                 (dead ??= new List<int>()).Add(proj.Id);
         }
@@ -398,6 +390,49 @@ public sealed class GameWorld
         if (dead is not null)
             foreach (var id in dead)
                 _projectiles.Remove(id);
+    }
+
+    private bool StrikePlayer(ProjectileState proj)
+    {
+        foreach (var player in _players.Values)
+        {
+            if (!player.IsAlive)
+                continue;
+            if (!ProjectileOverlaps(proj, player.Position, SimConstants.CharacterRadius))
+                continue;
+            // Armor soaks part of the hit, but every hit lands for at least 1.
+            player.TakeDamage(Math.Max(1f, proj.Damage - player.DamageReduction));
+            return true;
+        }
+        return false;
+    }
+
+    private bool StrikeEnemy(ProjectileState proj)
+    {
+        foreach (var enemy in _enemies.Values)
+        {
+            if (!enemy.IsAlive)
+                continue;
+            // Per-archetype radius: the boss is a wider target, as he is on foot.
+            if (!ProjectileOverlaps(proj, enemy.Position, EnemyArchetypes.Of(enemy.Type).Radius))
+                continue;
+            enemy.TakeDamage(proj.Damage);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Cylinder test: within the body column's height and combined radius on XZ.</summary>
+    private static bool ProjectileOverlaps(ProjectileState proj, Vector3 feet, float bodyRadius)
+    {
+        var withinColumn = proj.Position.Y >= feet.Y &&
+                           proj.Position.Y <= feet.Y + SimConstants.CharacterHeight;
+        if (!withinColumn)
+            return false;
+        var dx = feet.X - proj.Position.X;
+        var dz = feet.Z - proj.Position.Z;
+        var hitRadius = bodyRadius + SimConstants.ProjectileRadius;
+        return dx * dx + dz * dz <= hitRadius * hitRadius;
     }
 
     private void ResolveEnemyDeaths()

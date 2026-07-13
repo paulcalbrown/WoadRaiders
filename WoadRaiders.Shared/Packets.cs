@@ -6,9 +6,19 @@ namespace WoadRaiders.Shared;
 public sealed class JoinRequest : INetSerializable
 {
     public string Name = "Raider";
+    public byte Class; // CharacterClass — the server validates and honors it once
 
-    public void Serialize(NetDataWriter w) => w.Put(Name);
-    public void Deserialize(NetDataReader r) => Name = r.GetString();
+    public void Serialize(NetDataWriter w)
+    {
+        w.Put(Name);
+        w.Put(Class);
+    }
+
+    public void Deserialize(NetDataReader r)
+    {
+        Name = r.GetString();
+        Class = r.GetByte();
+    }
 }
 
 /// <summary>Server → client. Confirms the join and hands out the player's id.</summary>
@@ -78,6 +88,8 @@ public struct PlayerSnapshot : INetSerializable
     public float AttackAnim;
     public float AttackCooldown;
 
+    public byte Class; // CharacterClass — picks the model and attack clip
+
     public void Serialize(NetDataWriter w)
     {
         w.Put(Id);
@@ -89,6 +101,7 @@ public struct PlayerSnapshot : INetSerializable
         w.Put((byte)(Attacking ? 1 : 0));
         w.Put(AttackAnim);
         w.Put(AttackCooldown);
+        w.Put(Class);
     }
 
     public void Deserialize(NetDataReader r)
@@ -102,6 +115,7 @@ public struct PlayerSnapshot : INetSerializable
         Attacking = r.GetByte() != 0;
         AttackAnim = r.GetFloat();
         AttackCooldown = r.GetFloat();
+        Class = r.GetByte();
     }
 }
 
@@ -180,6 +194,7 @@ public struct ProjectileSnapshot : INetSerializable
     public float X;
     public float Y;
     public float Z;
+    public byte Kind; // ProjectileKind — picks the client visual (bolt vs arrow)
 
     public void Serialize(NetDataWriter w)
     {
@@ -187,6 +202,7 @@ public struct ProjectileSnapshot : INetSerializable
         w.Put(X);
         w.Put(Y);
         w.Put(Z);
+        w.Put(Kind);
     }
 
     public void Deserialize(NetDataReader r)
@@ -195,6 +211,7 @@ public struct ProjectileSnapshot : INetSerializable
         X = r.GetFloat();
         Y = r.GetFloat();
         Z = r.GetFloat();
+        Kind = r.GetByte();
     }
 }
 

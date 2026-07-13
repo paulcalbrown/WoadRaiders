@@ -24,8 +24,17 @@ public partial class HudController : CanvasLayer
     private ColorRect _healthFillRect = null!;
     private Label _healthLabel = null!;
     private DamageChip _chip = DamageChip.Full;
+    private CharacterClass _class = CharacterClass.Knight;
+    private float _maxHealth = SimConstants.PlayerMaxHealth;
 
     public bool InventoryOpen { get; private set; }
+
+    /// <summary>Tell the HUD which class it is drawing: the health bar's scale and the stats line.</summary>
+    public void SetPlayerClass(CharacterClass cls)
+    {
+        _class = cls;
+        _maxHealth = ClassArchetypes.Of(cls).MaxHealth;
+    }
 
     public override void _Ready()
     {
@@ -100,15 +109,15 @@ public partial class HudController : CanvasLayer
     {
         // The fill snaps to current health; the chip behind it lingers then drains,
         // so a hit leaves a brief pale trail of what was lost.
-        var frac = Mathf.Clamp(state.Health / SimConstants.PlayerMaxHealth, 0f, 1f);
+        var frac = Mathf.Clamp(state.Health / _maxHealth, 0f, 1f);
         _chip.Advance(frac, (float)delta);
         var inner = BarHeight - 2 * BarPad;
         _healthChipRect.Size = new Vector2((BarWidth - 2 * BarPad) * _chip.Fraction, inner);
         _healthFillRect.Size = new Vector2((BarWidth - 2 * BarPad) * frac, inner);
         _healthFillRect.Color = Color.FromHsv(0.33f * frac, 0.75f, 0.8f); // green when full → red when low
-        _healthLabel.Text = $"{Mathf.RoundToInt(state.Health)} / {Mathf.RoundToInt(SimConstants.PlayerMaxHealth)}";
+        _healthLabel.Text = $"{Mathf.RoundToInt(state.Health)} / {Mathf.RoundToInt(_maxHealth)}";
 
-        _stats.Text = $"Gold {state.Gold}   Items {state.Inventory.Count}   Atk {state.AttackDamage:0}   " +
+        _stats.Text = $"{_class}   Gold {state.Gold}   Items {state.Inventory.Count}   Atk {state.AttackDamage:0}   " +
                       $"Armor {state.DamageReduction:0.0}   " +
                       "[LMB] attack   [RMB] move   [I] inventory   [Esc] menu";
 

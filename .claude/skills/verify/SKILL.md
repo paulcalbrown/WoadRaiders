@@ -30,6 +30,11 @@ world size.
 
 ## Drive the wire protocol without Godot
 
+A working example lives at `tools/ClassProbe.cs` (a .NET 10 file-based app —
+`dotnet run tools/ClassProbe.cs` with the server up): it joins as a mage,
+walks to the nearest enemy, shoots it, and asserts class + projectile facts
+from the snapshot stream. Adapt its skeleton for new protocol checks.
+
 A minimal console probe (project ref to `WoadRaiders.Shared`, LiteNetLib comes
 transitively) is enough to exercise joins, snapshots, and the chunk assembler:
 connect with `NetConfig.ConnectionKey`, send `MessageType.JoinRequest` framed

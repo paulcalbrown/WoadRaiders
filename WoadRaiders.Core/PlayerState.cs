@@ -7,6 +7,13 @@ public sealed class PlayerState : Combatant
 {
     public string Name { get; set; }
 
+    /// <summary>The class this player raids as. Fixed at creation — max health
+    /// derives from it, so a class change means a fresh <see cref="PlayerState"/>.</summary>
+    public CharacterClass Class { get; }
+
+    /// <summary>This player's class stats (speed, damage, cooldown, reach).</summary>
+    public ClassArchetype Archetype => ClassArchetypes.Of(Class);
+
     /// <summary>
     /// Unit direction the player faces on the ground plane (XZ). Updated from the
     /// last non-zero movement intent and held while idle, so a standing player
@@ -30,14 +37,16 @@ public sealed class PlayerState : Combatant
     /// <summary>Currently equipped item per slot.</summary>
     public Dictionary<EquipSlot, Item> Equipped { get; } = new();
 
-    public PlayerState(int id, string name) : base(id, SimConstants.PlayerMaxHealth)
+    public PlayerState(int id, string name, CharacterClass cls = CharacterClass.Knight)
+        : base(id, ClassArchetypes.Of(cls).MaxHealth)
     {
         Name = name;
+        Class = cls;
     }
 
-    /// <summary>Effective attack damage: base plus equipped weapon and trinket power.</summary>
+    /// <summary>Effective attack damage: the class base plus equipped weapon and trinket power.</summary>
     public float AttackDamage =>
-        SimConstants.PlayerAttackDamage + EquippedPower(EquipSlot.Weapon) + EquippedPower(EquipSlot.Trinket);
+        Archetype.AttackDamage + EquippedPower(EquipSlot.Weapon) + EquippedPower(EquipSlot.Trinket);
 
     /// <summary>Flat damage soaked from each incoming hit, from equipped armor.</summary>
     public float DamageReduction => EquippedPower(EquipSlot.Armor) * SimConstants.ArmorDamageReductionPerPower;

@@ -54,7 +54,10 @@ public partial class GameScreen : Node3D
         _hud = new HudController();
         AddChild(_hud);
 
-        _connection = new ClientConnection(ClientConfig.Host, ClientConfig.Port, ClientConfig.PlayerName);
+        _connection = new ClientConnection(ClientConfig.Host, ClientConfig.Port, ClientConfig.PlayerName,
+                                           ClientConfig.PlayerClass);
+        _state.Class = ClientConfig.PlayerClass;
+        _hud.SetPlayerClass(ClientConfig.PlayerClass);
         _localPlayer = new LocalPlayer(_connection, _camera);
         _localPlayer.MoveClicked += point => MoveMarker.Spawn(this, point); // red X where the player clicks to move
 
@@ -175,8 +178,9 @@ public partial class GameScreen : Node3D
         // A reconnect is a brand-new join server-side — fresh player id, empty
         // inventory, full health, fresh input buffer. Mirror that exactly.
         _state.Reset();
-        _localPlayer.BeginSession(welcome.PlayerId, _geometry?.SpawnPoint ?? SysVec3.Zero, _geometry);
-        GD.Print($"Joined as player {welcome.PlayerId}");
+        _localPlayer.BeginSession(welcome.PlayerId, _geometry?.SpawnPoint ?? SysVec3.Zero, _geometry,
+                                  ClientConfig.PlayerClass);
+        GD.Print($"Joined as player {welcome.PlayerId} ({ClientConfig.PlayerClass})");
     }
 
     private void OnSnapshot(WorldSnapshotPacket snapshot)

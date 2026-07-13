@@ -27,6 +27,7 @@ public static class WorldSnapshot
             Attacking = p.IsAttacking,
             AttackAnim = p.AttackAnimRemaining,
             AttackCooldown = p.AttackCooldown,
+            Class = (byte)p.Class,
         }).ToArray(),
         Enemies = world.Enemies.Values.Select(e => new EnemySnapshot
         {
@@ -54,6 +55,7 @@ public static class WorldSnapshot
             X = p.Position.X,
             Y = p.Position.Y,
             Z = p.Position.Z,
+            Kind = (byte)p.Kind,
         }).ToArray(),
     };
 }

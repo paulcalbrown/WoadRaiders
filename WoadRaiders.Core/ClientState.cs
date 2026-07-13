@@ -16,6 +16,9 @@ public sealed class ClientState
     /// <summary>Items in pickup order — the inventory panel and 1-9 equip hotkeys index into this.</summary>
     public IReadOnlyList<Item> Inventory => _items;
 
+    /// <summary>The class this client raids as; drives the displayed base stats.</summary>
+    public CharacterClass Class { get; set; } = CharacterClass.Knight;
+
     public int WeaponId { get; private set; }
     public int ArmorId { get; private set; }
     public int TrinketId { get; private set; }
@@ -56,8 +59,8 @@ public sealed class ClientState
     public bool IsEquipped(int itemId) =>
         itemId != 0 && (itemId == WeaponId || itemId == ArmorId || itemId == TrinketId);
 
-    /// <summary>Displayed attack: base plus weapon and trinket power (mirrors <see cref="PlayerState.AttackDamage"/>).</summary>
-    public float AttackDamage => SimConstants.PlayerAttackDamage + PowerOf(WeaponId) + PowerOf(TrinketId);
+    /// <summary>Displayed attack: class base plus weapon and trinket power (mirrors <see cref="PlayerState.AttackDamage"/>).</summary>
+    public float AttackDamage => ClassArchetypes.Of(Class).AttackDamage + PowerOf(WeaponId) + PowerOf(TrinketId);
 
     /// <summary>Displayed per-hit armor soak (mirrors <see cref="PlayerState.DamageReduction"/>).</summary>
     public float DamageReduction => PowerOf(ArmorId) * SimConstants.ArmorDamageReductionPerPower;
@@ -68,7 +71,7 @@ public sealed class ClientState
         _items.Clear();
         _byId.Clear();
         WeaponId = ArmorId = TrinketId = 0;
-        Health = SimConstants.PlayerMaxHealth;
+        Health = ClassArchetypes.Of(Class).MaxHealth;
         Gold = 0;
     }
 

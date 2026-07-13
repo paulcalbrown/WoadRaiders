@@ -60,15 +60,17 @@ public sealed class LocalPlayer
     /// </summary>
     public Vector3 AttackFacing => _attackFacing;
 
-    /// <summary>Start (or on reconnect, restart) predicting as the given player.</summary>
-    public void BeginSession(int playerId, SysVec3 spawn, IDungeonGeometry? geometry)
+    /// <summary>Start (or on reconnect, restart) predicting as the given player and class.</summary>
+    public void BeginSession(int playerId, SysVec3 spawn, IDungeonGeometry? geometry, CharacterClass cls)
     {
         PlayerId = playerId;
-        _prediction = new ClientPrediction(playerId, spawn, geometry);
+        // The class shapes prediction itself: move speed and the attack root in the
+        // predicted world, and the swing cadence — all must mirror the server's.
+        _prediction = new ClientPrediction(playerId, spawn, geometry, cls);
+        _attack = new AttackPrediction(ClassArchetypes.Of(cls).AttackCooldown);
         _prevTickPos = _renderPos = _prediction.Position;
         _renderError = SysVec3.Zero;
         _tickAccumulator = 0;
-        _attack = default;
         _moveTarget = null;
         _moveClickHeld = false;
     }

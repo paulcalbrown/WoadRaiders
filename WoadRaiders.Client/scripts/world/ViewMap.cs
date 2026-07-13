@@ -33,6 +33,13 @@ public sealed class ViewMap<TView> where TView : class
     /// <summary>Register the view created for a just-<see cref="Touch"/>ed new id.</summary>
     public void Add(int id, TView view) => _views[id] = view;
 
+    /// <summary>Destroy and forget one view now (its visual identity changed and must rebuild).</summary>
+    public void Remove(int id)
+    {
+        if (_views.Remove(id, out var view))
+            _destroy(view);
+    }
+
     /// <summary>Destroy every view whose id was not <see cref="Touch"/>ed since the last prune.</summary>
     public void Prune()
     {

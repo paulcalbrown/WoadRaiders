@@ -42,6 +42,7 @@ public sealed class ClientConnection
     private readonly string _host;
     private readonly int _port;
     private readonly string _playerName;
+    private readonly WoadRaiders.Core.CharacterClass _playerClass;
     private NetPeer? _server;
     private double _retryIn;
 
@@ -55,11 +56,12 @@ public sealed class ClientConnection
     public event Action<ItemPickedUpPacket>? ItemPickedUp;
     public event Action<EquipmentUpdatePacket>? EquipmentUpdated;
 
-    public ClientConnection(string host, int port, string playerName)
+    public ClientConnection(string host, int port, string playerName, WoadRaiders.Core.CharacterClass playerClass)
     {
         _host = host;
         _port = port;
         _playerName = playerName;
+        _playerClass = playerClass;
         // AutoRecycle pools packet readers instead of allocating per received packet.
         _net = new NetManager(_listener) { AutoRecycle = true };
 
@@ -98,7 +100,8 @@ public sealed class ClientConnection
             // again at zero — stale-tick tracking from the old session would
             // swallow every snapshot, so it starts over too.
             _snapshots.Reset();
-            Send(MessageType.JoinRequest, new JoinRequest { Name = _playerName }, DeliveryMethod.ReliableOrdered);
+            Send(MessageType.JoinRequest, new JoinRequest { Name = _playerName, Class = (byte)_playerClass },
+                DeliveryMethod.ReliableOrdered);
         };
 
         // Fires for a lost connection AND for a dial that never landed, so this one
