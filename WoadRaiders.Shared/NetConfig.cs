@@ -39,9 +39,10 @@ public static class NetConfig
     /// build-compatibility gate at connect time): v1 = EnemySnapshot.Type byte,
     /// v2 = ProjectileSnapshot array in WorldSnapshotPacket,
     /// v3 = loot kinds (GroundItemSnapshot.Kind, ItemPickedUpPacket.Kind/Amount),
-    /// v4 = weapon-kit item types + GroundItemSnapshot.Type byte.
+    /// v4 = weapon-kit item types + GroundItemSnapshot.Type byte,
+    /// v5 = InputPacket aim (AimX/AimZ) for cursor-aimed attacks.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v4";
+    public const string ConnectionKey = "WoadRaiders.v5";
 
     /// <summary>Co-op party size cap for a single dedicated-server instance.</summary>
     public const int MaxPlayers = 8;

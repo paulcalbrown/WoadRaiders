@@ -16,6 +16,17 @@ public struct PlayerInput
     /// <summary>Move axis along world Z, expected in the range [-1, 1].</summary>
     public float MoveZ;
 
+    /// <summary>
+    /// Aim direction on the ground plane (world X), toward the cursor. When an
+    /// attack fires the server faces the player this way, so the swing goes where
+    /// the player aimed rather than where they last moved. (0,0) means "no aim" —
+    /// the server falls back to the movement facing.
+    /// </summary>
+    public float AimX;
+
+    /// <summary>Aim direction on the ground plane (world Z), toward the cursor.</summary>
+    public float AimZ;
+
     /// <summary>Whether the attack button is held this frame.</summary>
     public bool Attack;
 

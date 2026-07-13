@@ -63,6 +63,37 @@ public class CombatTests
     }
 
     [Fact]
+    public void Attack_faces_the_aim_and_strikes_that_way()
+    {
+        var world = new GameWorld();
+        var player = world.AddPlayer(1, "A"); // faces +X by default
+        var behind = world.SpawnEnemy(new Vector3(-50, 0, 0)); // behind the default facing, in reach
+
+        // Aim behind (-X) and attack: the swing should turn to the aim and land on the enemy
+        // that the default +X facing would have missed.
+        world.SetInput(1, new PlayerInput { Attack = true, AimX = -1f, AimZ = 0f });
+        world.Step();
+
+        Assert.Equal(new Vector3(-1, 0, 0), player.Facing);
+        Assert.Equal(SimConstants.EnemyMaxHealth - SimConstants.PlayerAttackDamage, behind.Health, 3);
+    }
+
+    [Fact]
+    public void A_zero_aim_leaves_the_movement_facing_intact()
+    {
+        var world = new GameWorld();
+        var player = world.AddPlayer(1, "A");
+        world.SetInput(1, new PlayerInput { MoveX = -1f }); // face left
+        world.Step();
+
+        // Attack with no aim (0,0): facing must stay where movement left it, not snap to +X.
+        world.SetInput(1, new PlayerInput { Attack = true });
+        world.Step();
+
+        Assert.Equal(new Vector3(-1, 0, 0), player.Facing);
+    }
+
+    [Fact]
     public void Player_attack_misses_enemy_out_of_range()
     {
         var world = new GameWorld();

@@ -206,6 +206,8 @@ public sealed class GameServer
         {
             MoveX = input.MoveX,
             MoveZ = input.MoveZ,
+            AimX = input.AimX,
+            AimZ = input.AimZ,
             Sequence = input.Sequence,
             Attack = input.Attack,
         });

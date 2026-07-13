@@ -14,6 +14,9 @@ public static class ClientActions
 {
     public const string InventoryToggle = "inventory_toggle";
 
+    /// <summary>Melee swing — left mouse button (ARPG-style), with Space kept as a fallback.</summary>
+    public const string Attack = "attack";
+
     /// <summary>equip_slot_1 .. equip_slot_9, indexed by inventory row.</summary>
     public static readonly string[] EquipSlots =
         Enumerable.Range(1, 9).Select(i => $"equip_slot_{i}").ToArray();
@@ -26,6 +29,12 @@ public static class ClientActions
         Register(InventoryToggle, Key.I);
         for (var i = 0; i < EquipSlots.Length; i++)
             Register(EquipSlots[i], Key.Key1 + i);
+
+        // Attack on the left mouse button; Space still works too. The swing aims at
+        // the cursor regardless of which of the two fired it.
+        InputMap.AddAction(Attack);
+        InputMap.ActionAddEvent(Attack, new InputEventMouseButton { ButtonIndex = MouseButton.Left });
+        AddEvent(Attack, Key.Space);
 
         // WASD as a second binding on the built-in movement actions (the arrow keys
         // stay). LocalPlayer reads ui_up/down/left/right, so it needs no changes.

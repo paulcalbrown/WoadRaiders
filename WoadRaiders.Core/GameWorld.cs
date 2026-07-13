@@ -68,6 +68,8 @@ public sealed class GameWorld
         // the simulation boundary, so no transport has to remember to.
         if (!float.IsFinite(input.MoveX)) input.MoveX = 0f;
         if (!float.IsFinite(input.MoveZ)) input.MoveZ = 0f;
+        if (!float.IsFinite(input.AimX)) input.AimX = 0f;
+        if (!float.IsFinite(input.AimZ)) input.AimZ = 0f;
 
         _inputs[id] = input;
     }
@@ -193,6 +195,12 @@ public sealed class GameWorld
 
             player.AttackCooldown = SimConstants.PlayerAttackCooldown;
             player.AttackAnimRemaining = SimConstants.AttackAnimDuration;
+
+            // Aim the swing where the player pointed (cursor), not where they last
+            // moved. A zero aim (no cursor sent) leaves the movement facing intact.
+            var aim = new Vector3(input.AimX, 0f, input.AimZ);
+            if (aim.LengthSquared() > 0.0001f)
+                player.Facing = Vector3.Normalize(aim);
 
             // Frontal cleave: every enemy within reach AND in front of you (the damage
             // arc) takes the hit — a swing through the arc, not a single target, but

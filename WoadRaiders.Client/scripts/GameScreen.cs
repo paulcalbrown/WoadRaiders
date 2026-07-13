@@ -54,7 +54,7 @@ public partial class GameScreen : Node3D
         AddChild(_hud);
 
         _connection = new ClientConnection(ClientConfig.Host, ClientConfig.Port, ClientConfig.PlayerName);
-        _localPlayer = new LocalPlayer(_connection);
+        _localPlayer = new LocalPlayer(_connection, _camera);
 
         _connection.GeometryReceived += OnGeometry;
         _connection.Welcomed += OnWelcome;
@@ -77,7 +77,8 @@ public partial class GameScreen : Node3D
             _localPlayer.Advance(delta);
         _localPlayer.UpdateRenderPosition(delta);
 
-        _worldView.Update(delta, _localPlayer.PlayerId, _localPlayer.RenderPosition, _localPlayer.Swinging);
+        _worldView.Update(delta, _localPlayer.PlayerId, _localPlayer.RenderPosition, _localPlayer.Swinging,
+                          _localPlayer.AimDirection);
 
         if (_localPlayer.Active)
         {

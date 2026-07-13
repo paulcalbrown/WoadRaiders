@@ -20,6 +20,7 @@ public sealed class LocalPlayer
     private const int MaxCatchUpTicks = 5;    // per frame; a longer stall drops the lost time
 
     private readonly ClientConnection _connection;
+    private readonly CameraRig _camera;
     private ClientPrediction? _prediction;
     private AttackPrediction _attack;
     private uint _inputSequence; // monotonic across reconnects — the server buffer only needs increasing
@@ -27,8 +28,13 @@ public sealed class LocalPlayer
     private SysVec3 _prevTickPos;  // predicted position at the previous fixed tick
     private SysVec3 _renderPos;    // interpolated position actually drawn this frame
     private SysVec3 _renderError;  // reconciliation correction being smoothed out of the render
+    private Vector3 _aim;          // last cursor aim on the ground plane (XZ, unit); drives attack facing
 
-    public LocalPlayer(ClientConnection connection) => _connection = connection;
+    public LocalPlayer(ClientConnection connection, CameraRig camera)
+    {
+        _connection = connection;
+        _camera = camera;
+    }
 
     public int PlayerId { get; private set; } = -1;
 
@@ -40,6 +46,9 @@ public sealed class LocalPlayer
 
     /// <summary>The smoothed feet position to draw (and follow) this frame.</summary>
     public Vector3 RenderPosition => _renderPos.ToGodot();
+
+    /// <summary>The current cursor aim on the ground plane (unit XZ); the model faces this while swinging.</summary>
+    public Vector3 AimDirection => _aim;
 
     /// <summary>Start (or on reconnect, restart) predicting as the given player.</summary>
     public void BeginSession(int playerId, SysVec3 spawn, IDungeonGeometry? geometry)
@@ -102,8 +111,13 @@ public sealed class LocalPlayer
     {
         // Screen up/down keys steer along world Z (the ground plane).
         var move = Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down");
-        var attack = Input.IsActionPressed("ui_accept"); // Space / Enter
-        var input = new PlayerInput { MoveX = move.X, MoveZ = move.Y, Attack = attack, Sequence = ++_inputSequence };
+        var attack = Input.IsActionPressed(ClientActions.Attack); // left mouse button / Space
+        _aim = ComputeAim();
+        var input = new PlayerInput
+        {
+            MoveX = move.X, MoveZ = move.Y, AimX = _aim.X, AimZ = _aim.Z,
+            Attack = attack, Sequence = ++_inputSequence,
+        };
 
         // Predict our own attack animation so the swing is instant (everyone else plays
         // theirs from the authoritative snapshot flag).
@@ -115,7 +129,26 @@ public sealed class LocalPlayer
         // exactly once, in order — that 1:1 replay is what keeps reconciliation drift-free.
         _connection.Send(MessageType.Input, new InputPacket
         {
-            MoveX = move.X, MoveZ = move.Y, Attack = attack, Sequence = input.Sequence,
+            MoveX = move.X, MoveZ = move.Y, AimX = _aim.X, AimZ = _aim.Z,
+            Attack = attack, Sequence = input.Sequence,
         }, DeliveryMethod.ReliableOrdered);
+    }
+
+    // Project the mouse onto the ground plane at the player's feet height and
+    // return the unit direction from the player toward it. Keeps the last aim if
+    // the cursor sits on the player or the ray runs parallel to the ground.
+    private Vector3 ComputeAim()
+    {
+        var playerPos = _prediction!.Position.ToGodot();
+        var mouse = _camera.GetViewport().GetMousePosition();
+        var from = _camera.ProjectRayOrigin(mouse);
+        var dir = _camera.ProjectRayNormal(mouse);
+        if (Mathf.Abs(dir.Y) < 1e-5f)
+            return _aim;
+
+        var t = (playerPos.Y - from.Y) / dir.Y;
+        var hit = from + dir * t;
+        var flat = new Vector3(hit.X - playerPos.X, 0f, hit.Z - playerPos.Z);
+        return flat.LengthSquared() > 0.01f ? flat.Normalized() : _aim;
     }
 }

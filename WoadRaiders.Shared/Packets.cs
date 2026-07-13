@@ -30,11 +30,13 @@ public sealed class WelcomePacket : INetSerializable
     }
 }
 
-/// <summary>Client → server. One frame of movement (ground-plane intent) + attack.</summary>
+/// <summary>Client → server. One frame of movement (ground-plane intent) + aim + attack.</summary>
 public sealed class InputPacket : INetSerializable
 {
     public float MoveX;
     public float MoveZ;
+    public float AimX; // ground-plane aim toward the cursor; (0,0) = no aim
+    public float AimZ;
     public uint Sequence;
     public bool Attack;
 
@@ -42,6 +44,8 @@ public sealed class InputPacket : INetSerializable
     {
         w.Put(MoveX);
         w.Put(MoveZ);
+        w.Put(AimX);
+        w.Put(AimZ);
         w.Put(Sequence);
         w.Put((byte)(Attack ? 1 : 0));
     }
@@ -50,6 +54,8 @@ public sealed class InputPacket : INetSerializable
     {
         MoveX = r.GetFloat();
         MoveZ = r.GetFloat();
+        AimX = r.GetFloat();
+        AimZ = r.GetFloat();
         Sequence = r.GetUInt();
         Attack = r.GetByte() != 0;
     }

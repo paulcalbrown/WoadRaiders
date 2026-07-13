@@ -41,6 +41,14 @@ public partial class CharacterView : Node3D
     /// <summary>Which swing clip this character plays (per enemy type; players use the default).</summary>
     public string AttackClip { get; set; } = DefaultAttackClip;
 
+    /// <summary>
+    /// Ask the character to turn to face this ground-plane direction this frame,
+    /// ahead of its movement heading. The local player calls it with the cursor
+    /// direction while swinging, so a left click faces the character where you
+    /// clicked. Re-request each frame it should apply (<see cref="Animate"/> consumes it).
+    /// </summary>
+    public void FaceToward(Vector3 direction) => _requestedFacing = direction;
+
     private Node3D _pivot = null!;      // yaw rotation for facing
     private AnimationPlayer? _anim;
     private MeshInstance3D? _healthFill; // enemies only
@@ -51,8 +59,9 @@ public partial class CharacterView : Node3D
     private float _barScale = 1f;
     private Vector3 _lastPos;
     private Vector3 _smoothVel;          // low-passed velocity used for facing (kills reconcile twitch)
+    private Vector3? _requestedFacing;   // a direction to face this frame (the cursor while swinging); see FaceToward
     private string _clip = "";
-    private float _yaw;
+    private float _yaw;                  // the character's current facing angle — always applied to the pivot
 
     /// <summary>Instantiate the model, snap to its real spot (no lerp-in from the origin), and enter the tree.</summary>
     public static CharacterView Spawn(Node parent, PackedScene scene, Vector3 feet, float scale, Color lightColor)
@@ -104,10 +113,18 @@ public partial class CharacterView : Node3D
         _smoothVel = _smoothVel.Lerp(frameVel, Mathf.Clamp((float)delta * VelSmoothRate, 0f, 1f));
         var speed = _smoothVel.Length();
 
+        // The character is always facing _yaw; each frame it eases _yaw toward the
+        // direction it should face. That's a requested facing when one was asked for
+        // this frame (the local player's cursor while swinging, so a click faces where
+        // you clicked), otherwise the movement heading. Standing still with no request,
+        // it just holds. The run/idle clip below still keys off real movement, so a
+        // requested facing while walking reads as a strafe.
         var moving = speed > MoveAnimSpeed;
-        if (moving)
+        var faceDir = _requestedFacing ?? (moving ? _smoothVel : (Vector3?)null);
+        _requestedFacing = null; // consumed — the caller re-requests it each frame it applies
+        if (faceDir is { } dir && dir.LengthSquared() > 0.0001f)
         {
-            var targetYaw = Mathf.Atan2(_smoothVel.X, _smoothVel.Z) + ModelYawOffset;
+            var targetYaw = Mathf.Atan2(dir.X, dir.Z) + ModelYawOffset;
             _yaw = Mathf.LerpAngle(_yaw, targetYaw, Mathf.Clamp((float)delta * TurnSpeed, 0f, 1f));
             _pivot.Rotation = new Vector3(0f, _yaw, 0f);
         }
