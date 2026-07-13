@@ -30,7 +30,7 @@ public class ClientPredictionTests
 
         // Server has processed the first 3 inputs.
         var serverPosition = ReferenceSim(inputs.Take(3));
-        var corrected = prediction.Reconcile(serverPosition, lastProcessedInput: 3);
+        var corrected = prediction.Reconcile(serverPosition, 0f, 0f, lastProcessedInput: 3);
 
         // Replaying inputs 4..6 on top of the server position reproduces the full sim.
         Assert.Equal(ReferenceSim(inputs), corrected);
@@ -45,11 +45,41 @@ public class ClientPredictionTests
             prediction.Predict(input);
 
         var serverPosition = new Vector3(123f, 0f, -45f);
-        var corrected = prediction.Reconcile(serverPosition, lastProcessedInput: 5);
+        var corrected = prediction.Reconcile(serverPosition, 0f, 0f, lastProcessedInput: 5);
 
         // Nothing in flight → we simply trust the server exactly.
         Assert.Equal(serverPosition, corrected);
         Assert.Equal(0, prediction.PendingInputCount);
+    }
+
+    [Fact]
+    public void Reconcile_reproduces_the_attack_root_without_drift()
+    {
+        // Move three ticks, then swing: the swing roots the player. A reconcile that
+        // lands before the swing must replay the moving ticks as moving — not wrongly
+        // rooted by a stale attack window carried over from the later swing — and land
+        // exactly where a clean full simulation does. (Restoring the authoritative
+        // attack timers is what makes that hold; without it the position drifts short,
+        // which is the "glide" the player saw when attacking mid-move.)
+        var inputs = new List<PlayerInput>
+        {
+            new() { MoveX = 1f, Sequence = 1 },
+            new() { MoveX = 1f, Sequence = 2 },
+            new() { MoveX = 1f, Sequence = 3 },
+            new() { Attack = true, Sequence = 4 },
+            new() { Sequence = 5 },
+            new() { Sequence = 6 },
+        };
+
+        var prediction = new ClientPrediction(1, Vector3.Zero);
+        foreach (var input in inputs)
+            prediction.Predict(input);
+
+        // Server has processed only the first two (moving) inputs — before the swing.
+        var atTwo = SimulateState(inputs.Take(2));
+        prediction.Reconcile(atTwo.Pos, atTwo.Anim, atTwo.Cooldown, lastProcessedInput: 2);
+
+        Assert.Equal(SimulateState(inputs).Pos, prediction.Position);
     }
 
     [Fact]
@@ -72,15 +102,19 @@ public class ClientPredictionTests
         return list;
     }
 
-    private static Vector3 ReferenceSim(IEnumerable<PlayerInput> inputs)
+    private static Vector3 ReferenceSim(IEnumerable<PlayerInput> inputs) => SimulateState(inputs).Pos;
+
+    // A clean authoritative simulation of the input stream: the final position plus the
+    // attack timers, which a reconcile needs to reproduce the swing-root exactly.
+    private static (Vector3 Pos, float Anim, float Cooldown) SimulateState(IEnumerable<PlayerInput> inputs)
     {
         var world = new GameWorld();
-        world.AddPlayer(1, "ref");
+        var player = world.AddPlayer(1, "ref");
         foreach (var input in inputs)
         {
             world.SetInput(1, input);
             world.Step();
         }
-        return world.Players[1].Position;
+        return (player.Position, player.AttackAnimRemaining, player.AttackCooldown);
     }
 }

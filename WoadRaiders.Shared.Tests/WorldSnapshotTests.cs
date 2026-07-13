@@ -55,6 +55,8 @@ public class WorldSnapshotTests
         Assert.Equal(player.Health, ps.Health);
         Assert.Equal(player.LastProcessedInput, ps.LastProcessedInput);
         Assert.Equal(player.IsAttacking, ps.Attacking);
+        Assert.Equal(player.AttackAnimRemaining, ps.AttackAnim);   // reconcile inputs
+        Assert.Equal(player.AttackCooldown, ps.AttackCooldown);
 
         // Enemy type is carried as its byte (drives the client model).
         var es = snap.Enemies.Single(e => e.Id == mage.Id);

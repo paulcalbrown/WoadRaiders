@@ -25,6 +25,8 @@ public static class WorldSnapshot
             Health = p.Health,
             LastProcessedInput = p.LastProcessedInput,
             Attacking = p.IsAttacking,
+            AttackAnim = p.AttackAnimRemaining,
+            AttackCooldown = p.AttackCooldown,
         }).ToArray(),
         Enemies = world.Enemies.Values.Select(e => new EnemySnapshot
         {

@@ -18,6 +18,7 @@ public sealed class LocalPlayer
     private const float ErrorDecayRate = 10f; // how fast reconciliation corrections ease out
     private const float MaxSnapError = 120f;  // above this, snap (respawn/teleport) not smooth
     private const int MaxCatchUpTicks = 5;    // per frame; a longer stall drops the lost time
+    private const float ArriveRadius = 10f;   // click-to-move stops once this close to the target
 
     private readonly ClientConnection _connection;
     private readonly CameraRig _camera;
@@ -30,6 +31,11 @@ public sealed class LocalPlayer
     private SysVec3 _renderError;  // reconciliation correction being smoothed out of the render
     private Vector3 _aim;          // live cursor aim on the ground plane (XZ, unit), sent every tick
     private Vector3 _attackFacing; // _aim captured when the current swing fired — held for the whole swing
+    private Vector3? _moveTarget;  // ground point the player is pathing toward (right-click), if any
+    private bool _moveClickHeld;   // right button down last tick, to detect the press edge
+
+    /// <summary>Fired on a right-click, with the ground point clicked — the game drops a marker there.</summary>
+    public event Action<Vector3>? MoveClicked;
 
     public LocalPlayer(ClientConnection connection, CameraRig camera)
     {
@@ -63,6 +69,8 @@ public sealed class LocalPlayer
         _renderError = SysVec3.Zero;
         _tickAccumulator = 0;
         _attack = default;
+        _moveTarget = null;
+        _moveClickHeld = false;
     }
 
     /// <summary>Run the fixed-tick loop for this frame: sample, predict, send.</summary>
@@ -91,7 +99,8 @@ public sealed class LocalPlayer
         if (_prediction is null)
             return;
         var before = _prediction.Position;
-        _prediction.Reconcile(new SysVec3(snapshot.X, snapshot.Y, snapshot.Z), snapshot.LastProcessedInput);
+        _prediction.Reconcile(new SysVec3(snapshot.X, snapshot.Y, snapshot.Z),
+                              snapshot.AttackAnim, snapshot.AttackCooldown, snapshot.LastProcessedInput);
         _renderError += before - _prediction.Position;
     }
 
@@ -113,22 +122,37 @@ public sealed class LocalPlayer
 
     private void Tick()
     {
-        // Screen up/down keys steer along world Z (the ground plane).
-        var move = Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down");
-        var attack = Input.IsActionPressed(ClientActions.Attack); // left mouse button / Space
         _aim = ComputeAim();
+
+        // Left mouse button swings toward the cursor; Space swings in the character's
+        // current facing. A zero aim tells the sim to keep the pre-attack facing — so
+        // the Space swing lands where the character already faces, not at the mouse.
+        var mouseAttack = Input.IsActionPressed(ClientActions.Attack);
+        var forwardAttack = Input.IsActionPressed(ClientActions.AttackForward);
+        var attack = mouseAttack || forwardAttack;
+        var attackAim = mouseAttack ? _aim : Vector3.Zero; // mouse wins if both are held
+
+        // Attacking takes priority over moving: a swing cancels the click-to-move order
+        // (and the sim roots the player for the swing). A held movement key resumes on
+        // its own once the swing ends; a cancelled click-to-move order does not.
+        if (attack)
+            _moveTarget = null;
+        else
+            ReadMoveClick();
+        var move = MovementIntent();
+
         var input = new PlayerInput
         {
-            MoveX = move.X, MoveZ = move.Y, AimX = _aim.X, AimZ = _aim.Z,
+            MoveX = move.X, MoveZ = move.Y, AimX = attackAim.X, AimZ = attackAim.Z,
             Attack = attack, Sequence = ++_inputSequence,
         };
 
         // Predict our own attack animation so the swing is instant (everyone else plays
-        // theirs from the authoritative snapshot flag). Lock the facing to the aim at
-        // the moment the swing fires, so the character commits to the click direction
-        // instead of following the mouse through the animation.
+        // theirs from the authoritative snapshot flag). Lock the facing at the moment the
+        // swing fires: the cursor for a mouse attack, or zero for a Space attack (no
+        // visual override → the model keeps facing where it already is).
         if (_attack.Tick(attack))
-            _attackFacing = _aim;
+            _attackFacing = attackAim;
 
         _prediction!.Predict(input);
 
@@ -136,26 +160,77 @@ public sealed class LocalPlayer
         // exactly once, in order — that 1:1 replay is what keeps reconciliation drift-free.
         _connection.Send(MessageType.Input, new InputPacket
         {
-            MoveX = move.X, MoveZ = move.Y, AimX = _aim.X, AimZ = _aim.Z,
+            MoveX = move.X, MoveZ = move.Y, AimX = attackAim.X, AimZ = attackAim.Z,
             Attack = attack, Sequence = input.Sequence,
         }, DeliveryMethod.ReliableOrdered);
     }
 
-    // Project the mouse onto the ground plane at the player's feet height and
-    // return the unit direction from the player toward it. Keeps the last aim if
-    // the cursor sits on the player or the ray runs parallel to the ground.
+    // Right mouse button: click or hold to path toward the cursor. On the press
+    // edge, announce the click so the game drops a marker there.
+    private void ReadMoveClick()
+    {
+        if (Input.IsActionPressed(ClientActions.MoveTo) && TryProjectMouseToGround(out var clicked))
+        {
+            _moveTarget = clicked;
+            if (!_moveClickHeld)
+                MoveClicked?.Invoke(clicked);
+            _moveClickHeld = true;
+        }
+        else
+        {
+            _moveClickHeld = false;
+        }
+    }
+
+    // Keyboard steering wins and cancels any click-to-move; otherwise head toward
+    // the move target (full speed) until we arrive within ArriveRadius.
+    private Vector2 MovementIntent()
+    {
+        var keys = Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down");
+        if (keys != Vector2.Zero)
+        {
+            _moveTarget = null;
+            return keys;
+        }
+
+        if (_moveTarget is { } target)
+        {
+            var pos = _prediction!.Position.ToGodot();
+            var to = new Vector3(target.X - pos.X, 0f, target.Z - pos.Z);
+            if (to.LengthSquared() > ArriveRadius * ArriveRadius)
+            {
+                var dir = to.Normalized();
+                return new Vector2(dir.X, dir.Z);
+            }
+            _moveTarget = null; // arrived
+        }
+        return Vector2.Zero;
+    }
+
+    // Unit direction from the player toward the cursor's ground point. Keeps the
+    // last aim if the cursor sits on the player or the ray runs parallel to the ground.
     private Vector3 ComputeAim()
     {
+        if (!TryProjectMouseToGround(out var hit))
+            return _aim;
+        var playerPos = _prediction!.Position.ToGodot();
+        var flat = new Vector3(hit.X - playerPos.X, 0f, hit.Z - playerPos.Z);
+        return flat.LengthSquared() > 0.01f ? flat.Normalized() : _aim;
+    }
+
+    // Intersect the cursor ray with the ground plane at the player's feet height.
+    private bool TryProjectMouseToGround(out Vector3 point)
+    {
+        point = default;
         var playerPos = _prediction!.Position.ToGodot();
         var mouse = _camera.GetViewport().GetMousePosition();
         var from = _camera.ProjectRayOrigin(mouse);
         var dir = _camera.ProjectRayNormal(mouse);
         if (Mathf.Abs(dir.Y) < 1e-5f)
-            return _aim;
+            return false;
 
         var t = (playerPos.Y - from.Y) / dir.Y;
-        var hit = from + dir * t;
-        var flat = new Vector3(hit.X - playerPos.X, 0f, hit.Z - playerPos.Z);
-        return flat.LengthSquared() > 0.01f ? flat.Normalized() : _aim;
+        point = from + dir * t;
+        return true;
     }
 }

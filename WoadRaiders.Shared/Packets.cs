@@ -72,6 +72,12 @@ public struct PlayerSnapshot : INetSerializable
     public uint LastProcessedInput;
     public bool Attacking;
 
+    // Authoritative attack timers. The local client restores these when reconciling
+    // so its predicted swing-root replays exactly (see ClientPrediction.Reconcile);
+    // remotes ignore them.
+    public float AttackAnim;
+    public float AttackCooldown;
+
     public void Serialize(NetDataWriter w)
     {
         w.Put(Id);
@@ -81,6 +87,8 @@ public struct PlayerSnapshot : INetSerializable
         w.Put(Health);
         w.Put(LastProcessedInput);
         w.Put((byte)(Attacking ? 1 : 0));
+        w.Put(AttackAnim);
+        w.Put(AttackCooldown);
     }
 
     public void Deserialize(NetDataReader r)
@@ -92,6 +100,8 @@ public struct PlayerSnapshot : INetSerializable
         Health = r.GetFloat();
         LastProcessedInput = r.GetUInt();
         Attacking = r.GetByte() != 0;
+        AttackAnim = r.GetFloat();
+        AttackCooldown = r.GetFloat();
     }
 }
 

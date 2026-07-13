@@ -55,6 +55,7 @@ public partial class GameScreen : Node3D
 
         _connection = new ClientConnection(ClientConfig.Host, ClientConfig.Port, ClientConfig.PlayerName);
         _localPlayer = new LocalPlayer(_connection, _camera);
+        _localPlayer.MoveClicked += point => MoveMarker.Spawn(this, point); // red X where the player clicks to move
 
         _connection.GeometryReceived += OnGeometry;
         _connection.Welcomed += OnWelcome;

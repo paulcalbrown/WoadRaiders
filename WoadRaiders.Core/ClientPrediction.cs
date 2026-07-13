@@ -51,16 +51,26 @@ public sealed class ClientPrediction
 
     /// <summary>
     /// Fold in an authoritative snapshot: drop inputs the server has already
-    /// processed, snap to the server position, then replay the inputs still in
-    /// flight. Returns the corrected predicted position.
+    /// processed, snap to the server position and attack timers, then replay the
+    /// inputs still in flight. Returns the corrected predicted position.
+    ///
+    /// The attack timers must be restored too, not just position: a swing roots the
+    /// player, so replaying the still-pending inputs against a stale attack window
+    /// would wrongly root (or free) the pre-swing moving ticks and leave the
+    /// position short of the server's — a correction that then eases out as a
+    /// visible glide. Restoring the server's authoritative <paramref name="attackAnimRemaining"/>
+    /// and <paramref name="attackCooldown"/> makes the replay reproduce the root exactly.
     /// </summary>
-    public Vector3 Reconcile(Vector3 authoritativePosition, uint lastProcessedInput)
+    public Vector3 Reconcile(Vector3 authoritativePosition, float attackAnimRemaining, float attackCooldown,
+                             uint lastProcessedInput)
     {
         _pending.RemoveAll(i => i.Sequence <= lastProcessedInput);
 
         var player = _world.Players[_localPlayerId];
         player.Position = authoritativePosition;
         player.Velocity = Vector3.Zero;
+        player.AttackAnimRemaining = attackAnimRemaining;
+        player.AttackCooldown = attackCooldown;
 
         foreach (var input in _pending)
         {

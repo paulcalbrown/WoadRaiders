@@ -110,7 +110,7 @@ public partial class HudController : CanvasLayer
 
         _stats.Text = $"Gold {state.Gold}   Items {state.Inventory.Count}   Atk {state.AttackDamage:0}   " +
                       $"Armor {state.DamageReduction:0.0}   " +
-                      "[I] inventory   [Space] attack   [Esc] menu";
+                      "[LMB] attack   [RMB] move   [I] inventory   [Esc] menu";
 
         _status.Text = connection switch
         {

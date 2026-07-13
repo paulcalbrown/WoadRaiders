@@ -14,8 +14,14 @@ public static class ClientActions
 {
     public const string InventoryToggle = "inventory_toggle";
 
-    /// <summary>Melee swing — left mouse button (ARPG-style), with Space kept as a fallback.</summary>
+    /// <summary>Melee swing aimed at the cursor — left mouse button (ARPG-style).</summary>
     public const string Attack = "attack";
+
+    /// <summary>Melee swing in the character's current facing — the Space key.</summary>
+    public const string AttackForward = "attack_forward";
+
+    /// <summary>Click/hold to path toward the cursor — right mouse button (ARPG-style).</summary>
+    public const string MoveTo = "move_to";
 
     /// <summary>equip_slot_1 .. equip_slot_9, indexed by inventory row.</summary>
     public static readonly string[] EquipSlots =
@@ -30,11 +36,15 @@ public static class ClientActions
         for (var i = 0; i < EquipSlots.Length; i++)
             Register(EquipSlots[i], Key.Key1 + i);
 
-        // Attack on the left mouse button; Space still works too. The swing aims at
-        // the cursor regardless of which of the two fired it.
+        // Left mouse button swings toward the cursor; Space swings in the direction
+        // the character is already facing.
         InputMap.AddAction(Attack);
         InputMap.ActionAddEvent(Attack, new InputEventMouseButton { ButtonIndex = MouseButton.Left });
-        AddEvent(Attack, Key.Space);
+        Register(AttackForward, Key.Space);
+
+        // Right mouse button paths toward the cursor.
+        InputMap.AddAction(MoveTo);
+        InputMap.ActionAddEvent(MoveTo, new InputEventMouseButton { ButtonIndex = MouseButton.Right });
 
         // WASD as a second binding on the built-in movement actions (the arrow keys
         // stay). LocalPlayer reads ui_up/down/left/right, so it needs no changes.

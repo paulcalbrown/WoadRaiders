@@ -94,6 +94,42 @@ public class CombatTests
     }
 
     [Fact]
+    public void Attacking_roots_the_player()
+    {
+        var world = new GameWorld();
+        var player = world.AddPlayer(1, "A"); // origin
+
+        // Try to run right while swinging — the swing should hold the player in place.
+        world.SetInput(1, new PlayerInput { MoveX = 1f, Attack = true });
+        world.Step();
+
+        Assert.Equal(Vector3.Zero, player.Position);
+    }
+
+    [Fact]
+    public void Held_movement_intent_resumes_once_the_swing_animation_ends()
+    {
+        // The sim root is scoped to the swing: continuous intent (a held key) flows
+        // again once the animation ends. Cancelling a one-shot click-to-move order on
+        // attack is a separate, client-side concern (LocalPlayer), not the sim's.
+        var world = new GameWorld();
+        var player = world.AddPlayer(1, "A");
+
+        world.SetInput(1, new PlayerInput { Attack = true });
+        world.Step(); // fire a swing → rooted for the animation window
+
+        // Hold right without attacking: rooted until the swing anim expires, then moves.
+        var animTicks = (int)Math.Ceiling(SimConstants.AttackAnimDuration / SimConstants.TickDelta);
+        for (var t = 0; t < animTicks + 5; t++)
+        {
+            world.SetInput(1, new PlayerInput { MoveX = 1f });
+            world.Step();
+        }
+
+        Assert.True(player.Position.X > 0f, "held movement should resume once the swing animation ended");
+    }
+
+    [Fact]
     public void Player_attack_misses_enemy_out_of_range()
     {
         var world = new GameWorld();

@@ -29,6 +29,9 @@ public abstract class Combatant
     /// <summary>True while the attack animation should be playing.</summary>
     public bool IsAttacking => AttackAnimRemaining > 0f;
 
+    /// <summary>True when the attack cooldown has elapsed, so a swing may fire this tick.</summary>
+    public bool AttackReady => AttackCooldown <= 0f;
+
     public bool IsAlive => Health > 0f;
 
     protected Combatant(int id, float maxHealth)

@@ -163,6 +163,14 @@ public sealed class GameWorld
             var input = _inputs.TryGetValue(player.Id, out var i) ? i : default;
             player.LastProcessedInput = input.Sequence;
 
+            // A melee swing roots you: no movement while the swing plays, nor on the
+            // tick it fires. Facing still comes from the swing's aim (ResolvePlayerAttacks).
+            if (player.IsAttacking || (input.Attack && player.AttackReady))
+            {
+                player.Velocity = Vector3.Zero;
+                continue;
+            }
+
             // Intent is on the ground plane; the geometry decides the resulting height.
             var move = new Vector3(input.MoveX, 0f, input.MoveZ);
             var moveLenSq = move.LengthSquared();
@@ -190,7 +198,7 @@ public sealed class GameWorld
                 continue;
 
             var input = _inputs.TryGetValue(player.Id, out var i) ? i : default;
-            if (!input.Attack || player.AttackCooldown > 0f)
+            if (!input.Attack || !player.AttackReady)
                 continue;
 
             player.AttackCooldown = SimConstants.PlayerAttackCooldown;
