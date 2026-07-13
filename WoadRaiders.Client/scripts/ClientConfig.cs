@@ -13,6 +13,7 @@ namespace WoadRaiders.Client;
 ///   --server=host[:port]   target server (default 127.0.0.1)
 ///   --name=RaiderName      player name sent in the JoinRequest
 ///   --play                 skip the title screen and connect immediately
+///   --screenshot=path.png  save title-screen stills there and exit (dev)
 /// </summary>
 public static class ClientConfig
 {
@@ -22,6 +23,9 @@ public static class ClientConfig
 
     /// <summary>Skip the title screen and connect immediately (dev/headless convenience).</summary>
     public static bool AutoPlay { get; private set; }
+
+    /// <summary>Render the title screen, save PNG stills at this path, then quit (dev convenience).</summary>
+    public static string? ScreenshotPath { get; private set; }
 
     private static bool _loaded;
 
@@ -41,6 +45,8 @@ public static class ClientConfig
                 SetServer(arg["--server=".Length..]);
             else if (arg.StartsWith("--name="))
                 PlayerName = arg["--name=".Length..];
+            else if (arg.StartsWith("--screenshot="))
+                ScreenshotPath = arg["--screenshot=".Length..];
         }
     }
 

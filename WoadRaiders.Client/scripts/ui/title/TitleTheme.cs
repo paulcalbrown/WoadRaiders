@@ -1,0 +1,77 @@
+using Godot;
+
+namespace WoadRaiders.Client;
+
+/// <summary>
+/// Shared palette and fonts for the title screen's Celtic/gothic dress. The
+/// colors run the game's woad blue against a radioactive ooze green over a
+/// near-black night. The display face prefers a real blackletter font file —
+/// drop any .ttf/.otf into res://assets/fonts and it is picked up without a
+/// code change — and otherwise condenses and emboldens the best installed
+/// serif toward blackletter weight.
+/// </summary>
+public static class TitleTheme
+{
+    public static readonly Color Night = new(0.012f, 0.016f, 0.024f); // matches the dungeon sky
+    public static readonly Color WoadBlue = new(0.55f, 0.75f, 1f);
+    public static readonly Color WoadDim = new(0.38f, 0.52f, 0.74f);
+    public static readonly Color BoneSilver = new(0.80f, 0.85f, 0.94f);
+    public static readonly Color OozeGreen = new(0.55f, 1f, 0.22f);
+    public static readonly Color OozeDeep = new(0.10f, 0.42f, 0.06f);
+    public static readonly Color Verdigris = new(0.42f, 0.68f, 0.38f);
+
+    private static Font? _display;
+    private static Font? _body;
+
+    /// <summary>Heavy display face: the title and the menu entries.</summary>
+    public static Font DisplayFont() => _display ??= BuildDisplayFont();
+
+    /// <summary>Book face: field labels, inputs, and the tagline.</summary>
+    public static Font BodyFont() => _body ??= new SystemFont
+    {
+        FontNames = ["Palatino Linotype", "Constantia", "Georgia", "Times New Roman"],
+    };
+
+    private static Font BuildDisplayFont()
+    {
+        // A real blackletter needs no dressing up.
+        if (LoadBundledFont() is { } bundled)
+            return bundled;
+
+        return new FontVariation
+        {
+            BaseFont = new SystemFont
+            {
+                FontNames = ["Old English Text MT", "Palatino Linotype", "Constantia", "Georgia"],
+                FontWeight = 700,
+            },
+            // Condensed and over-inked, a bold serif approaches the dense
+            // vertical color of blackletter. Kept moderate — heavier synthetic
+            // embolden shoots faint spikes above the glyph extrema.
+            VariationEmbolden = 0.30f,
+            VariationTransform = new Transform2D(new Vector2(0.86f, 0f), new Vector2(0f, 1f), Vector2.Zero),
+        };
+    }
+
+    private static Font? LoadBundledFont()
+    {
+        using var dir = DirAccess.Open("res://assets/fonts");
+        if (dir == null)
+            return null;
+        foreach (var file in dir.GetFiles())
+        {
+            if (!file.EndsWith(".ttf") && !file.EndsWith(".otf"))
+                continue;
+            var path = $"res://assets/fonts/{file}";
+            // The imported resource exists once the editor has scanned the file
+            // (and is all an exported build ships); reading the raw ttf covers
+            // running from the CLI before that first import.
+            if (ResourceLoader.Exists(path))
+                return ResourceLoader.Load<FontFile>(path);
+            var font = new FontFile();
+            if (font.LoadDynamicFont(path) == Error.Ok)
+                return font;
+        }
+        return null;
+    }
+}
