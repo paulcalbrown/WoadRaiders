@@ -78,7 +78,7 @@ public partial class GameScreen : Node3D
         _localPlayer.UpdateRenderPosition(delta);
 
         _worldView.Update(delta, _localPlayer.PlayerId, _localPlayer.RenderPosition, _localPlayer.Swinging,
-                          _localPlayer.AimDirection);
+                          _localPlayer.AttackFacing);
 
         if (_localPlayer.Active)
         {

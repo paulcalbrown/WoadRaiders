@@ -15,6 +15,15 @@ public class AttackPredictionTests
     }
 
     [Fact]
+    public void Tick_reports_the_tick_a_swing_fires()
+    {
+        var attack = new AttackPrediction();
+        Assert.True(attack.Tick(attackHeld: true));   // the click fires a swing
+        Assert.False(attack.Tick(attackHeld: true));  // still on cooldown — no new swing this tick
+        Assert.False(attack.Tick(attackHeld: false)); // released — nothing fires
+    }
+
+    [Fact]
     public void No_input_never_swings()
     {
         var attack = new AttackPrediction();

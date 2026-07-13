@@ -28,7 +28,8 @@ public sealed class LocalPlayer
     private SysVec3 _prevTickPos;  // predicted position at the previous fixed tick
     private SysVec3 _renderPos;    // interpolated position actually drawn this frame
     private SysVec3 _renderError;  // reconciliation correction being smoothed out of the render
-    private Vector3 _aim;          // last cursor aim on the ground plane (XZ, unit); drives attack facing
+    private Vector3 _aim;          // live cursor aim on the ground plane (XZ, unit), sent every tick
+    private Vector3 _attackFacing; // _aim captured when the current swing fired — held for the whole swing
 
     public LocalPlayer(ClientConnection connection, CameraRig camera)
     {
@@ -47,8 +48,11 @@ public sealed class LocalPlayer
     /// <summary>The smoothed feet position to draw (and follow) this frame.</summary>
     public Vector3 RenderPosition => _renderPos.ToGodot();
 
-    /// <summary>The current cursor aim on the ground plane (unit XZ); the model faces this while swinging.</summary>
-    public Vector3 AimDirection => _aim;
+    /// <summary>
+    /// The aim locked in when the current swing fired (the click direction). The
+    /// model holds this through the swing, so it doesn't chase the mouse mid-attack.
+    /// </summary>
+    public Vector3 AttackFacing => _attackFacing;
 
     /// <summary>Start (or on reconnect, restart) predicting as the given player.</summary>
     public void BeginSession(int playerId, SysVec3 spawn, IDungeonGeometry? geometry)
@@ -120,8 +124,11 @@ public sealed class LocalPlayer
         };
 
         // Predict our own attack animation so the swing is instant (everyone else plays
-        // theirs from the authoritative snapshot flag).
-        _attack.Tick(attack);
+        // theirs from the authoritative snapshot flag). Lock the facing to the aim at
+        // the moment the swing fires, so the character commits to the click direction
+        // instead of following the mouse through the animation.
+        if (_attack.Tick(attack))
+            _attackFacing = _aim;
 
         _prediction!.Predict(input);
 

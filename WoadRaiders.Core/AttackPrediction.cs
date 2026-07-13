@@ -18,9 +18,10 @@ public struct AttackPrediction
     /// <summary>
     /// Advance one fixed simulation tick with this tick's attack intent. The
     /// decrement-then-trigger order matches the server, so both fire an attack on
-    /// the same tick of a held button.
+    /// the same tick of a held button. Returns true on the tick a new swing fires
+    /// (the moment to lock in the aim), false otherwise.
     /// </summary>
-    public void Tick(bool attackHeld)
+    public bool Tick(bool attackHeld)
     {
         _cooldown = Math.Max(0f, _cooldown - SimConstants.TickDelta);
         _animTime = Math.Max(0f, _animTime - SimConstants.TickDelta);
@@ -28,6 +29,8 @@ public struct AttackPrediction
         {
             _animTime = SimConstants.AttackAnimDuration;
             _cooldown = SimConstants.PlayerAttackCooldown;
+            return true;
         }
+        return false;
     }
 }
