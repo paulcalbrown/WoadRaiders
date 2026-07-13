@@ -21,4 +21,15 @@
     <InternalsVisibleTo Include="WoadRaiders.Server.Tests" />
   </ItemGroup>
 
+  <!--
+    Dungeon geometry. The canonical JSON lives in the client project (its title
+    screen renders map previews from the same files); copying it beside the
+    binary makes a built or published server self-contained.
+  -->
+  <ItemGroup>
+    <Content Include="..\WoadRaiders.Client\maps\*.json"
+             Link="maps\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

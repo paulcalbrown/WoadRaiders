@@ -77,17 +77,12 @@ public sealed class GameServer
         };
     }
 
-    /// <summary>Locates the client's maps directory for map-less dev runs (repo root or bin dir).</summary>
-    public static string? FindMapsDirectory()
-    {
-        string[] candidates =
-        {
-            Path.Combine("WoadRaiders.Client", "maps"),
-            Path.Combine("..", "WoadRaiders.Client", "maps"),
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WoadRaiders.Client", "maps"),
-        };
-        return candidates.FirstOrDefault(Directory.Exists);
-    }
+    /// <summary>
+    /// The maps directory: always beside the binary. The csproj copies the
+    /// canonical JSON (WoadRaiders.Client/maps) there on every build and publish,
+    /// so this holds wherever the server runs from — no fallback paths.
+    /// </summary>
+    public static string MapsDirectory => Path.Combine(AppContext.BaseDirectory, "maps");
 
     /// <summary>Runs the server until stopped. Returns false if startup failed.</summary>
     public bool Run(int port = NetConfig.DefaultPort)
