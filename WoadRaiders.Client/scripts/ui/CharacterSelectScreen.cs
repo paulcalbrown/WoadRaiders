@@ -37,7 +37,7 @@ public partial class CharacterSelectScreen : Control
 
         AddChild(new FogBackground());
         AddChild(new CelticFrame());
-        MusicPlayer.Loop(this, "res://assets/audio/title_theme.wav", -8f); // carry the title theme through
+        MusicJukebox.Instance.PlayTitleTheme(); // carries on seamlessly from the title screen
 
         var center = new CenterContainer();
         center.SetAnchorsPreset(LayoutPreset.FullRect);

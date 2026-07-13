@@ -39,7 +39,7 @@ public partial class RunSummaryScreen : Control
 
         AddChild(new FogBackground());
         AddChild(new CelticFrame());
-        MusicPlayer.Loop(this, "res://assets/audio/title_theme.wav", -8f); // back to the hearth-fire theme
+        MusicJukebox.Instance.Silence(); // the summary is quiet — cut the dungeon theme carried in from the run
 
         var center = new CenterContainer();
         center.SetAnchorsPreset(LayoutPreset.FullRect);

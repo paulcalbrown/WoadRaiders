@@ -41,7 +41,6 @@ public partial class GameScreen : Node3D
     private DungeonGeometry? _geometry;
     private Node3D? _mapRoot;            // all dungeon visuals live under here, so a map swap can rebuild them
     private int? _builtMapFingerprint;   // fingerprint of the map the visuals were built for
-    private AudioStreamPlayer? _music;   // the current map's looping theme
     private bool _portalAnnounced;       // the "way opens" banner fires once per session
 
     public override void _Ready()
@@ -228,17 +227,19 @@ public partial class GameScreen : Node3D
     /// matching track just plays nothing.</summary>
     private void StartMapMusic(string? scenePath)
     {
-        _music?.QueueFree();
-        _music = null;
-
         if (string.IsNullOrEmpty(scenePath))
+        {
+            MusicJukebox.Instance.Silence();
             return;
+        }
         var key = DungeonCatalog.ForScene(scenePath) is { } info
             ? info.MusicKey
             : System.IO.Path.GetFileNameWithoutExtension(scenePath).ToLowerInvariant();
         var track = $"res://assets/audio/{key}_theme.wav";
         if (MusicPlayer.Exists(track))
-            _music = MusicPlayer.Loop(this, track, -10f);
+            MusicJukebox.Instance.Play(track, -10f); // takes over from the title theme carried in from the menus
+        else
+            MusicJukebox.Instance.Silence();
     }
 
     private void SaveStill(string path) => GetViewport().GetTexture().GetImage().SavePng(path);

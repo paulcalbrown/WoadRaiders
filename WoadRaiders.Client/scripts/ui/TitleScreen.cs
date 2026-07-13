@@ -178,6 +178,7 @@ public partial class TitleScreen : Control
 
     private void SaveStill(string path) => GetViewport().GetTexture().GetImage().SavePng(path);
 
-    /// <summary>Loop the title theme, rendered by tools/GenerateTitleMusic.cs.</summary>
-    private void PlayMusic() => MusicPlayer.Loop(this, "res://assets/audio/title_theme.wav", -6f);
+    /// <summary>Carry the title theme (rendered by tools/GenerateTitleMusic.cs)
+    /// through the jukebox, so it keeps playing unbroken into the next screen.</summary>
+    private void PlayMusic() => MusicJukebox.Instance.PlayTitleTheme();
 }

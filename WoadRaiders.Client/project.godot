@@ -14,6 +14,10 @@ config/name="WoadRaiders"
 run/main_scene="res://screens/TitleScreen.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 
+[autoload]
+
+MusicJukebox="*res://scripts/MusicJukebox.cs"
+
 [display]
 
 window/size/viewport_width=1920

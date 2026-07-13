@@ -3,17 +3,16 @@ using Godot;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// Loads a WAV and plays it as a looping music track. The tracks are rendered
-/// by the tools/Generate*Music.cs file-based apps (dotnet run) — tweak a tune
-/// there and regenerate.
+/// Loads the game's WAV music tracks (rendered by the tools/Generate*Music.cs
+/// file-based apps — tweak a tune there and regenerate). Playback itself is owned
+/// by the autoloaded <see cref="MusicJukebox"/>, which keeps a single persistent
+/// player alive across scene changes so a theme carries seamlessly between screens.
 /// </summary>
 public static class MusicPlayer
 {
-    /// <summary>Start <paramref name="resPath"/> looping under <paramref name="parent"/>,
-    /// or return null if the file is absent (silence, never a crash). The player
-    /// is a child of the caller, so freeing the caller — a scene change — stops
-    /// the music.</summary>
-    public static AudioStreamPlayer? Loop(Node parent, string resPath, float volumeDb)
+    /// <summary>Load <paramref name="resPath"/> as a forward-looping stream, or
+    /// return null if the file is absent (silence, never a crash).</summary>
+    public static AudioStreamWav? LoadLooping(string resPath)
     {
         var stream = Load(resPath);
         if (stream == null)
@@ -24,11 +23,7 @@ public static class MusicPlayer
         stream.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
         stream.LoopBegin = 0;
         stream.LoopEnd = stream.Data.Length / 2; // 16-bit mono: two bytes per frame
-
-        var player = new AudioStreamPlayer { Stream = stream, VolumeDb = volumeDb };
-        parent.AddChild(player);
-        player.Play();
-        return player;
+        return stream;
     }
 
     /// <summary>True if a track exists at <paramref name="resPath"/> (imported or raw).</summary>
