@@ -334,6 +334,12 @@ public sealed class WorldSnapshotPacket : INetSerializable
     public GroundItemSnapshot[] GroundItems = System.Array.Empty<GroundItemSnapshot>();
     public ProjectileSnapshot[] Projectiles = System.Array.Empty<ProjectileSnapshot>();
 
+    /// <summary>The exit portal, once the boss has fallen. Walking into it ends the run.</summary>
+    public bool PortalOpen;
+    public float PortalX;
+    public float PortalY;
+    public float PortalZ;
+
     public void Serialize(NetDataWriter w)
     {
         w.Put(ServerTick);
@@ -353,6 +359,11 @@ public sealed class WorldSnapshotPacket : INetSerializable
         w.Put((ushort)Projectiles.Length);
         foreach (var p in Projectiles)
             p.Serialize(w);
+
+        w.Put(PortalOpen);
+        w.Put(PortalX);
+        w.Put(PortalY);
+        w.Put(PortalZ);
     }
 
     public void Deserialize(NetDataReader r)
@@ -394,6 +405,11 @@ public sealed class WorldSnapshotPacket : INetSerializable
             p.Deserialize(r);
             Projectiles[i] = p;
         }
+
+        PortalOpen = r.GetBool();
+        PortalX = r.GetFloat();
+        PortalY = r.GetFloat();
+        PortalZ = r.GetFloat();
     }
 }
 
@@ -505,6 +521,41 @@ public sealed class DungeonGeometryPacket : INetSerializable
         Boxes = new float[count * 6];
         for (var i = 0; i < Boxes.Length; i++)
             Boxes[i] = r.GetFloat();
+    }
+}
+
+/// <summary>
+/// Server → one client. Their run is over — they stepped through the boss
+/// portal. Carries the summary the client shows before returning to the menus;
+/// the connection is unbound from the instance the moment this is sent.
+/// </summary>
+public sealed class RunCompletePacket : INetSerializable
+{
+    public byte Dungeon;          // DungeonId that was raided
+    public string RaidName = "";  // the instance's name, for the summary heading
+    public int DurationSeconds;   // this player's time inside
+    public int Gold;              // coins carried out
+    public int ItemsLooted;       // equipment pieces carried out
+    public int FoesSlain;         // the warband's shared kill tally
+
+    public void Serialize(NetDataWriter w)
+    {
+        w.Put(Dungeon);
+        w.Put(RaidName);
+        w.Put(DurationSeconds);
+        w.Put(Gold);
+        w.Put(ItemsLooted);
+        w.Put(FoesSlain);
+    }
+
+    public void Deserialize(NetDataReader r)
+    {
+        Dungeon = r.GetByte();
+        RaidName = r.GetString();
+        DurationSeconds = r.GetInt();
+        Gold = r.GetInt();
+        ItemsLooted = r.GetInt();
+        FoesSlain = r.GetInt();
     }
 }
 

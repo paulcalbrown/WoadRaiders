@@ -57,5 +57,9 @@ public static class WorldSnapshot
             Z = p.Position.Z,
             Kind = (byte)p.Kind,
         }).ToArray(),
+        PortalOpen = world.Portal is not null,
+        PortalX = world.Portal?.X ?? 0f,
+        PortalY = world.Portal?.Y ?? 0f,
+        PortalZ = world.Portal?.Z ?? 0f,
     };
 }

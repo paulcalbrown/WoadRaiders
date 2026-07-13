@@ -17,6 +17,7 @@ public sealed class GameWorld
     private readonly Dictionary<int, GroundItem> _groundItems = new();
     private readonly Dictionary<int, ProjectileState> _projectiles = new();
     private readonly List<LootPickup> _pickups = new();
+    private readonly List<PortalExit> _portalExits = new();
     private readonly Random _rng;
     private int _nextEnemyId = 1;
     private int _nextItemId = 1;
@@ -40,11 +41,21 @@ public sealed class GameWorld
     /// <summary>How many fixed steps have been simulated since the world began.</summary>
     public int Tick { get; private set; }
 
+    /// <summary>Where the exit portal stands, once the boss has fallen (null before).</summary>
+    public Vector3? Portal { get; private set; }
+
+    /// <summary>Every enemy slain in this world so far — the warband's shared tally.</summary>
+    public int EnemiesSlain { get; private set; }
+
+    /// <summary>Open the exit portal. The first opening sticks; later calls (a
+    /// respawned boss falling again) leave the standing portal alone.</summary>
+    public void OpenPortal(Vector3 position) => Portal ??= position;
+
     // --- players ---
 
     public PlayerState AddPlayer(int id, string name, CharacterClass cls = CharacterClass.Knight)
     {
-        var player = new PlayerState(id, name, cls);
+        var player = new PlayerState(id, name, cls) { JoinTick = Tick };
         _players[id] = player;
         _inputs[id] = default;
         return player;
@@ -123,6 +134,21 @@ public sealed class GameWorld
         return drained;
     }
 
+    /// <summary>
+    /// Returns the portal exits that happened since the last call, then clears the
+    /// buffer. Each exited player is already out of the world (removed the tick
+    /// they stepped through); the host drains this to send their run summaries.
+    /// </summary>
+    public IReadOnlyList<PortalExit> ConsumePortalExits()
+    {
+        if (_portalExits.Count == 0)
+            return Array.Empty<PortalExit>();
+
+        var drained = _portalExits.ToArray();
+        _portalExits.Clear();
+        return drained;
+    }
+
     // --- simulation ---
 
     /// <summary>Advance the simulation by exactly one fixed tick.</summary>
@@ -137,9 +163,38 @@ public sealed class GameWorld
         UpdateProjectiles(dt);   // bolts travel and strike
         ResolveEnemyDeaths();    // roll drops, then remove the slain
         ResolvePickups();        // players auto-collect nearby loot
+        ResolvePortalExits();    // after pickups, so loot grabbed at the threshold counts
         RespawnDeadPlayers();
 
         Tick++;
+    }
+
+    /// <summary>
+    /// Walk any player standing in the open portal out of the dungeon: record
+    /// their haul as a <see cref="PortalExit"/> and remove them from the world in
+    /// the same tick, so they never appear in another snapshot (and can't exit
+    /// twice under server catch-up stepping).
+    /// </summary>
+    private void ResolvePortalExits()
+    {
+        if (Portal is not { } portal)
+            return;
+
+        List<PlayerState>? exiting = null;
+        var radiusSq = SimConstants.PortalRadius * SimConstants.PortalRadius;
+        foreach (var player in _players.Values)
+            if (player.IsAlive && Vector3.DistanceSquared(player.Position, portal) <= radiusSq)
+                (exiting ??= new List<PlayerState>()).Add(player);
+
+        if (exiting is null)
+            return;
+
+        foreach (var player in exiting)
+        {
+            _portalExits.Add(new PortalExit(
+                player.Id, player.Name, player.Gold, player.Inventory.Count, Tick - player.JoinTick));
+            RemovePlayer(player.Id);
+        }
     }
 
     private void TickCooldowns(float dt)
@@ -474,6 +529,7 @@ public sealed class GameWorld
                 DropPotion(enemy.Position + new Vector3(-14f, 0f, 10f));
 
             _enemies.Remove(id);
+            EnemiesSlain++;
         }
     }
 

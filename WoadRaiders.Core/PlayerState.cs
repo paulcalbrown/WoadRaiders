@@ -34,6 +34,9 @@ public sealed class PlayerState : Combatant
     /// <summary>Coins collected this session. No spend sink yet — shops will come.</summary>
     public int Gold;
 
+    /// <summary>The world tick this player joined on — the run-summary clock starts here.</summary>
+    public int JoinTick;
+
     /// <summary>Currently equipped item per slot.</summary>
     public Dictionary<EquipSlot, Item> Equipped { get; } = new();
 

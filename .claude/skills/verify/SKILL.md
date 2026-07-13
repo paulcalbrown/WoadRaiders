@@ -42,6 +42,10 @@ tools/<Probe>.cs` with the server up):
 - `InstanceProbe.cs` drives four clients through the instance flow: forge,
   browse the list, join by id, cross-instance isolation, and the
   JoinDenied path. Run it against a FRESH server.
+- `PortalProbe.cs` verifies the end-of-run chain: kill the boss, the portal
+  opens in the snapshot, walking in yields a RunComplete and removal from
+  the world. It needs the tiny arena so the fight is fast — start the server
+  with `--map tools/maps/portal_arena.json`.
 Adapt their skeletons for new protocol checks.
 
 A minimal console probe (project ref to `WoadRaiders.Shared`, LiteNetLib comes

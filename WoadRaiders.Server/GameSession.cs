@@ -24,8 +24,16 @@ internal sealed class GameSession
 
         // The session owns the wording of match events so the transport layer never has
         // to know about the boss (its name, its respawn timing) — it just relays Notice.
-        _director.BossFell += () => Raise(SessionEventKind.BossFell,
-            $"The Barrow King has fallen! He returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
+        // The boss falling opens the exit portal where he stood; walking into it ends a
+        // player's run (GameWorld detects the step-through; ConsumePortalExits reports it).
+        _director.BossFell += () =>
+        {
+            if (_dungeon.BossSpawn is { } bossPos)
+                _world.OpenPortal(bossPos);
+            Raise(SessionEventKind.BossFell,
+                $"The Barrow King has fallen! A portal tears open in his chamber — " +
+                $"he returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
+        };
         _director.BossRose += () => Raise(SessionEventKind.BossRose, "The Barrow King rises again.");
     }
 
@@ -110,6 +118,28 @@ internal sealed class GameSession
     /// <summary>Loot collected since the last call, for the server to deliver to each player.</summary>
     public IReadOnlyList<LootPickup> ConsumePickups() => _world.ConsumePickups();
 
+    /// <summary>
+    /// Players who stepped through the boss portal since the last call, each with
+    /// their run summary. The world already removed them the tick they exited;
+    /// this also clears their input buffers, finishing the session-side removal.
+    /// </summary>
+    public IReadOnlyList<RunReport> ConsumePortalExits()
+    {
+        var exits = _world.ConsumePortalExits();
+        if (exits.Count == 0)
+            return Array.Empty<RunReport>();
+
+        var reports = new RunReport[exits.Count];
+        for (var i = 0; i < exits.Count; i++)
+        {
+            var exit = exits[i];
+            reports[i] = new RunReport(exit.PlayerId, exit.PlayerName, exit.Gold, exit.ItemsLooted,
+                exit.DurationTicks / SimConstants.TickRate, _world.EnemiesSlain);
+            RemovePlayer(exit.PlayerId); // world part is a no-op; drops the input buffer
+        }
+        return reports;
+    }
+
     /// <summary>Try to equip an item; returns the resulting loadout to send back, or null on no-op.</summary>
     public EquipOutcome? TryEquip(int playerId, int itemId)
     {
@@ -133,6 +163,11 @@ internal sealed class GameSession
 /// <summary>A player's equipped item ids and derived combat stats after an equip.</summary>
 internal readonly record struct EquipOutcome(
     int WeaponId, int ArmorId, int TrinketId, float AttackDamage, float DamageReduction);
+
+/// <summary>One finished run: what a player carried out through the portal.
+/// FoesSlain is the warband's shared tally, not this player's alone.</summary>
+internal readonly record struct RunReport(
+    int PlayerId, string PlayerName, int Gold, int ItemsLooted, int DurationSeconds, int FoesSlain);
 
 /// <summary>A notable match event — for host logging now, telemetry or client notices later.</summary>
 internal readonly record struct SessionEvent(SessionEventKind Kind, string Message);

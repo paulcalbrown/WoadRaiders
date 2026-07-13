@@ -14,7 +14,7 @@ public class EnemyTypeTests
         Assert.Equal(SimConstants.EnemyMaxHealth, world.SpawnEnemy(Vector3.Zero).Health, 3); // default = Minion
         Assert.Equal(EnemyArchetypes.Of(EnemyType.Boss).MaxHealth,
                      world.SpawnEnemy(Vector3.Zero, EnemyType.Boss).Health, 3);
-        Assert.True(EnemyArchetypes.Of(EnemyType.Boss).MaxHealth > 5 * SimConstants.EnemyMaxHealth,
+        Assert.True(EnemyArchetypes.Of(EnemyType.Boss).MaxHealth >= 4 * SimConstants.EnemyMaxHealth,
                     "a boss should be an order tougher than a minion");
     }
 

@@ -93,6 +93,10 @@ public static class SimConstants
     /// <summary>How close (units) a returning enemy must get to its post before it settles.</summary>
     public const float EnemyHomeEpsilon = 8f;
 
+    // --- The exit portal (opens when the boss falls) ---
+    /// <summary>How close a player must stand to the portal to step through it.</summary>
+    public const float PortalRadius = 55f;
+
     // --- Projectiles (mage spell bolts) ---
     /// <summary>Bolt radius on the XZ plane (added to the target's radius for a hit).</summary>
     public const float ProjectileRadius = 10f;

@@ -42,4 +42,7 @@ public enum MessageType : byte
 
     /// <summary>Server → one client: your join was refused (gone/full); pick again.</summary>
     JoinDenied = 11,
+
+    /// <summary>Server → one client: you stepped through the portal — run over, here is your summary.</summary>
+    RunComplete = 12,
 }

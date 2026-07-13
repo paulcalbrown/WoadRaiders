@@ -423,7 +423,10 @@ public sealed class GameServer
                 _log.Info($"[!] Sim stalled {plan.Dropped.TotalMilliseconds:0} ms beyond the catch-up cap — dropping the lost time.");
 
             foreach (var instance in _instances.Values)
+            {
                 DeliverPickups(instance.Session);
+                DeliverPortalExits(instance);
+            }
 
             if (plan.Snapshot)
             {
@@ -435,6 +438,42 @@ public sealed class GameServer
             // Yield a slice so we poll often (low input latency) without busy-waiting.
             // With the raised timer resolution this wakes in ~1-2 ms, not ~15 ms.
             Thread.Sleep(1);
+        }
+    }
+
+    /// <summary>
+    /// Walk each raider who stepped through the boss portal out of their instance:
+    /// send their run summary, then unbind the connection (it survives — the client
+    /// moves on to its summary screen and disconnects, or browses anew). The sim
+    /// already removed their player, so no snapshot shows them again.
+    /// </summary>
+    private void DeliverPortalExits(Instance instance)
+    {
+        foreach (var report in instance.Session.ConsumePortalExits())
+        {
+            if (!_connections.TryGetValue(report.PlayerId, out var connection)
+                || connection.Instance != instance.Id)
+                continue; // exited and vanished in the same beat — nothing to tell
+
+            var packet = new RunCompletePacket
+            {
+                Dungeon = (byte)instance.Dungeon,
+                RaidName = instance.Name,
+                DurationSeconds = report.DurationSeconds,
+                Gold = report.Gold,
+                ItemsLooted = report.ItemsLooted,
+                FoesSlain = report.FoesSlain,
+            };
+            connection.Peer.Send(NetProtocol.Frame(MessageType.RunComplete, packet), Channel, DeliveryMethod.ReliableOrdered);
+
+            connection.Instance = null;
+            instance.Players--;
+            if (instance.Players <= 0)
+                instance.EmptySince = _clock.Elapsed; // the reaper takes it from here
+
+            _log.Info($"[exit] Player {report.PlayerId} \"{report.PlayerName}\" stepped through the portal " +
+                      $"out of \"{instance.Name}\" (#{instance.Id}) after {report.DurationSeconds}s — " +
+                      $"{report.Gold} gold, {report.ItemsLooted} relics, {report.FoesSlain} foes felled by the warband");
         }
     }
 

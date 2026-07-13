@@ -130,6 +130,7 @@ public sealed class WorldView
     private const float GlowHeight = 12f;    // sits within the fitted prop
 
     private double _elapsed; // drives the loot bob
+    private PortalView? _portal; // the exit portal, standing while the snapshot says it is open
 
     public WorldView(Node3D parent)
     {
@@ -228,6 +229,20 @@ public sealed class WorldView
             view.Target = pos;
         }
         _projectiles.Prune();
+
+        // The exit portal is a singleton: stand it up the first snapshot that
+        // carries it, tear it down if the server stops sending it (a reconnect
+        // landing in a fresh instance whose boss still stands).
+        if (snapshot.PortalOpen && _portal is null)
+        {
+            _portal = new PortalView { Position = new Vector3(snapshot.PortalX, snapshot.PortalY, snapshot.PortalZ) };
+            _parent.AddChild(_portal);
+        }
+        else if (!snapshot.PortalOpen && _portal is not null)
+        {
+            _portal.QueueFree();
+            _portal = null;
+        }
     }
 
     /// <summary>

@@ -63,7 +63,18 @@ public partial class GothicButton : Button
         AddThemeStyleboxOverride("pressed", pressed);
         SetHighlight(0f);
 
-        MouseEntered += () => { _hovered = true; Retarget(); };
+        // Hover takes keyboard focus (like DungeonCard): hover and focus ignite
+        // identically, so if they could point at different buttons, one would
+        // stay lit "selected" while another glowed under the mouse — and Enter
+        // would fire the stale one. Never steal focus from a text field though;
+        // brushing past a button mid-typing must not interrupt the typing.
+        MouseEntered += () =>
+        {
+            _hovered = true;
+            if (!Disabled && GetViewport().GuiGetFocusOwner() is null or GothicButton)
+                GrabFocus();
+            Retarget();
+        };
         MouseExited += () => { _hovered = false; Retarget(); };
         FocusEntered += () => { _focused = true; Retarget(); };
         FocusExited += () => { _focused = false; Retarget(); };
@@ -120,7 +131,15 @@ public partial class GothicButton : Button
             DrawPolyline(over, green, 1.6f, true);
         }
 
-        // Knot spearheads sliding in from the sides.
+        // Knot spearheads sliding in from the sides — but only when there is
+        // clear gutter beside the label. On a narrow button (or a long label)
+        // they would stab straight through the text; the art spans ~41px from
+        // the edge plus the 14px slide-in, so it needs ~56px of clear side.
+        var font = GetThemeFont("font");
+        var textWidth = font.GetStringSize(Text, HorizontalAlignment.Center, -1, GetThemeFontSize("font_size")).X;
+        if ((Size.X - textWidth) / 2f < 56f)
+            return;
+
         float slide = (1f - _highlight) * 14f;
         DrawSpearhead(new Vector2(20f - slide, Size.Y / 2f), 1, green, woad);
         DrawSpearhead(new Vector2(Size.X - 20f + slide, Size.Y / 2f), -1, green, woad);

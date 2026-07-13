@@ -42,6 +42,7 @@ public partial class GameScreen : Node3D
     private Node3D? _mapRoot;            // all dungeon visuals live under here, so a map swap can rebuild them
     private int? _builtMapFingerprint;   // fingerprint of the map the visuals were built for
     private AudioStreamPlayer? _music;   // the current map's looping theme
+    private bool _portalAnnounced;       // the "way opens" banner fires once per session
 
     public override void _Ready()
     {
@@ -82,6 +83,7 @@ public partial class GameScreen : Node3D
         _connection.ItemPickedUp += OnItemPickedUp;
         _connection.EquipmentUpdated += OnEquipmentUpdate;
         _connection.JoinDenied += OnJoinDenied;
+        _connection.RunCompleted += OnRunComplete;
         _connection.Start();
     }
 
@@ -91,6 +93,13 @@ public partial class GameScreen : Node3D
         // before Advance ticks prediction, and the views must move before the
         // fader and camera read the render position.
         _connection.Poll(delta);
+
+        // A handler fired during Poll (run complete, join denied) can swap the
+        // scene out — Godot pulls this node from the tree immediately and frees
+        // it at frame's end. The rest of the frame reads the tree (LookAt needs
+        // a global transform), so stop here on the way out.
+        if (!IsInsideTree())
+            return;
 
         // Freeze prediction while the link is down: the world is frozen too, and
         // walking a ghost through it would only earn a big snap on rejoin.
@@ -244,14 +253,34 @@ public partial class GameScreen : Node3D
 
         // A reconnect is a brand-new join server-side — fresh player id, empty
         // inventory, full health, fresh input buffer. Mirror that exactly.
+        // (The portal banner may fire again: a rejoined world is news again.)
+        _portalAnnounced = false;
         _state.Reset();
         _localPlayer.BeginSession(welcome.PlayerId, _geometry?.SpawnPoint ?? SysVec3.Zero, _geometry,
                                   ClientConfig.PlayerClass);
         GD.Print($"Joined instance #{welcome.InstanceId} as player {welcome.PlayerId} ({ClientConfig.PlayerClass})");
     }
 
+    /// <summary>The boss has fallen and the way out stands open — the server pulled us
+    /// through the portal. Hand the report to the summary screen and leave the match.</summary>
+    private void OnRunComplete(RunCompletePacket run)
+    {
+        RunSummaryScreen.Summary = run;
+        GD.Print($"Run complete — {run.Gold} gold, {run.ItemsLooted} relics, " +
+                 $"{run.FoesSlain} foes felled in {run.DurationSeconds}s.");
+        GetTree().ChangeSceneToFile(RunSummaryScreen.ScenePath); // _ExitTree closes the connection
+    }
+
     private void OnSnapshot(WorldSnapshotPacket snapshot)
     {
+        // Announce the portal the first time it appears — the whole warband sees
+        // the way open the moment the boss falls, wherever they stand.
+        if (snapshot.PortalOpen && !_portalAnnounced)
+        {
+            _portalAnnounced = true;
+            _hud.AnnounceLocation("The Way Opens");
+        }
+
         foreach (var p in snapshot.Players)
         {
             if (p.Id != _localPlayer.PlayerId)

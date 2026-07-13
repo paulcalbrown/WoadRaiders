@@ -64,6 +64,7 @@ public sealed class ClientConnection
     public event Action<EquipmentUpdatePacket>? EquipmentUpdated;
     public event Action<InstanceListPacket>? InstanceListReceived;
     public event Action<JoinDeniedPacket>? JoinDenied;
+    public event Action<RunCompletePacket>? RunCompleted;
 
     public ClientConnection(string host, int port)
     {
@@ -98,6 +99,7 @@ public sealed class ClientConnection
             [MessageType.ItemPickedUp] = r => ItemPickedUp?.Invoke(Read<ItemPickedUpPacket>(r)),
             [MessageType.EquipmentUpdate] = r => EquipmentUpdated?.Invoke(Read<EquipmentUpdatePacket>(r)),
             [MessageType.InstanceList] = r => InstanceListReceived?.Invoke(Read<InstanceListPacket>(r)),
+            [MessageType.RunComplete] = r => RunCompleted?.Invoke(Read<RunCompletePacket>(r)),
             [MessageType.JoinDenied] = r =>
             {
                 // The server refused the join but kept the connection — back to

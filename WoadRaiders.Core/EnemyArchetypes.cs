@@ -42,7 +42,7 @@ public static class EnemyArchetypes
             SimConstants.EnemyAttackCooldown, 480f, 0, SimConstants.CharacterRadius), // Minion
         new(40f, 200f, 2f, 44f, 0.9f, 560f, 0, SimConstants.CharacterRadius),        // Rogue
         new(45f, 110f, 6f, 180f, 2.5f, 620f, 0, SimConstants.CharacterRadius, 460f), // Mage — fires a spell bolt
-        new(600f, 105f, 12f, 70f, 2.0f, 520f, 3, 30f),                                // Boss — drops are guaranteed
+        new(300f, 105f, 12f, 70f, 2.0f, 520f, 3, 30f),                                // Boss — drops are guaranteed
     };
 
     public static EnemyArchetype Of(EnemyType type) => Table[(int)type];
