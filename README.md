@@ -4,8 +4,9 @@ A public co-op, **server-authoritative** ARPG dungeon crawler (Celtic/Pictish wo
 theme), rendered in **3D isometric**. Real-time action, loot, hand-crafted dungeons — built so that
 online multiplayer with matchmaking is a first-class concern from day one, not a bolt-on.
 
-This repository is the **architecture scaffold**: a working client ⇄ dedicated-server skeleton
-you can grow the actual game on top of.
+What started as an architecture scaffold is now a playable slice: pick one of **four classes**,
+choose a dungeon, **forge or join a raid instance** with up to 8 players, fight through to the
+boss, and step out through the portal to a run summary.
 
 ---
 
@@ -47,14 +48,22 @@ When your Godot build runs on .NET 10, flip the client to `net10.0` and you can 
 target from `Core`/`Shared`.
 
 ### Networking model
-- Transport: **LiteNetLib 2.x** (reliable UDP). All gameplay traffic on channel 0.
-- `Welcome` / `JoinRequest` / `Input`: `ReliableOrdered` (must arrive, in order). Input is
-  reliable-ordered so the server's per-player **input buffer** receives every input exactly once,
-  in sequence — it applies one per tick, replaying the client's stream 1:1, so reconciliation
-  introduces ~zero correction (no prediction pop).
-- `WorldSnapshot`: `Sequenced` (unreliable, but never delivers a stale snapshot after a newer one —
-  ideal for high-frequency state).
-- Server steps the simulation at **30 Hz** and broadcasts snapshots at **20 Hz**.
+- Transport: **LiteNetLib 2.x** (reliable UDP). All gameplay traffic on channel 0; the delivery
+  method varies per packet.
+- `Welcome` / `JoinRequest` / `Input` (and the other request/event packets): `ReliableOrdered`
+  (must arrive, in order). Input is reliable-ordered so the server's per-player **input buffer**
+  receives every input exactly once, in sequence — it applies one per tick, replaying the
+  client's stream 1:1, so reconciliation introduces ~zero correction (no prediction pop).
+- `WorldSnapshot`: **chunked over `Unreliable`** (`SnapshotChunks`). Unreliable delivery caps a
+  packet at ~one MTU and never fragments, but the world's size is unbounded (enemies respawn,
+  loot piles up) — so every snapshot is framed as one or more tick-stamped chunks (most fit in
+  one), and the client's `SnapshotAssembler` reassembles them with a tick guard that restores
+  the never-deliver-stale property the old Sequenced channel provided.
+- The **connection key** (`WoadRaiders.v12`) is bumped whenever the wire format changes — the
+  only build-compatibility gate at connect time. Inbound messages are **rate-limited per
+  connection** (token bucket), so one hot client can't starve the loop.
+- The server steps each instance's simulation at **30 Hz** and broadcasts snapshots at **20 Hz**;
+  it hosts up to **16 live instances** of **8 raiders** each.
 
 ---
 
@@ -63,9 +72,13 @@ target from `Core`/`Shared`.
 ### 1. The dedicated server (works today, no engine needed)
 ```bash
 dotnet run --project WoadRaiders.Server
-# → WoadRaiders dedicated server listening on udp/9050 (sim 30Hz, snapshots 20Hz)
+# → WoadRaiders dedicated server listening on udp/9050 (2 maps, up to 16 instances
+#   of 8 raiders; sim 30Hz, snapshots 20Hz). Ctrl+C to stop.
 ```
-Optional custom port: `dotnet run --project WoadRaiders.Server -- 9060`
+Without arguments it loads **every catalog dungeon** (The Barrow, The Cairn) from the client's
+`maps/` directory and lets players forge/join instances of them. Options: a bare number sets the
+port (`… -- 9060`); `--map path/to/map.json` pins every instance to one map (dev convenience
+for map work, e.g. `--map WoadRaiders.Client/maps/TestArena.json`).
 
 ### 2. The Godot client
 Requires the **.NET/Mono build** of Godot (installed here as **Godot 4.7** via Scoop — the CLI
@@ -73,20 +86,31 @@ command is `godot-mono`). The client csproj is pinned to `Godot.NET.Sdk/4.7.0` t
 two in lockstep if you upgrade Godot.
 1. Open the `WoadRaiders.Client` folder in the Godot editor once (it generates the `.godot/`
    import cache), then press **Play**. From the CLI: `godot-mono --path WoadRaiders.Client`.
-2. An orthographic isometric camera eases after you (with directional shadows). **Arrows** move,
-   **Space** attacks (a frontal melee strike — face your target), **I** opens the inventory
-   (**1-9** to equip). You're a **Knight**,
-   other players are **Barbarians**, and the dead walk: **skeleton minions** chase you down,
-   **skeleton rogues** dart in fast, **skeleton mages** zap you from range, and the **Barrow
-   King** — a hulking armored skeleton — waits in his throne room at the far end of the map
-   (slay him for a guaranteed pile of loot; he rises again two minutes later). All animated
-   KayKit characters that face their movement and play idle/run/attack clips (enemies carry
-   billboard health bars). Loot spins and glows by rarity. Walls between you and the camera
-   fade out.
+2. The flow: a Celtic/gothic **title screen** (your name + server endpoint, defaulting to
+   `127.0.0.1:9050`) → **character select** (Knight, Rogue, Mage, or Ranger — per-class stats
+   live in `Core.ClassArchetypes`; Mage and Ranger fire real projectiles) → **dungeon select**
+   (The Barrow or The Cairn) → the **raid browser**, where you forge a fresh instance or join a
+   live one → the run itself. You arrive through a blue entrance portal; fellow raiders wear
+   overhead nameplates with woad-blue health bars. Kill the **Barrow King** and a green exit
+   portal opens — step through it to end the run on a **summary screen** (time, gold, relics,
+   the warband's kill tally). Generated chiptune themes play throughout; a music autoload
+   carries the menu theme seamlessly across screens.
+3. Controls: **WASD/arrows** move, **right-click** (hold) paths toward the cursor,
+   **left-click** attacks aimed at the cursor, **Space** attacks in your current facing,
+   **I** opens the inventory (**1-9** to equip), **Esc** backs out. Skeleton **minions** chase
+   you down, **rogues** dart in fast, **mages** zap you from range, and the Barrow King —
+   a hulking armored skeleton — waits in his throne room. All animated KayKit characters that
+   face their movement and play idle/run/attack clips (enemies carry billboard health bars;
+   your health bar sits at the top of the screen with a "recently lost" damage-chip trail).
+   Loot spins and glows by rarity. Walls between you and the camera fade out.
+   (Dev flags: `--play` skips straight into the game, `--select` to the class picker,
+   `--screenshot` saves title stills and exits.)
 
 ### 3. A two-player local test
 Start the server, then launch **two** client instances (Godot editor "Play" + an exported build,
-or two editor windows). Both characters are driven by the same authoritative server.
+or two editor windows). Forge a raid in the first client; it then appears in the second client's
+raid browser — join it and both characters share one authoritative instance. (Two clients that
+each *forge* get isolated worlds — that's the instancing working as intended.)
 
 ### 4. Run the tests
 ```bash
@@ -108,17 +132,31 @@ core loop earns it.
       unit-tested), replaying the client's stream 1:1 so reconciliation introduces ~zero correction
       — the drift that caused the visible prediction pop is gone at the source (the smoke test
       asserts `maxCorrection ≈ 0`). Input is sent `ReliableOrdered` so nothing is lost or reordered.
+- [x] **Snapshot chunking** — world snapshots are split across UDP-sized chunks
+      (`Shared.SnapshotChunks` + `SnapshotAssembler`), so an unbounded world can never outgrow
+      a packet and crash the server. Every snapshot takes the chunked path, so the multi-chunk
+      code is exercised constantly rather than only on the day the world finally gets big.
 - [ ] **Remote interpolation** — buffer timestamped snapshots and render remote players ~100 ms in
       the past for smoothness (currently a simple ease-toward-latest).
 - [x] **Combat (first pass)** — server-authoritative directional melee (a frontal cleave: every
       enemy in front and within reach takes the hit — not a 360° area sweep), enemies with
-      seek/attack AI, damage, enemy death + respawn, player respawn. **Mages fire authoritative
-      spell bolts** — a real projectile that travels, is blocked by walls, and can be side-stepped
-      (damage lands on impact, not on cast). Logic in `Core`, unit-tested. Client sends only the
-      attack intent; the client predicts movement, never damage.
-- [ ] **Combat polish** — directional/aimed attacks, on-screen health bars, downed state + revive,
-      more enemy types, attack telegraphs. (Currently: frontal-cleave strike, immediate
-      respawn at origin.)
+      seek/attack AI, damage, enemy death + respawn, player respawn. Attacks are **aimed**:
+      left-click swings toward the cursor (the aim ships in the input packet). **Casters fire
+      authoritative spell bolts** — real projectiles that travel, are blocked by walls, and can
+      be side-stepped (damage lands on impact, not on cast). Logic in `Core`, unit-tested. The
+      client predicts movement, never damage.
+- [x] **Four playable classes** — Knight (armored line-holder), Rogue (fast, fragile,
+      knife-quick), Mage (slow glass cannon, heavy bolts), Ranger (skirmisher, rapid light
+      bolts), picked on a character-select screen. The stat table (`Core.ClassArchetypes`)
+      is shared by server, prediction, and tests; the class ships as a byte in the join
+      request and player snapshots and picks the client's KayKit adventurer model and gear.
+- [x] **Health bars & presentation pass** — a top-of-screen player health bar and enemy
+      billboard bars, both with a "recently lost health" **damage-chip** trail (`Core.DamageChip`,
+      unit-tested); overhead **nameplates** on fellow raiders (woad-blue vs enemy red); a
+      downward faction-coloured spotlight on every character; arrivals staged through a blue
+      **entrance portal** with a walk-out (pure render effect — prediction untouched).
+- [ ] **Combat polish** — downed state + revive, more enemy types, attack telegraphs.
+      (Currently: immediate respawn at origin.)
 - [x] **3D simulation** — `Core` simulates in full 3D world space (`System.Numerics.Vector3`,
       **Y-up**, matching Godot and glTF conventions, so the client maps sim positions 1:1). Dungeon
       shape sits behind the `IDungeonGeometry` seam. Movement input stays 2D ground-plane intent
@@ -130,12 +168,12 @@ core loop earns it.
 - [x] **Hand-crafted maps from the Godot editor** — author any scene with `CollisionShape3D`/
       `BoxShape3D` solids, a `Marker3D` named `PlayerSpawn`, typed `EnemySpawn*` markers (name
       contains `Rogue`/`Mage` for those types), and an optional `BossSpawn`, then export
-      it with `tools/export_dungeon.gd` (runs headless) to JSON; serve it with
-      `dotnet run --project WoadRaiders.Server -- --map maps/YourMap.json`. `maps/TestArena.tscn` is
-      a working example, and the server defaults to it when run without `--map`. **Maps are the only
-      way dungeons exist** — procedural generation has been removed by design (hand-crafted maps are
-      the product direction).
-- [x] **Dungeon art pass** — hand-crafted maps now **render their own Godot scene** (meshes,
+      it with `WoadRaiders.Client/tools/export_dungeon.gd` (runs headless) to JSON; serve it with
+      `dotnet run --project WoadRaiders.Server -- --map maps/YourMap.json`. `maps/TestArena.tscn`
+      is a working example. **The game only ever consumes map files** — runtime procedural
+      generation stays out by design; the shipping dungeons are hand-crafted or generated
+      *offline* into the same static format (see The Cairn below).
+- [x] **Dungeon art pass** — hand-crafted maps **render their own Godot scene** (meshes,
       materials, lights authored in the editor; the collision boxes stay the sim truth). The export
       tool records the source scene in the JSON; the server passes it over the wire; the client
       instantiates it — falling back to placeholder textured boxes if the scene is missing. The wall
@@ -147,37 +185,65 @@ core loop earns it.
       a sprawling dungeon built from it: entry hall, twin pillared halls, a north wing (shrine,
       storeroom, mage reliquary), a south wing (columned crypt, rogue ossuary), and a grand
       processional east to the antechamber and the **Barrow King's throne room** — all joined by
-      looping corridors, with auto-placed wall torches, banners, and props (918 floor tiles, 474
-      collision solids). Enemy density and **mix** are map-driven: the server spawns 1 enemy per
-      typed `EnemySpawn` marker (clamped 4–40), replenished one every 6 s. Serve it with
-      `dotnet run --project WoadRaiders.Server -- --map WoadRaiders.Client/maps/Barrow.json`.
-      Kit pieces are on a 4-unit grid, placed under a ×20-scaled `Visuals` node (1 kit tile = 80
-      world units); collision boxes and markers are authored in world units as usual.
+      looping corridors, with auto-placed wall torches, banners, and props (474 collision solids,
+      30 typed enemy spawns). Enemy density and **mix** are map-driven: the server spawns 1 enemy
+      per typed `EnemySpawn` marker (clamped 4–40), replenished one every 6 s. Kit pieces are on a
+      4-unit grid, placed under a ×20-scaled `Visuals` node (1 kit tile = 80 world units);
+      collision boxes and markers are authored in world units as usual.
+- [x] **A second dungeon, generated offline** — `maps/Cairn.tscn` ("The Cairn"), a ring-tomb of
+      standing stones: a central boss rotunda, four radial arms out to a wide ring corridor,
+      stair-stepped passages to four burial chambers, and a western entrance hall. It is
+      *computed* by `tools/GenerateDungeon.cs` (a .NET 10 file-based app:
+      `dotnet run tools/GenerateDungeon.cs`) into the same authored-quality scene + JSON pair
+      the Barrow uses, following its conventions verbatim — and the tool validates its own
+      output (JSON round-trip + a flood fill proving the boss and every spawn are reachable).
+- [x] **Dungeon instances** — the server hosts player-forged **instances**: a join request
+      either forges a fresh instance (its own `GameSession`, world, and enemy population) or
+      enters a live one by id, so separate warbands never share a world. The client's raid
+      browser lists live instances of the chosen dungeon and refreshes while open; denied joins
+      (gone/full) bounce you back with a reason. Emptied instances linger 60 s (a disconnected
+      raider can rejoin), then are reaped. Verified end-to-end by a scripted probe
+      (`tools/InstanceProbe.cs`).
+- [x] **The boss portal & run summary** — when the boss falls, a green **exit portal** opens;
+      stepping through it ends your run and the server sends a `RunComplete` summary (duration,
+      gold, relics looted, the warband's kill tally), shown on a run-summary screen with roads
+      back to character select, dungeon select, or the main menu.
 - [x] **Enemy types & the first boss** — enemies are typed (`EnemyType` + an `EnemyArchetypes`
       stat table in `Core`): **Minions** (baseline melee), **Rogues** (fast, fragile, quick
       stabs), **Mages** (slow casters that strike from range), and the **Boss** (the Barrow
-      King: ~10× minion health, heavy hits, guaranteed triple loot, respawns 120 s after
-      falling). Enemies now **aggro by proximity** (idle at their posts until a player nears —
-      essential on a large map). Maps choose the mix with marker names (`EnemySpawn7_Rogue`,
+      King: heavy hits, guaranteed triple loot, respawns 120 s after falling). Enemies **aggro
+      by proximity** (idle at their posts until a player nears — essential on a large map) and
+      leash back home. Maps choose the mix with marker names (`EnemySpawn7_Rogue`,
       `EnemySpawn12_Mage`, `BossSpawn`); the type ships as a byte on enemy snapshots and picks
       the client model, scale, attack clip, and health-bar size. **Mages are ranged**: they fire
       an authoritative spell bolt (a glowing projectile in the world snapshot) that flies, is
       stopped by walls, and misses if you side-step — so you can dodge a mage but not a minion.
-- [x] **Animated characters** — players and enemies are rigged KayKit characters (Knight,
-      Barbarian, Skeleton) at `addons/kaykit_character_pack_{adventures,skeletons}`. They
-      face their movement direction and play **idle / run / attack** clips. Facing and movement are
+- [x] **Animated characters** — players and enemies are rigged KayKit characters (the
+      adventurer pack's Knight/Rogue/Mage bodies for the four classes, the skeleton pack for
+      enemies) at `addons/kaykit_character_pack_{adventures,skeletons}`. They face their
+      movement direction and play **idle / run / attack** clips. Facing and movement are
       derived client-side from motion; the attack clip is driven by an authoritative `Attacking`
       flag on the snapshot (set when an attack lands, ticked down, broadcast).
 - [ ] **Dungeon content & depth** — more maps and kit variety; BepuPhysics for non-box collision
       and DotRecast navmesh for smarter AI pathing, all behind `IDungeonGeometry`.
 - [ ] **Gauntlet-style dungeons** — enemy generators (destroy to stop the horde), an exit/portal to
       descend to the next level, health-drain + food pickups, keys/doors/gates, themed realms.
-- [x] **Loot (first pass)** — enemies drop themed items on death (rarity-weighted, Celtic/Pict
-      names like "Chieftain's Blade"); players auto-collect nearby drops; server-authoritative
-      per-player inventory with reliable pickup events; ground loot in snapshots. `Core`, unit-tested.
-- [x] **Equipment & inventory** — equip items (I opens inventory, 1-9 equips); weapon/trinket Power
-      boosts your strike, armor soaks incoming damage. Equipping is server-validated. `Core`,
-      unit-tested. This closes the core loop: kill → loot → equip → hit harder.
+- [x] **Loot** — slain enemies drop **gold piles** (75%, added to your purse), **health potions**
+      (50%, consumed on pickup), and **equipment** (50% from common enemies; the boss always pays
+      out): rarity-weighted items with woad-raider names ("Chieftain's Battleaxe", "Morrígan's
+      Dagger") across the KayKit weapon kit's eight types (swords, axes, dagger, staff, crossbow,
+      shield). Players auto-collect nearby drops; the inventory is server-authoritative with
+      reliable pickup events; ground loot rides the snapshots. `Core`, unit-tested.
+- [x] **Equipment & inventory** — equip items (I opens inventory, 1-9 equips); every weapon
+      type boosts your strike's Power, the shield equips to the armor slot and soaks incoming
+      damage (the trinket slot is reserved). Equipping is server-validated. `Core`, unit-tested.
+      This closes the core loop: kill → loot → equip → hit harder.
+- [x] **Title screen, UI dress & music** — a code-first screen flow (title → class → dungeon →
+      raid browser → run → summary) wearing a reusable Celtic/gothic UI kit (knotwork, fog
+      backdrop, blackletter Pirata One type, glowing menu widgets). The **music is generated by
+      code**: `tools/GenerateTitleMusic.cs` and `tools/GenerateBarrowMusic.cs` render looping
+      chiptune WAVs (loop points in the `smpl` chunk), and a `MusicJukebox` autoload carries the
+      menu theme seamlessly across screens and swaps to the dungeon's theme in the run.
 - [ ] **Loot & progression polish** — loot visibility (drops linger/beam before pickup), item
       affixes/multiple stats, character levels/XP, and persistence via PlayFab Economy.
 - [ ] **Matchmaking + managed dedicated hosting + accounts/economy** — planned via **PlayFab**
@@ -194,3 +260,11 @@ core loop earns it.
 | `WoadRaiders.Server` | Headless dedicated server | Core, Shared |
 | `WoadRaiders.Client` | Godot 4 (.NET) game client | Core, Shared |
 | `WoadRaiders.Core.Tests` | Simulation unit tests | Core |
+| `WoadRaiders.Shared.Tests` | Wire-protocol mapper tests | Shared |
+| `WoadRaiders.Server.Tests` | Server-internals tests | Server |
+
+`tools/` holds .NET 10 file-based apps (`dotnet run tools/<Name>.cs`): the Cairn dungeon
+generator, the two music generators, and scripted LiteNetLib **probes** (`ClassProbe`,
+`InstanceProbe`, `PortalProbe`) that verify class stats, instance isolation, and the portal
+flow end-to-end against a running server — no Godot needed. The Godot-side editor tools
+(map export, scene measurement) live in `WoadRaiders.Client/tools/`.
