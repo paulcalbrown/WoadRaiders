@@ -20,6 +20,7 @@ public partial class HudController : CanvasLayer
     private Label _stats = null!;
     private Label _invPanel = null!;
     private Label _status = null!;
+    private Label _location = null!;
     private ColorRect _healthChipRect = null!;
     private ColorRect _healthFillRect = null!;
     private Label _healthLabel = null!;
@@ -83,6 +84,22 @@ public partial class HudController : CanvasLayer
         };
         barBg.AddChild(_healthLabel); // added after the fill → drawn on top
 
+        // The location banner: the dungeon announces itself in blackletter when
+        // its map builds, then fades. Invisible until then.
+        _location = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            AnchorLeft = 0.5f, AnchorRight = 0.5f, AnchorTop = 0f, AnchorBottom = 0f,
+            OffsetLeft = -500f, OffsetRight = 500f, OffsetTop = 90f, OffsetBottom = 190f,
+            Modulate = Colors.Transparent,
+        };
+        _location.AddThemeFontOverride("font", UiTheme.DisplayFont());
+        _location.AddThemeFontSizeOverride("font_size", 64);
+        _location.AddThemeColorOverride("font_color", UiTheme.BoneSilver);
+        _location.AddThemeColorOverride("font_outline_color", new Color(0.02f, 0.04f, 0.03f));
+        _location.AddThemeConstantOverride("outline_size", 10);
+        AddChild(_location);
+
         // Connection banner just under the health bar; empty while Playing.
         _status = new Label
         {
@@ -99,6 +116,16 @@ public partial class HudController : CanvasLayer
     {
         InventoryOpen = !InventoryOpen;
         _invPanel.Visible = InventoryOpen;
+    }
+
+    /// <summary>Announce where the party has arrived; the name lingers, then fades.</summary>
+    public void AnnounceLocation(string name)
+    {
+        _location.Text = name.ToUpperInvariant();
+        _location.Modulate = Colors.White;
+        var tween = _location.CreateTween();
+        tween.TweenInterval(3.0);
+        tween.TweenProperty(_location, "modulate:a", 0f, 1.5f);
     }
 
     /// <summary>Call when a snapshot shows the local player just took a hit.</summary>
@@ -124,7 +151,7 @@ public partial class HudController : CanvasLayer
         _status.Text = connection switch
         {
             ConnectionState.Connecting => "Connecting to server ...",
-            ConnectionState.Joining => "Joining ...",
+            ConnectionState.Lobby or ConnectionState.Joining => "Joining ...",
             ConnectionState.Disconnected => "Connection lost — retrying ...",
             _ => "",
         };

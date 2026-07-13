@@ -1,5 +1,4 @@
 using LiteNetLib;
-using WoadRaiders.Core;
 
 namespace WoadRaiders.Server;
 
@@ -24,6 +23,10 @@ internal sealed class Connection
     }
 
     public NetPeer Peer { get; }
+
+    /// <summary>The instance this peer raids, set when its join request lands
+    /// (null until then — a connected-but-not-joined peer is in no instance).</summary>
+    public int? Instance { get; set; }
 
     /// <summary>False when this peer is over its message-rate budget — drop the message.</summary>
     public bool AllowMessage(TimeSpan now) => _rate.TryConsume(now);

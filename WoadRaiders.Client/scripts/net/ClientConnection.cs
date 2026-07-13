@@ -11,7 +11,10 @@ public enum ConnectionState
     /// <summary>Socket dialing the server (initial connect or a retry).</summary>
     Connecting,
 
-    /// <summary>Transport is up; JoinRequest sent, waiting for the Welcome.</summary>
+    /// <summary>Transport is up, no join sent — browsing the instance list.</summary>
+    Lobby,
+
+    /// <summary>JoinRequest sent, waiting for the Welcome (or a denial).</summary>
     Joining,
 
     /// <summary>Welcomed — we have a player id and are receiving snapshots.</summary>
@@ -25,8 +28,10 @@ public enum ConnectionState
 /// The client's transport layer — the only code that touches LiteNetLib. It owns
 /// the socket, frames/deframes packets, dispatches inbound messages through a
 /// handler table (the mirror of the server's), and runs the connection
-/// lifecycle: Connecting → Joining (peer up, JoinRequest sent) → Playing
-/// (Welcome received), dropping to Disconnected and auto-retrying on loss.
+/// lifecycle: Connecting → Lobby (peer up; <see cref="Connected"/> fires and the
+/// owner decides what to send — the raid browser lists instances, the game screen
+/// joins) → Joining (<see cref="SendJoin"/>) → Playing (Welcome received), dropping
+/// to Disconnected and auto-retrying on loss. A denied join falls back to Lobby.
 /// Everything above this class deals in typed packets and events only.
 /// </summary>
 public sealed class ClientConnection
@@ -41,12 +46,14 @@ public sealed class ClientConnection
     private readonly Dictionary<MessageType, Action<NetPacketReader>> _handlers;
     private readonly string _host;
     private readonly int _port;
-    private readonly string _playerName;
-    private readonly WoadRaiders.Core.CharacterClass _playerClass;
     private NetPeer? _server;
     private double _retryIn;
 
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
+
+    /// <summary>Transport is up (fires on every connect, including retries). The owner
+    /// sends what its screen needs: a list request, a join, or nothing yet.</summary>
+    public event Action? Connected;
 
     // One event per server → client message. Handlers fire on the main thread
     // (from Poll), so subscribers may touch the scene tree freely.
@@ -55,13 +62,13 @@ public sealed class ClientConnection
     public event Action<WorldSnapshotPacket>? SnapshotReceived;
     public event Action<ItemPickedUpPacket>? ItemPickedUp;
     public event Action<EquipmentUpdatePacket>? EquipmentUpdated;
+    public event Action<InstanceListPacket>? InstanceListReceived;
+    public event Action<JoinDeniedPacket>? JoinDenied;
 
-    public ClientConnection(string host, int port, string playerName, WoadRaiders.Core.CharacterClass playerClass)
+    public ClientConnection(string host, int port)
     {
         _host = host;
         _port = port;
-        _playerName = playerName;
-        _playerClass = playerClass;
         // AutoRecycle pools packet readers instead of allocating per received packet.
         _net = new NetManager(_listener) { AutoRecycle = true };
 
@@ -90,18 +97,25 @@ public sealed class ClientConnection
             },
             [MessageType.ItemPickedUp] = r => ItemPickedUp?.Invoke(Read<ItemPickedUpPacket>(r)),
             [MessageType.EquipmentUpdate] = r => EquipmentUpdated?.Invoke(Read<EquipmentUpdatePacket>(r)),
+            [MessageType.InstanceList] = r => InstanceListReceived?.Invoke(Read<InstanceListPacket>(r)),
+            [MessageType.JoinDenied] = r =>
+            {
+                // The server refused the join but kept the connection — back to
+                // browsing; the owner decides where to send the player.
+                State = ConnectionState.Lobby;
+                JoinDenied?.Invoke(Read<JoinDeniedPacket>(r));
+            },
         };
 
         _listener.PeerConnectedEvent += peer =>
         {
             _server = peer;
-            State = ConnectionState.Joining;
+            State = ConnectionState.Lobby;
             // A fresh connection can be to a restarted server whose ticks begin
             // again at zero — stale-tick tracking from the old session would
             // swallow every snapshot, so it starts over too.
             _snapshots.Reset();
-            Send(MessageType.JoinRequest, new JoinRequest { Name = _playerName, Class = (byte)_playerClass },
-                DeliveryMethod.ReliableOrdered);
+            Connected?.Invoke();
         };
 
         // Fires for a lost connection AND for a dial that never landed, so this one
@@ -142,6 +156,17 @@ public sealed class ClientConnection
     /// <summary>Frame and send a packet. Silently dropped while not connected.</summary>
     public void Send(MessageType type, INetSerializable packet, DeliveryMethod delivery) =>
         _server?.Send(NetProtocol.Frame(type, packet), Channel, delivery);
+
+    /// <summary>Ask the server for its live instances; the reply raises <see cref="InstanceListReceived"/>.</summary>
+    public void RequestInstances() =>
+        Send(MessageType.InstanceListRequest, new InstanceListRequestPacket(), DeliveryMethod.ReliableOrdered);
+
+    /// <summary>Send the join (forge or enter an instance); Welcome or JoinDenied answers it.</summary>
+    public void SendJoin(JoinRequest join)
+    {
+        State = ConnectionState.Joining;
+        Send(MessageType.JoinRequest, join, DeliveryMethod.ReliableOrdered);
+    }
 
     private void Connect()
     {

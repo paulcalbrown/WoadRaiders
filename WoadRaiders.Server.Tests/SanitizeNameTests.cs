@@ -32,3 +32,30 @@ public class SanitizeNameTests
     public void Empty_after_cleaning_falls_back_to_a_default(string hostile) =>
         Assert.Equal("Raider-7", GameServer.SanitizeName(hostile, 7));
 }
+
+// SanitizeInstanceName guards the player-supplied name of a forged instance the
+// same way (it is shown to every browsing client, so it is just as untrusted).
+public class SanitizeInstanceNameTests
+{
+    [Fact]
+    public void Passes_a_normal_name_unchanged() =>
+        Assert.Equal("Night of the Long Spears", GameServer.SanitizeInstanceName("Night of the Long Spears", "Bran"));
+
+    [Fact]
+    public void Strips_control_characters_and_trims() =>
+        Assert.Equal("abc", GameServer.SanitizeInstanceName(" a\0b\tc\n ", "Bran"));
+
+    [Fact]
+    public void Caps_the_length()
+    {
+        var flood = new string('A', 10_000);
+        Assert.Equal(40, GameServer.SanitizeInstanceName(flood, "Bran").Length);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\r\n\0")]
+    public void Empty_after_cleaning_is_named_for_its_founder(string hostile) =>
+        Assert.Equal("Bran's raid", GameServer.SanitizeInstanceName(hostile, "Bran"));
+}

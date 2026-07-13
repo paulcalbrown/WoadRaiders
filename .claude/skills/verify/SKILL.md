@@ -16,7 +16,12 @@ dotnet test WoadRaiders.slnx --no-build
 
 ```powershell
 dotnet run --project WoadRaiders.Server -- [port] --map <map.json>
-# Without --map it serves WoadRaiders.Client\maps\TestArena.json (3 spawns).
+# Without --map it loads EVERY catalog dungeon map (DungeonCatalog: Barrow,
+# Cairn). Players forge/join INSTANCES of them: a JoinRequest either creates a
+# fresh instance (Mode=Create, naming the dungeon) or enters a live one by id
+# (Mode=Join); each instance is its own GameSession/world. With --map only that
+# map is loaded and every forged instance uses it. Empty instances are reaped
+# after a 60 s linger.
 # Listens on udp/9050 by default. Stop it via the process owning the port:
 #   (Get-NetUDPEndpoint -LocalPort 9050).OwningProcess | Stop-Process -Force
 ```
@@ -30,18 +35,25 @@ world size.
 
 ## Drive the wire protocol without Godot
 
-A working example lives at `tools/ClassProbe.cs` (a .NET 10 file-based app —
-`dotnet run tools/ClassProbe.cs` with the server up): it joins as a mage,
-walks to the nearest enemy, shoots it, and asserts class + projectile facts
-from the snapshot stream. Adapt its skeleton for new protocol checks.
+Working examples live in `tools/` (.NET 10 file-based apps — `dotnet run
+tools/<Probe>.cs` with the server up):
+- `ClassProbe.cs` forges an instance as a mage, walks to the nearest enemy,
+  shoots it, and asserts class + projectile facts from the snapshot stream.
+- `InstanceProbe.cs` drives four clients through the instance flow: forge,
+  browse the list, join by id, cross-instance isolation, and the
+  JoinDenied path. Run it against a FRESH server.
+Adapt their skeletons for new protocol checks.
 
 A minimal console probe (project ref to `WoadRaiders.Shared`, LiteNetLib comes
 transitively) is enough to exercise joins, snapshots, and the chunk assembler:
 connect with `NetConfig.ConnectionKey`, send `MessageType.JoinRequest` framed
-via `NetProtocol.Frame`, then feed received `WorldSnapshot` packets (after the
-type byte) into `SnapshotAssembler.TryAdd`. Track ticks to assert no stale
-delivery. Run several probe processes to add players (33 bytes each) when you
-need the snapshot to cross the single-packet MTU budget and split into chunks.
+via `NetProtocol.Frame` (Mode=Create + Dungeon forges an instance; Mode=Join +
+InstanceId enters one — the Welcome echoes the instance id), then feed received
+`WorldSnapshot` packets (after the type byte) into `SnapshotAssembler.TryAdd`.
+Track ticks to assert no stale delivery. Run several probe processes to add
+players (33 bytes each) in ONE instance (join the first probe's instance id)
+when you need the snapshot to cross the single-packet MTU budget and split
+into chunks.
 
 Gotchas:
 - The ConnectionKey is version-gated (`WoadRaiders.vN`) — a stale probe build

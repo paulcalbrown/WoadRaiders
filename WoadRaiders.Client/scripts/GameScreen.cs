@@ -54,18 +54,34 @@ public partial class GameScreen : Node3D
         _hud = new HudController();
         AddChild(_hud);
 
-        _connection = new ClientConnection(ClientConfig.Host, ClientConfig.Port, ClientConfig.PlayerName,
-                                           ClientConfig.PlayerClass);
+        _connection = new ClientConnection(ClientConfig.Host, ClientConfig.Port);
         _state.Class = ClientConfig.PlayerClass;
         _hud.SetPlayerClass(ClientConfig.PlayerClass);
+
+        // Dev helper behind --play --screenshot: let the match come up and render,
+        // save two stills of the live dungeon, and exit.
+        if (ClientConfig.ScreenshotPath is { } path)
+        {
+            GetTree().CreateTimer(4.0).Timeout += () =>
+            {
+                SaveStill(path);
+                GetTree().CreateTimer(2.0).Timeout += () =>
+                {
+                    SaveStill(System.IO.Path.ChangeExtension(path, null) + "-2.png");
+                    GetTree().Quit();
+                };
+            };
+        }
         _localPlayer = new LocalPlayer(_connection, _camera);
         _localPlayer.MoveClicked += point => MoveMarker.Spawn(this, point); // red X where the player clicks to move
 
+        _connection.Connected += SendJoin;
         _connection.GeometryReceived += OnGeometry;
         _connection.Welcomed += OnWelcome;
         _connection.SnapshotReceived += OnSnapshot;
         _connection.ItemPickedUp += OnItemPickedUp;
         _connection.EquipmentUpdated += OnEquipmentUpdate;
+        _connection.JoinDenied += OnJoinDenied;
         _connection.Start();
     }
 
@@ -132,6 +148,36 @@ public partial class GameScreen : Node3D
 
     public override void _ExitTree() => _connection.Stop();
 
+    /// <summary>Fires on every connect (including retries): forge the configured
+    /// dungeon or enter the chosen instance. After the first Welcome the config is
+    /// pinned to Join, so a reconnect lands back in the same run.</summary>
+    private void SendJoin() => _connection.SendJoin(new JoinRequest
+    {
+        Name = ClientConfig.PlayerName,
+        Class = (byte)ClientConfig.PlayerClass,
+        Mode = (byte)ClientConfig.Mode,
+        Dungeon = (byte)ClientConfig.Dungeon,
+        InstanceName = ClientConfig.InstanceName,
+        InstanceId = ClientConfig.InstanceId,
+    });
+
+    /// <summary>The instance we wanted is gone or full (or the server is) — back to
+    /// the raid browser with the reason, so the player picks again.</summary>
+    private void OnJoinDenied(JoinDeniedPacket denial)
+    {
+        RaidSelectScreen.Notice = (JoinDenyReason)denial.Reason switch
+        {
+            JoinDenyReason.InstanceFull => "That warband is full.",
+            JoinDenyReason.ServerFull => "The server can host no more raids.",
+            _ => "That raid has ended.",
+        };
+        // A rejected rejoin must not try the dead instance forever; browsing anew
+        // starts from a clean forge-or-join choice.
+        ClientConfig.Mode = JoinMode.Create;
+        GD.Print($"Join denied ({(JoinDenyReason)denial.Reason}) — returning to the raid browser.");
+        GetTree().ChangeSceneToFile(RaidSelectScreen.ScenePath);
+    }
+
     private void OnGeometry(DungeonGeometryPacket packet)
     {
         _geometry = DungeonSnapshot.ToGeometry(packet);
@@ -154,12 +200,23 @@ public partial class GameScreen : Node3D
         AddChild(_mapRoot);
         DungeonVisualBuilder.Build(_mapRoot, _geometry, _fader);
         StartMapMusic(_geometry.ScenePath);
+
+        // Announce the arrival — and if we asked to FORGE one dungeon but the
+        // server served another (it doesn't host it?), say so loudly. A join by
+        // instance id takes whatever dungeon that instance runs, so no check.
+        var info = DungeonCatalog.ForScene(_geometry.ScenePath ?? "");
+        _hud.AnnounceLocation(info?.Name
+            ?? System.IO.Path.GetFileNameWithoutExtension(_geometry.ScenePath ?? "the uncharted depths"));
+        if (ClientConfig.Mode == JoinMode.Create && info is { } served && served.Id != ClientConfig.Dungeon)
+            GD.PrintErr($"Asked to raid {ClientConfig.Dungeon} but the server served {served.Id} — " +
+                        "is that dungeon hosted? (Check the server's startup log.)");
     }
 
-    /// <summary>Loop the map's theme, chosen by its scene name: Barrow.tscn plays
-    /// assets/audio/barrow_theme.wav (rendered by tools/GenerateBarrowMusic.cs).
-    /// Runs only on a genuine map (re)build, so a same-map reconnect doesn't
-    /// restart it; a map with no matching track just plays nothing.</summary>
+    /// <summary>Loop the map's theme. Catalog dungeons name their track (several can
+    /// share one); anything else falls back to its scene name, so a custom map drops
+    /// in a matching assets/audio/&lt;scene&gt;_theme.wav with no code change. Runs only
+    /// on a genuine map (re)build, so a same-map reconnect doesn't restart it; no
+    /// matching track just plays nothing.</summary>
     private void StartMapMusic(string? scenePath)
     {
         _music?.QueueFree();
@@ -167,20 +224,30 @@ public partial class GameScreen : Node3D
 
         if (string.IsNullOrEmpty(scenePath))
             return;
-        var name = System.IO.Path.GetFileNameWithoutExtension(scenePath).ToLowerInvariant();
-        var track = $"res://assets/audio/{name}_theme.wav";
+        var key = DungeonCatalog.ForScene(scenePath) is { } info
+            ? info.MusicKey
+            : System.IO.Path.GetFileNameWithoutExtension(scenePath).ToLowerInvariant();
+        var track = $"res://assets/audio/{key}_theme.wav";
         if (MusicPlayer.Exists(track))
             _music = MusicPlayer.Loop(this, track, -10f);
     }
 
+    private void SaveStill(string path) => GetViewport().GetTexture().GetImage().SavePng(path);
+
     private void OnWelcome(WelcomePacket welcome)
     {
+        // Pin the run: whatever we asked for, we are IN instance InstanceId now.
+        // A mid-run reconnect then rejoins this same instance instead of forging
+        // a fresh one (and being alone in an identical-looking dungeon).
+        ClientConfig.Mode = JoinMode.Join;
+        ClientConfig.InstanceId = welcome.InstanceId;
+
         // A reconnect is a brand-new join server-side — fresh player id, empty
         // inventory, full health, fresh input buffer. Mirror that exactly.
         _state.Reset();
         _localPlayer.BeginSession(welcome.PlayerId, _geometry?.SpawnPoint ?? SysVec3.Zero, _geometry,
                                   ClientConfig.PlayerClass);
-        GD.Print($"Joined as player {welcome.PlayerId} ({ClientConfig.PlayerClass})");
+        GD.Print($"Joined instance #{welcome.InstanceId} as player {welcome.PlayerId} ({ClientConfig.PlayerClass})");
     }
 
     private void OnSnapshot(WorldSnapshotPacket snapshot)

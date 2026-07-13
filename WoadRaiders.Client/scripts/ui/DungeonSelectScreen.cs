@@ -4,17 +4,18 @@ using WoadRaiders.Core;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The class-picking screen between the title and the dungeon: four
-/// <see cref="ClassCard"/>s under the shared Celtic/gothic dress. Choosing a
-/// card stores the class in <see cref="ClientConfig"/> and enters the game;
-/// Esc returns to the title. Code-first like every screen — the .tscn is just
-/// this script on an empty Control.
+/// The dungeon-picking screen between class selection and the raid: one
+/// <see cref="DungeonCard"/> per catalog dungeon under the shared Celtic/gothic
+/// dress. Choosing a card stores the dungeon in <see cref="ClientConfig"/> and
+/// moves on to the raid browser (forge or join an instance); Esc returns to the
+/// class picker. Code-first like every screen — the .tscn is just this script
+/// on an empty Control.
 /// </summary>
-public partial class CharacterSelectScreen : Control
+public partial class DungeonSelectScreen : Control
 {
-    public const string ScenePath = "res://screens/CharacterSelect.tscn";
+    public const string ScenePath = "res://screens/DungeonSelect.tscn";
 
-    private readonly Dictionary<CharacterClass, ClassCard> _cards = new();
+    private readonly Dictionary<DungeonId, DungeonCard> _cards = new();
 
     public override void _Ready()
     {
@@ -27,8 +28,8 @@ public partial class CharacterSelectScreen : Control
 
     public override void _Input(InputEvent @event)
     {
-        if (@event.IsActionPressed("ui_cancel")) // Esc — back to the title
-            GetTree().ChangeSceneToFile(TitleScreen.ScenePath);
+        if (@event.IsActionPressed("ui_cancel")) // Esc — back to the class picker
+            GetTree().ChangeSceneToFile(CharacterSelectScreen.ScenePath);
     }
 
     private void BuildUi()
@@ -49,7 +50,7 @@ public partial class CharacterSelectScreen : Control
 
         var heading = new Label
         {
-            Text = "CHOOSE YOUR RAIDER",
+            Text = "CHOOSE YOUR HUNT",
             HorizontalAlignment = HorizontalAlignment.Center,
         };
         heading.AddThemeFontOverride("font", UiTheme.DisplayFont());
@@ -69,21 +70,20 @@ public partial class CharacterSelectScreen : Control
         column.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) }); // spacer
 
         var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ShrinkCenter };
-        row.AddThemeConstantOverride("separation", 24);
+        row.AddThemeConstantOverride("separation", 28);
         column.AddChild(row);
 
-        foreach (var cls in new[]
-                 { CharacterClass.Knight, CharacterClass.Rogue, CharacterClass.Mage, CharacterClass.Ranger })
+        foreach (var info in DungeonCatalog.All)
         {
-            var card = new ClassCard { Class = cls };
-            card.Pressed += () => Choose(cls);
+            var card = new DungeonCard { Info = info };
+            card.Pressed += () => Choose(info.Id);
             row.AddChild(card);
-            _cards[cls] = card;
+            _cards[info.Id] = card;
         }
 
         var hint = new Label
         {
-            Text = "·  ONWARD  ·  ESC TURNS BACK  ·",
+            Text = "·  ENTER  ·  ESC TURNS BACK  ·",
             HorizontalAlignment = HorizontalAlignment.Center,
         };
         hint.AddThemeFontOverride("font", new FontVariation { BaseFont = UiTheme.BodyFont(), SpacingGlyph = 6 });
@@ -91,24 +91,24 @@ public partial class CharacterSelectScreen : Control
         hint.AddThemeColorOverride("font_color", new Color(UiTheme.BoneSilver, 0.5f));
         column.AddChild(hint);
 
-        // Keyboard flow starts on the last class raided (or the knight).
-        _cards[ClientConfig.PlayerClass].GrabFocus();
+        // Keyboard flow starts on the last dungeon raided (or the Barrow).
+        _cards[ClientConfig.Dungeon].GrabFocus();
     }
 
-    private void Choose(CharacterClass cls)
+    private void Choose(DungeonId id)
     {
-        ClientConfig.PlayerClass = cls;
-        GetTree().ChangeSceneToFile(DungeonSelectScreen.ScenePath); // next: pick the hunt
+        ClientConfig.Dungeon = id;
+        GetTree().ChangeSceneToFile(RaidSelectScreen.ScenePath);
     }
 
-    /// <summary>Dev helper behind --select --screenshot: save a still on the default
-    /// focus, another courting the mage, and exit.</summary>
+    /// <summary>Dev helper behind --dungeon-select --screenshot: save a still on the
+    /// default focus, another courting the Cairn, and exit.</summary>
     private void CaptureScreenshots(string path)
     {
         GetTree().CreateTimer(1.4).Timeout += () =>
         {
             SaveStill(path);
-            _cards[CharacterClass.Mage].GrabFocus();
+            _cards[DungeonId.Cairn].GrabFocus();
             GetTree().CreateTimer(1.2).Timeout += () =>
             {
                 SaveStill(System.IO.Path.ChangeExtension(path, null) + "-2.png");

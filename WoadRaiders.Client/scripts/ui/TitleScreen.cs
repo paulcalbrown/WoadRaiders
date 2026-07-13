@@ -25,11 +25,14 @@ public partial class TitleScreen : Control
     {
         ClientConfig.EnsureLoaded();
 
-        if (ClientConfig.AutoSelect)
+        if (ClientConfig.AutoSelect || ClientConfig.AutoDungeonSelect || ClientConfig.AutoRaidSelect)
         {
             // A scene change can't run while the tree is still mid-add of this
             // scene (_Ready), so defer it to the end of the frame.
-            Callable.From(() => GetTree().ChangeSceneToFile(CharacterSelectScreen.ScenePath)).CallDeferred();
+            var next = ClientConfig.AutoRaidSelect ? RaidSelectScreen.ScenePath
+                : ClientConfig.AutoDungeonSelect ? DungeonSelectScreen.ScenePath
+                : CharacterSelectScreen.ScenePath;
+            Callable.From(() => GetTree().ChangeSceneToFile(next)).CallDeferred();
             return;
         }
 

@@ -33,4 +33,13 @@ public enum MessageType : byte
 
     /// <summary>Server → client: the dungeon's 3D collision geometry (sent once on join).</summary>
     DungeonGeometry = 8,
+
+    /// <summary>Client → server: send me the current list of live dungeon instances.</summary>
+    InstanceListRequest = 9,
+
+    /// <summary>Server → one client: every live instance (reply to a list request).</summary>
+    InstanceList = 10,
+
+    /// <summary>Server → one client: your join was refused (gone/full); pick again.</summary>
+    JoinDenied = 11,
 }

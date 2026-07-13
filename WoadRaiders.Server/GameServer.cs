@@ -7,29 +7,61 @@ using WoadRaiders.Shared;
 namespace WoadRaiders.Server;
 
 /// <summary>
-/// The authoritative dedicated server. It owns the one true <see cref="GameWorld"/>,
-/// steps it at a fixed rate, applies validated client input, and broadcasts
-/// snapshots. Clients may only ever send input — the server decides everything else.
+/// The authoritative dedicated server. It loads every shipping dungeon's map at
+/// startup, then hosts player-forged <em>instances</em> of them: a join request
+/// either forges a fresh instance — its own <see cref="GameSession"/> with its own
+/// enemy population — or enters a live one by id, so separate warbands never share
+/// a world. The server steps every live instance at a fixed rate, applies validated
+/// client input, and broadcasts each instance's snapshots to the peers inside it.
+/// An emptied instance lingers briefly (a disconnected raider can rejoin), then is
+/// reaped. Clients may only ever send input — the server decides everything else.
 /// </summary>
 public sealed class GameServer
 {
     // All gameplay traffic rides channel 0 for now; delivery method varies per packet.
     private const byte Channel = 0;
 
+    /// <summary>An empty instance lingers this long (a disconnect-retry can rejoin), then is reaped.</summary>
+    private static readonly TimeSpan EmptyLinger = TimeSpan.FromSeconds(60);
+
+    /// <summary>One loaded map: its display name, parsed geometry, and the immutable packet sent on join.</summary>
+    private sealed record LoadedMap(string Name, DungeonGeometry Geometry, DungeonGeometryPacket Packet);
+
+    /// <summary>One live raid: a player-forged run of a dungeon with its own world.</summary>
+    private sealed class Instance(
+        int id, DungeonId dungeon, string dungeonName, string name,
+        GameSession session, DungeonGeometryPacket geometry)
+    {
+        public int Id { get; } = id;
+        public DungeonId Dungeon { get; } = dungeon;
+        public string DungeonName { get; } = dungeonName;
+        public string Name { get; } = name;
+        public GameSession Session { get; } = session;
+        public DungeonGeometryPacket Geometry { get; } = geometry;
+
+        /// <summary>Live connections bound to this instance.</summary>
+        public int Players;
+
+        /// <summary>When the last raider left — starts the reaper countdown. Null while occupied.</summary>
+        public TimeSpan? EmptySince;
+    }
+
     private readonly EventBasedNetListener _listener = new();
     private readonly NetManager _net;
     private readonly Dictionary<int, Connection> _connections = new(); // per-peer transport state
     private readonly Stopwatch _clock = Stopwatch.StartNew(); // monotonic; drives the loop and rate limits
-    private readonly string _mapPath;
+    private readonly IReadOnlyDictionary<DungeonId, string> _mapPaths;
     private readonly ServerLog _log = new(); // non-blocking: keeps console I/O off the game loop
     private readonly Dictionary<MessageType, Action<NetPeer, NetPacketReader>> _handlers;
-    private GameSession _session = null!; // the authoritative match (world, spawns, input buffers)
-    private DungeonGeometryPacket _geometryPacket = null!; // immutable geometry — built once, sent per join
+    private readonly Dictionary<DungeonId, LoadedMap> _maps = new(); // every map this server can instantiate
+    private readonly Dictionary<int, Instance> _instances = new();   // every live instance, by id
+    private readonly List<NetPeer> _peerScratch = new(); // reused per-instance send list
+    private int _nextInstanceId = 1;
     private volatile bool _running;
 
-    public GameServer(string mapPath)
+    public GameServer(IReadOnlyDictionary<DungeonId, string> mapPaths)
     {
-        _mapPath = mapPath;
+        _mapPaths = mapPaths;
         // AutoRecycle returns each NetPacketReader to LiteNetLib's pool after the
         // receive event — without it every received packet allocates fresh garbage.
         _net = new NetManager(_listener) { AutoRecycle = true };
@@ -41,19 +73,20 @@ public sealed class GameServer
             [MessageType.JoinRequest] = HandleJoin,
             [MessageType.Input] = HandleInput,
             [MessageType.EquipRequest] = HandleEquip,
+            [MessageType.InstanceListRequest] = HandleInstanceList,
         };
     }
 
-    /// <summary>Locates the bundled test arena for map-less dev runs (repo root or bin dir).</summary>
-    public static string? FindDefaultMap()
+    /// <summary>Locates the client's maps directory for map-less dev runs (repo root or bin dir).</summary>
+    public static string? FindMapsDirectory()
     {
         string[] candidates =
         {
-            Path.Combine("WoadRaiders.Client", "maps", "TestArena.json"),
-            Path.Combine("..", "WoadRaiders.Client", "maps", "TestArena.json"),
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WoadRaiders.Client", "maps", "TestArena.json"),
+            Path.Combine("WoadRaiders.Client", "maps"),
+            Path.Combine("..", "WoadRaiders.Client", "maps"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WoadRaiders.Client", "maps"),
         };
-        return candidates.FirstOrDefault(File.Exists);
+        return candidates.FirstOrDefault(Directory.Exists);
     }
 
     /// <summary>Runs the server until stopped. Returns false if startup failed.</summary>
@@ -62,31 +95,29 @@ public sealed class GameServer
         var started = false;
         try
         {
-            // Validate the map first — fail fast with no side effects (no socket, no threads).
-            DungeonGeometry dungeon;
-            try
+            // Validate and load every map first — fail fast with no side effects
+            // (no socket, no threads). Each geometry packet is immutable, so it is
+            // built once here and shared by every instance forged from that map.
+            foreach (var (id, mapPath) in _mapPaths)
             {
-                dungeon = DungeonGeometryFile.Load(_mapPath);
+                DungeonGeometry dungeon;
+                try
+                {
+                    dungeon = DungeonGeometryFile.Load(mapPath);
+                }
+                catch (Exception e)
+                {
+                    _log.Error($"Failed to load map '{mapPath}': {e.Message}");
+                    return false;
+                }
+
+                var name = Path.GetFileNameWithoutExtension(mapPath);
+                _maps[id] = new LoadedMap(name, dungeon, DungeonSnapshot.From(dungeon));
+                _log.Info($"[map] Loaded '{mapPath}' " +
+                          $"({dungeon.Solids.Count} solids, {dungeon.EnemySpawns.Count} spawn markers).");
             }
-            catch (Exception e)
-            {
-                _log.Error($"Failed to load map '{_mapPath}': {e.Message}");
-                return false;
-            }
-            _log.Info($"Loaded map '{_mapPath}' " +
-                      $"({dungeon.Solids.Count} solids, {dungeon.EnemySpawns.Count} enemy spawns" +
-                      $"{(dungeon.ScenePath is null ? "" : $", scene {dungeon.ScenePath}")}).");
 
-            // Build the match before opening the socket. The geometry packet is immutable,
-            // so it is built once here and reused for every join.
-            _geometryPacket = DungeonSnapshot.From(dungeon);
-            _session = new GameSession(dungeon, new Random());
-            _session.Notice += e => _log.Info(e.Message); // relay match events; no domain knowledge here
-
-            var spawned = _session.SpawnInitial();
-            _log.Info($"Spawned {spawned} enemies (map has {dungeon.EnemySpawns.Count} spawn markers).");
-
-            // Only now, with the world fully built, open the socket — so a joining peer
+            // Only now, with every map loaded, open the socket — so a joining peer
             // can never race a half-initialized server.
             WireEvents();
             if (!_net.Start(port))
@@ -109,7 +140,9 @@ public sealed class GameServer
 
             _log.Info(
                 $"WoadRaiders dedicated server listening on udp/{port} " +
-                $"(sim {SimConstants.TickRate}Hz, snapshots {NetConfig.SnapshotsPerSecond}Hz). Ctrl+C to stop.");
+                $"({_maps.Count} maps, up to {NetConfig.MaxInstances} instances of " +
+                $"{NetConfig.MaxPlayersPerInstance} raiders; " +
+                $"sim {SimConstants.TickRate}Hz, snapshots {NetConfig.SnapshotsPerSecond}Hz). Ctrl+C to stop.");
 
             Loop();
             return true;
@@ -131,7 +164,7 @@ public sealed class GameServer
     {
         _listener.ConnectionRequestEvent += request =>
         {
-            if (_net.ConnectedPeersCount < NetConfig.MaxPlayers)
+            if (_net.ConnectedPeersCount < NetConfig.MaxConnections)
                 request.AcceptIfKey(NetConfig.ConnectionKey);
             else
                 request.Reject();
@@ -139,19 +172,24 @@ public sealed class GameServer
 
         _listener.PeerConnectedEvent += peer =>
         {
+            // Which instance (and who) arrives with the join request; geometry,
+            // welcome, and the player spawn all wait for it in HandleJoin, so no
+            // snapshot ever shows a placeholder body in the wrong instance. Until
+            // then the peer may only browse the instance list.
             _connections[peer.Id] = new Connection(peer, _clock.Elapsed);
             _log.Info($"[+] Player {peer.Id} connected  ({_net.ConnectedPeersCount} online)");
-
-            // The dungeon can start crossing the wire now; the player itself is
-            // spawned by HandleJoin, once the join request says who they are —
-            // so no snapshot ever shows a placeholder body with the wrong class.
-            peer.Send(NetProtocol.Frame(MessageType.DungeonGeometry, _geometryPacket), Channel, DeliveryMethod.ReliableOrdered);
         };
 
         _listener.PeerDisconnectedEvent += (peer, _) =>
         {
-            _connections.Remove(peer.Id);
-            _session.RemovePlayer(peer.Id);
+            if (_connections.Remove(peer.Id, out var connection) && connection.Instance is { } id
+                && _instances.TryGetValue(id, out var instance))
+            {
+                instance.Session.RemovePlayer(peer.Id);
+                instance.Players--;
+                if (instance.Players <= 0)
+                    instance.EmptySince = _clock.Elapsed; // the reaper takes it from here
+            }
             _log.Info($"[-] Player {peer.Id} left    ({_net.ConnectedPeersCount} online)");
         };
 
@@ -188,21 +226,121 @@ public sealed class GameServer
             handler(peer, reader);
     }
 
+    /// <summary>The session the peer's connection is bound to, or null before its join lands.</summary>
+    private GameSession? SessionOf(Connection connection) =>
+        connection.Instance is { } id && _instances.TryGetValue(id, out var instance) ? instance.Session : null;
+
+    private GameSession? SessionOf(NetPeer peer) =>
+        _connections.TryGetValue(peer.Id, out var connection) ? SessionOf(connection) : null;
+
     private void HandleJoin(NetPeer peer, NetPacketReader reader)
     {
         var join = new JoinRequest();
         join.Deserialize(reader);
-        // Class is client-supplied and untrusted like the name: an unknown byte
-        // (version skew, tampering) falls back to Knight rather than faulting.
+        if (!_connections.TryGetValue(peer.Id, out var connection))
+            return;
+
+        // Class, mode, and instance fields are client-supplied and untrusted like
+        // the name: an unknown byte (version skew, tampering) falls back to the
+        // default rather than faulting. A repeated join must not move a live
+        // player between instances (that would be a free escape) — the first
+        // binding sticks and a re-join renames at most.
         var cls = join.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)join.Class : CharacterClass.Knight;
         var name = SanitizeName(join.Name, peer.Id);
-        _session.AddPlayer(peer.Id, name, cls);
+        var instance = connection.Instance is { } bound
+            ? _instances[bound]
+            : (JoinMode)join.Mode == JoinMode.Join
+                ? TryJoinExisting(peer, join.InstanceId)
+                : TryForge(peer, join, name);
+        if (instance is null)
+            return; // denied — the JoinDenied packet is already on its way
 
-        // The welcome follows the join, so by the time the client starts playing
-        // its player exists — classed — in every snapshot from the first one.
-        var welcome = new WelcomePacket { PlayerId = peer.Id, ServerTick = _session.Tick };
+        if (connection.Instance is null)
+        {
+            connection.Instance = instance.Id;
+            instance.Players++;
+            instance.EmptySince = null; // a lingering-empty instance is live again
+        }
+        instance.Session.AddPlayer(peer.Id, name, cls);
+
+        // Geometry first, then the welcome (both reliable-ordered on the same
+        // channel), so by the time the client starts playing its player exists —
+        // classed, in its chosen instance — in every snapshot from the first one.
+        peer.Send(NetProtocol.Frame(MessageType.DungeonGeometry, instance.Geometry), Channel, DeliveryMethod.ReliableOrdered);
+        var welcome = new WelcomePacket { PlayerId = peer.Id, ServerTick = instance.Session.Tick, InstanceId = instance.Id };
         peer.Send(NetProtocol.Frame(MessageType.Welcome, welcome), Channel, DeliveryMethod.ReliableOrdered);
-        _log.Info($"[join] Player {peer.Id} raids as a {cls} named \"{name}\"");
+        _log.Info($"[join] Player {peer.Id} enters \"{instance.Name}\" (#{instance.Id}, {instance.DungeonName}) " +
+                  $"as a {cls} named \"{name}\" — {instance.Players}/{NetConfig.MaxPlayersPerInstance} raiders");
+    }
+
+    /// <summary>Look up a live instance to join, or deny (gone/full) and return null.</summary>
+    private Instance? TryJoinExisting(NetPeer peer, int instanceId)
+    {
+        if (!_instances.TryGetValue(instanceId, out var instance))
+        {
+            Deny(peer, JoinDenyReason.InstanceGone, $"asked for instance #{instanceId}, which is gone");
+            return null;
+        }
+        if (instance.Players >= NetConfig.MaxPlayersPerInstance)
+        {
+            Deny(peer, JoinDenyReason.InstanceFull, $"asked for instance #{instanceId} (\"{instance.Name}\"), which is full");
+            return null;
+        }
+        return instance;
+    }
+
+    /// <summary>Forge a fresh instance of the requested dungeon, or deny (server full) and return null.</summary>
+    private Instance? TryForge(NetPeer peer, JoinRequest join, string playerName)
+    {
+        if (_instances.Count >= NetConfig.MaxInstances)
+        {
+            Deny(peer, JoinDenyReason.ServerFull, "tried to forge an instance, but the server is at its cap");
+            return null;
+        }
+
+        var requested = DungeonCatalog.Sanitize(join.Dungeon);
+        if (!_maps.TryGetValue(requested, out var map))
+            (requested, map) = _maps.First(); // a custom --map run hosts one map; every forge uses it
+
+        var id = _nextInstanceId++;
+        var session = new GameSession(map.Geometry, new Random());
+        session.Notice += e => _log.Info($"[{map.Name}#{id}] {e.Message}"); // relay match events; no domain knowledge here
+        var spawned = session.SpawnInitial();
+
+        var instance = new Instance(id, requested, map.Name, SanitizeInstanceName(join.InstanceName, playerName),
+                                    session, map.Packet);
+        _instances[id] = instance;
+        _log.Info($"[forge] Instance #{id} \"{instance.Name}\" of {map.Name} lit " +
+                  $"({spawned} foes; {_instances.Count}/{NetConfig.MaxInstances} live)");
+        return instance;
+    }
+
+    /// <summary>Refuse a join but keep the connection — the client returns to its raid browser.</summary>
+    private void Deny(NetPeer peer, JoinDenyReason reason, string detail)
+    {
+        peer.Send(NetProtocol.Frame(MessageType.JoinDenied, new JoinDeniedPacket { Reason = (byte)reason }),
+            Channel, DeliveryMethod.ReliableOrdered);
+        _log.Info($"[deny] Player {peer.Id} {detail}");
+    }
+
+    /// <summary>Send the peer every live instance, so it can offer a join-or-forge choice.</summary>
+    private void HandleInstanceList(NetPeer peer, NetPacketReader reader)
+    {
+        var list = new InstanceListPacket
+        {
+            Instances = _instances.Values
+                .OrderBy(i => i.Id)
+                .Select(i => new InstanceEntry
+                {
+                    Id = i.Id,
+                    Dungeon = (byte)i.Dungeon,
+                    Name = i.Name,
+                    Players = (byte)Math.Clamp(i.Players, 0, byte.MaxValue),
+                    MaxPlayers = NetConfig.MaxPlayersPerInstance,
+                })
+                .ToArray(),
+        };
+        peer.Send(NetProtocol.Frame(MessageType.InstanceList, list), Channel, DeliveryMethod.ReliableOrdered);
     }
 
     private void HandleInput(NetPeer peer, NetPacketReader reader)
@@ -211,7 +349,7 @@ public sealed class GameServer
         input.Deserialize(reader);
         // Buffer the intent; the session applies it one-per-tick, in order. Trust
         // nothing but the intent — the simulation clamps/normalizes it.
-        _session.EnqueueInput(peer.Id, new PlayerInput
+        SessionOf(peer)?.EnqueueInput(peer.Id, new PlayerInput
         {
             MoveX = input.MoveX,
             MoveZ = input.MoveZ,
@@ -226,7 +364,7 @@ public sealed class GameServer
     {
         var req = new EquipRequestPacket();
         req.Deserialize(reader);
-        if (_session.TryEquip(peer.Id, req.ItemId) is not { } equipped)
+        if (SessionOf(peer)?.TryEquip(peer.Id, req.ItemId) is not { } equipped)
             return;
 
         var packet = new EquipmentUpdatePacket
@@ -251,6 +389,16 @@ public sealed class GameServer
         return cleaned.Length == 0 ? $"Raider-{playerId}" : cleaned;
     }
 
+    /// <summary>Instance names are untrusted like player names; an empty one is named for its founder.</summary>
+    internal static string SanitizeInstanceName(string name, string playerName)
+    {
+        const int maxLength = 40;
+        var cleaned = string.Concat(name.Where(c => !char.IsControl(c))).Trim();
+        if (cleaned.Length > maxLength)
+            cleaned = cleaned[..maxLength];
+        return cleaned.Length == 0 ? $"{playerName}'s raid" : cleaned;
+    }
+
     private void Loop()
     {
         var scheduler = new FixedTimestepScheduler(
@@ -265,17 +413,24 @@ public sealed class GameServer
 
             var plan = scheduler.Advance(_clock.Elapsed);
 
-            // The session applies one buffered input per player and advances spawn
-            // policy each tick, so it rides out a stall cleanly under the catch-up bound.
+            // Every instance steps in lockstep: each session applies one buffered
+            // input per player and advances its spawn policy per tick, so they all
+            // ride out a stall cleanly under the catch-up bound.
             for (var i = 0; i < plan.Ticks; i++)
-                _session.Step();
+                foreach (var instance in _instances.Values)
+                    instance.Session.Step();
             if (plan.Stalled)
                 _log.Info($"[!] Sim stalled {plan.Dropped.TotalMilliseconds:0} ms beyond the catch-up cap — dropping the lost time.");
 
-            DeliverPickups();
+            foreach (var instance in _instances.Values)
+                DeliverPickups(instance.Session);
 
             if (plan.Snapshot)
-                BroadcastSnapshot();
+            {
+                foreach (var (id, instance) in _instances)
+                    BroadcastSnapshot(id, instance.Session);
+                ReapEmptyInstances(); // snapshot cadence is plenty for a 60 s linger
+            }
 
             // Yield a slice so we poll often (low input latency) without busy-waiting.
             // With the raised timer resolution this wakes in ~1-2 ms, not ~15 ms.
@@ -283,28 +438,53 @@ public sealed class GameServer
         }
     }
 
-    private void BroadcastSnapshot()
+    /// <summary>Remove instances that have stood empty past the linger window.</summary>
+    private void ReapEmptyInstances()
     {
-        if (_connections.Count == 0)
+        List<Instance>? doomed = null;
+        foreach (var instance in _instances.Values)
+            if (instance is { Players: <= 0, EmptySince: { } since } && _clock.Elapsed - since >= EmptyLinger)
+                (doomed ??= new List<Instance>()).Add(instance);
+        if (doomed is null)
+            return;
+
+        foreach (var instance in doomed)
+        {
+            _instances.Remove(instance.Id);
+            _log.Info($"[reap] Instance #{instance.Id} \"{instance.Name}\" stood empty " +
+                      $"{EmptyLinger.TotalSeconds:0} s — snuffed ({_instances.Count}/{NetConfig.MaxInstances} live)");
+        }
+    }
+
+    private void BroadcastSnapshot(int instanceId, GameSession session)
+    {
+        // Only the peers inside this instance receive its snapshots.
+        _peerScratch.Clear();
+        var budget = int.MaxValue;
+        foreach (var connection in _connections.Values)
+        {
+            if (connection.Instance != instanceId)
+                continue;
+            _peerScratch.Add(connection.Peer);
+            budget = Math.Min(budget, connection.Peer.GetMaxSinglePacketSize(DeliveryMethod.Unreliable));
+        }
+        if (_peerScratch.Count == 0)
             return;
 
         // Unreliable delivery tops out at one MTU and never fragments, while the
         // world (and so the snapshot) grows without bound — so each snapshot is
-        // split into as many packets as it needs, sized to the smallest connected
-        // peer's limit so one send plan fits everyone. The client's assembler
-        // rebuilds it and drops stale ticks, which is what Sequenced used to buy
-        // us; losing any chunk just costs that one snapshot.
-        var budget = int.MaxValue;
-        foreach (var connection in _connections.Values)
-            budget = Math.Min(budget, connection.Peer.GetMaxSinglePacketSize(DeliveryMethod.Unreliable));
-
-        foreach (var chunk in SnapshotChunks.Split(_session.Snapshot(), budget))
-            _net.SendToAll(chunk, Channel, DeliveryMethod.Unreliable);
+        // split into as many packets as it needs, sized to the smallest listening
+        // peer's limit so one send plan fits the whole group. The client's
+        // assembler rebuilds it and drops stale ticks; losing any chunk just
+        // costs that one snapshot.
+        foreach (var chunk in SnapshotChunks.Split(session.Snapshot(), budget))
+            foreach (var peer in _peerScratch)
+                peer.Send(chunk, Channel, DeliveryMethod.Unreliable);
     }
 
-    private void DeliverPickups()
+    private void DeliverPickups(GameSession session)
     {
-        foreach (var pickup in _session.ConsumePickups())
+        foreach (var pickup in session.ConsumePickups())
         {
             if (!_connections.TryGetValue(pickup.PlayerId, out var connection))
                 continue;

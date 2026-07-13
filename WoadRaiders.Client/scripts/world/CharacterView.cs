@@ -63,13 +63,18 @@ public partial class CharacterView : Node3D
     private string _clip = "";
     private float _yaw;                  // the character's current facing angle — always applied to the pivot
 
-    /// <summary>Instantiate the model, snap to its real spot (no lerp-in from the origin), and enter the tree.</summary>
-    public static CharacterView Spawn(Node parent, PackedScene scene, Vector3 feet, float scale, Color lightColor)
+    /// <summary>Instantiate the model, snap to its real spot (no lerp-in from the origin), and enter the tree.
+    /// A player class, when given, trims the KayKit model down to that class's primary loadout;
+    /// enemies pass null and keep their model as authored.</summary>
+    public static CharacterView Spawn(Node parent, PackedScene scene, Vector3 feet, float scale, Color lightColor,
+                                      CharacterClass? loadout = null)
     {
         var view = new CharacterView { Position = feet, Target = feet, _lastPos = feet };
         view._pivot = new Node3D();
         var model = scene.Instantiate<Node3D>();
         model.Scale = Vector3.One * scale;
+        if (loadout is { } cls)
+            CharacterLoadout.Apply(model, cls); // hide the rest of the armory
         view._pivot.AddChild(model);
         view.AddChild(view._pivot);
 

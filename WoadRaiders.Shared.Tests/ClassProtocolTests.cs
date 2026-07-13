@@ -10,9 +10,16 @@ namespace WoadRaiders.Shared.Tests;
 public class ClassProtocolTests
 {
     [Fact]
-    public void Join_request_round_trips_name_and_class()
+    public void Join_request_round_trips_name_class_and_dungeon()
     {
-        var join = new JoinRequest { Name = "Boudica", Class = (byte)CharacterClass.Ranger };
+        var join = new JoinRequest
+        {
+            Name = "Boudica",
+            Class = (byte)CharacterClass.Ranger,
+            Mode = (byte)JoinMode.Create,
+            Dungeon = (byte)DungeonId.Cairn,
+            InstanceName = "Boudica's revenge",
+        };
 
         var writer = new NetDataWriter();
         join.Serialize(writer);
@@ -23,6 +30,23 @@ public class ClassProtocolTests
 
         Assert.Equal("Boudica", back.Name);
         Assert.Equal((byte)CharacterClass.Ranger, back.Class);
+        Assert.Equal((byte)JoinMode.Create, back.Mode);
+        Assert.Equal((byte)DungeonId.Cairn, back.Dungeon);
+        Assert.Equal("Boudica's revenge", back.InstanceName);
+    }
+
+    [Fact]
+    public void Dungeon_catalog_is_internally_consistent()
+    {
+        // The enum indexes the table; a reorder or gap would misroute every join.
+        for (var i = 0; i < DungeonCatalog.All.Length; i++)
+            Assert.Equal((DungeonId)i, DungeonCatalog.All[i].Id);
+
+        Assert.Equal(DungeonId.Cairn, DungeonCatalog.Sanitize((byte)DungeonId.Cairn));
+        Assert.Equal(DungeonId.Barrow, DungeonCatalog.Sanitize(200)); // junk byte falls home
+
+        foreach (var info in DungeonCatalog.All)
+            Assert.Equal(info, DungeonCatalog.ForScene(info.ScenePath));
     }
 
     [Fact]

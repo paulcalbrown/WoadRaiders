@@ -44,12 +44,22 @@ public static class NetConfig
     /// v6 = PlayerSnapshot attack timers (AttackAnim/AttackCooldown) for reconcile,
     /// v7 = WorldSnapshot chunk framing (tick/index/count header, rides Unreliable),
     /// v8 = character classes (JoinRequest.Class, PlayerSnapshot.Class,
-    ///      ProjectileSnapshot.Kind).
+    ///      ProjectileSnapshot.Kind),
+    /// v9 = dungeon choice (JoinRequest.Dungeon; the server hosts every
+    ///      catalog dungeon at once),
+    /// v10 = dungeon instances (JoinRequest create/join mode + instance fields,
+    ///       WelcomePacket.InstanceId, instance list and join-denied packets).
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v8";
+    public const string ConnectionKey = "WoadRaiders.v10";
 
-    /// <summary>Co-op party size cap for a single dedicated-server instance.</summary>
-    public const int MaxPlayers = 8;
+    /// <summary>Co-op party size cap for one dungeon instance.</summary>
+    public const int MaxPlayersPerInstance = 8;
+
+    /// <summary>How many live instances one server will host at once (bounds sim cost).</summary>
+    public const int MaxInstances = 16;
+
+    /// <summary>Socket-level connection cap: enough for every instance to run full.</summary>
+    public const int MaxConnections = MaxPlayersPerInstance * MaxInstances;
 
     /// <summary>How many world snapshots the server broadcasts per second.</summary>
     public const int SnapshotsPerSecond = 20;

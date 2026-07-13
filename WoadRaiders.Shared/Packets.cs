@@ -2,22 +2,57 @@ using LiteNetLib.Utils;
 
 namespace WoadRaiders.Shared;
 
+/// <summary>How a join request enters a dungeon: forge a fresh instance or join a live one.</summary>
+public enum JoinMode : byte
+{
+    /// <summary>Create a new instance of <see cref="JoinRequest.Dungeon"/> and enter it.</summary>
+    Create = 0,
+
+    /// <summary>Enter the existing instance named by <see cref="JoinRequest.InstanceId"/>.</summary>
+    Join = 1,
+}
+
+/// <summary>Why the server refused a join (the connection stays up; pick again).</summary>
+public enum JoinDenyReason : byte
+{
+    /// <summary>The instance no longer exists (ended, or the id was never real).</summary>
+    InstanceGone = 0,
+
+    /// <summary>The instance is at its player cap.</summary>
+    InstanceFull = 1,
+
+    /// <summary>The server is at its instance cap — no new instance can be forged.</summary>
+    ServerFull = 2,
+}
+
 /// <summary>Client → server. Sent once, right after connecting.</summary>
 public sealed class JoinRequest : INetSerializable
 {
     public string Name = "Raider";
-    public byte Class; // CharacterClass — the server validates and honors it once
+    public byte Class;        // CharacterClass — the server validates and honors it once
+    public byte Mode;         // JoinMode — forge a new instance, or join a live one
+    public byte Dungeon;      // DungeonId — which dungeon to forge (Create mode)
+    public string InstanceName = ""; // what to call the forged instance ("" = server default)
+    public int InstanceId;    // which live instance to enter (Join mode)
 
     public void Serialize(NetDataWriter w)
     {
         w.Put(Name);
         w.Put(Class);
+        w.Put(Mode);
+        w.Put(Dungeon);
+        w.Put(InstanceName);
+        w.Put(InstanceId);
     }
 
     public void Deserialize(NetDataReader r)
     {
         Name = r.GetString();
         Class = r.GetByte();
+        Mode = r.GetByte();
+        Dungeon = r.GetByte();
+        InstanceName = r.GetString();
+        InstanceId = r.GetInt();
     }
 }
 
@@ -27,16 +62,91 @@ public sealed class WelcomePacket : INetSerializable
     public int PlayerId;
     public int ServerTick;
 
+    /// <summary>The instance the player landed in. A client that forged it pins
+    /// this id so a reconnect rejoins the same run instead of forging another.</summary>
+    public int InstanceId;
+
     public void Serialize(NetDataWriter w)
     {
         w.Put(PlayerId);
         w.Put(ServerTick);
+        w.Put(InstanceId);
     }
 
     public void Deserialize(NetDataReader r)
     {
         PlayerId = r.GetInt();
         ServerTick = r.GetInt();
+        InstanceId = r.GetInt();
+    }
+}
+
+/// <summary>Server → one client. The join was refused; the connection stays up so the client can re-browse.</summary>
+public sealed class JoinDeniedPacket : INetSerializable
+{
+    public byte Reason; // JoinDenyReason
+
+    public void Serialize(NetDataWriter w) => w.Put(Reason);
+    public void Deserialize(NetDataReader r) => Reason = r.GetByte();
+}
+
+/// <summary>Client → server. Asks for the current list of live instances (no payload).</summary>
+public sealed class InstanceListRequestPacket : INetSerializable
+{
+    public void Serialize(NetDataWriter w) { }
+    public void Deserialize(NetDataReader r) { }
+}
+
+/// <summary>One live instance inside an <see cref="InstanceListPacket"/>.</summary>
+public struct InstanceEntry : INetSerializable
+{
+    public int Id;
+    public byte Dungeon; // DungeonId
+    public string Name;
+    public byte Players;
+    public byte MaxPlayers;
+
+    public void Serialize(NetDataWriter w)
+    {
+        w.Put(Id);
+        w.Put(Dungeon);
+        w.Put(Name);
+        w.Put(Players);
+        w.Put(MaxPlayers);
+    }
+
+    public void Deserialize(NetDataReader r)
+    {
+        Id = r.GetInt();
+        Dungeon = r.GetByte();
+        Name = r.GetString();
+        Players = r.GetByte();
+        MaxPlayers = r.GetByte();
+    }
+}
+
+/// <summary>Server → one client. Every live instance, in reply to a list request.</summary>
+public sealed class InstanceListPacket : INetSerializable
+{
+    public InstanceEntry[] Instances = System.Array.Empty<InstanceEntry>();
+
+    public void Serialize(NetDataWriter w)
+    {
+        w.Put((ushort)Instances.Length);
+        foreach (var entry in Instances)
+            entry.Serialize(w);
+    }
+
+    public void Deserialize(NetDataReader r)
+    {
+        int count = r.GetUShort();
+        Instances = new InstanceEntry[count];
+        for (var i = 0; i < count; i++)
+        {
+            var entry = new InstanceEntry();
+            entry.Deserialize(r);
+            Instances[i] = entry;
+        }
     }
 }
 

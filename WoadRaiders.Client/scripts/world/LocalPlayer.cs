@@ -209,29 +209,40 @@ public sealed class LocalPlayer
         return Vector2.Zero;
     }
 
-    // Unit direction from the player toward the cursor's ground point. Keeps the
-    // last aim if the cursor sits on the player or the ray runs parallel to the ground.
+    // Unit direction from the player toward the cursor. The cursor is projected
+    // onto the plane at the projectile's FLIGHT height (feet + eye height), not
+    // the floor: a bolt leaves the caster at eye height and flies level, so
+    // aiming at the floor point under the cursor would launch it out raised-but-
+    // parallel and — under the angled iso camera — it would visibly track a line
+    // above where you clicked. Aiming at the flight plane makes the shot pass
+    // through the cursor. Melee shares the aim; its wide arc shrugs off the few-
+    // degrees difference. Keeps the last aim if the cursor sits on the player or
+    // the ray runs parallel to the plane.
     private Vector3 ComputeAim()
     {
-        if (!TryProjectMouseToGround(out var hit))
-            return _aim;
         var playerPos = _prediction!.Position.ToGodot();
+        if (!TryProjectMouseToPlane(playerPos.Y + SimConstants.EyeHeight, out var hit))
+            return _aim;
         var flat = new Vector3(hit.X - playerPos.X, 0f, hit.Z - playerPos.Z);
         return flat.LengthSquared() > 0.01f ? flat.Normalized() : _aim;
     }
 
-    // Intersect the cursor ray with the ground plane at the player's feet height.
-    private bool TryProjectMouseToGround(out Vector3 point)
+    // Intersect the cursor ray with the ground plane at the player's feet height
+    // (where a click-to-move order lands).
+    private bool TryProjectMouseToGround(out Vector3 point) =>
+        TryProjectMouseToPlane(_prediction!.Position.Y, out point);
+
+    // Intersect the cursor ray with the horizontal plane at world height planeY.
+    private bool TryProjectMouseToPlane(float planeY, out Vector3 point)
     {
         point = default;
-        var playerPos = _prediction!.Position.ToGodot();
         var mouse = _camera.GetViewport().GetMousePosition();
         var from = _camera.ProjectRayOrigin(mouse);
         var dir = _camera.ProjectRayNormal(mouse);
         if (Mathf.Abs(dir.Y) < 1e-5f)
             return false;
 
-        var t = (playerPos.Y - from.Y) / dir.Y;
+        var t = (planeY - from.Y) / dir.Y;
         point = from + dir * t;
         return true;
     }

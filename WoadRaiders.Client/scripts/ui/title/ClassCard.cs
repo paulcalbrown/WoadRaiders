@@ -71,7 +71,10 @@ public partial class ClassCard : Button
 
         BuildContent();
 
-        MouseEntered += () => { _hovered = true; Retarget(); };
+        // Hover takes keyboard focus too: hover and focus ignite identically, so
+        // if they could point at different cards, Enter would fire the one that
+        // merely LOOKS unselected. With this, Enter always enters the lit card.
+        MouseEntered += () => { _hovered = true; GrabFocus(); Retarget(); };
         MouseExited += () => { _hovered = false; Retarget(); };
         FocusEntered += () => { _focused = true; Retarget(); };
         FocusExited += () => { _focused = false; Retarget(); };
@@ -139,6 +142,7 @@ public partial class ClassCard : Button
         var model = GD.Load<PackedScene>(
             $"res://addons/kaykit_character_pack_adventures/Characters/gltf/{Flavor[Class].SceneFile}")
             .Instantiate<Node3D>();
+        CharacterLoadout.Apply(model, Class); // just the class's primary weapon, not the whole rack
         _turntable.AddChild(model);
         viewport.AddChild(_turntable);
         model.FindDescendant<AnimationPlayer>()?.Play("Idle");

@@ -167,7 +167,7 @@ public sealed class WorldView
 
             if (!_players.Touch(p.Id, out var view))
             {
-                view = CharacterView.Spawn(_parent, _classScenes[cls], feet, CharScale, PlayerLight);
+                view = CharacterView.Spawn(_parent, _classScenes[cls], feet, CharScale, PlayerLight, cls);
                 view.AttackClip = ClassVisuals[cls].AttackClip;
                 _players.Add(p.Id, view);
                 _playerClassSeen[p.Id] = (byte)cls;
