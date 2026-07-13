@@ -48,6 +48,7 @@ public partial class TitleScreen : Control
 
         AddChild(new FogBackground());
         AddChild(new CelticFrame());
+        PlayMusic();
 
         var center = new CenterContainer();
         center.SetAnchorsPreset(LayoutPreset.FullRect);
@@ -166,4 +167,7 @@ public partial class TitleScreen : Control
     }
 
     private void SaveStill(string path) => GetViewport().GetTexture().GetImage().SavePng(path);
+
+    /// <summary>Loop the title theme, rendered by tools/GenerateTitleMusic.cs.</summary>
+    private void PlayMusic() => MusicPlayer.Loop(this, "res://assets/audio/title_theme.wav", -6f);
 }

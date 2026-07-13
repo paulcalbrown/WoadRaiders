@@ -41,6 +41,7 @@ public partial class GameScreen : Node3D
     private DungeonGeometry? _geometry;
     private Node3D? _mapRoot;            // all dungeon visuals live under here, so a map swap can rebuild them
     private int? _builtMapFingerprint;   // fingerprint of the map the visuals were built for
+    private AudioStreamPlayer? _music;   // the current map's looping theme
 
     public override void _Ready()
     {
@@ -149,6 +150,24 @@ public partial class GameScreen : Node3D
         _mapRoot = new Node3D { Name = "Map" };
         AddChild(_mapRoot);
         DungeonVisualBuilder.Build(_mapRoot, _geometry, _fader);
+        StartMapMusic(_geometry.ScenePath);
+    }
+
+    /// <summary>Loop the map's theme, chosen by its scene name: Barrow.tscn plays
+    /// assets/audio/barrow_theme.wav (rendered by tools/GenerateBarrowMusic.cs).
+    /// Runs only on a genuine map (re)build, so a same-map reconnect doesn't
+    /// restart it; a map with no matching track just plays nothing.</summary>
+    private void StartMapMusic(string? scenePath)
+    {
+        _music?.QueueFree();
+        _music = null;
+
+        if (string.IsNullOrEmpty(scenePath))
+            return;
+        var name = System.IO.Path.GetFileNameWithoutExtension(scenePath).ToLowerInvariant();
+        var track = $"res://assets/audio/{name}_theme.wav";
+        if (MusicPlayer.Exists(track))
+            _music = MusicPlayer.Loop(this, track, -10f);
     }
 
     private void OnWelcome(WelcomePacket welcome)
