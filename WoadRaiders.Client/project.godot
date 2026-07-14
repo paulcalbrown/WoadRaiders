@@ -28,3 +28,7 @@ window/stretch/aspect="keep_height"
 [dotnet]
 
 project/assembly_name="WoadRaiders.Client"
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true

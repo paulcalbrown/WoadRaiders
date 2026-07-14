@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://g7uwbvc3t6ly"
 path.s3tc="res://.godot/imported/crates_stacked_dungeon_texture.png-a21c03844bcabbb3ead01b60cc204e99.s3tc.ctex"
+path.etc2="res://.godot/imported/crates_stacked_dungeon_texture.png-a21c03844bcabbb3ead01b60cc204e99.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://addons/kaykit_dungeon_remastered/Assets/gltf/crates_stacked_dungeon_texture.png"
-dest_files=["res://.godot/imported/crates_stacked_dungeon_texture.png-a21c03844bcabbb3ead01b60cc204e99.s3tc.ctex"]
+dest_files=["res://.godot/imported/crates_stacked_dungeon_texture.png-a21c03844bcabbb3ead01b60cc204e99.s3tc.ctex", "res://.godot/imported/crates_stacked_dungeon_texture.png-a21c03844bcabbb3ead01b60cc204e99.etc2.ctex"]
 
 [params]
 
