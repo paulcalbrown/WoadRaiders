@@ -59,6 +59,18 @@ public static class NetConfig
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";
 
+    /// <summary>Extract N from a "WoadRaiders.vN" connection key. False for anything
+    /// else — a foreign key, a mangled manifest, an empty string.</summary>
+    public static bool TryParseVersion(string? key, out int version)
+    {
+        version = 0;
+        const string prefix = "WoadRaiders.v";
+        return key != null
+            && key.StartsWith(prefix, StringComparison.Ordinal)
+            && int.TryParse(key[prefix.Length..], out version)
+            && version > 0;
+    }
+
     /// <summary>Co-op party size cap for one dungeon instance.</summary>
     public const int MaxPlayersPerInstance = 8;
 

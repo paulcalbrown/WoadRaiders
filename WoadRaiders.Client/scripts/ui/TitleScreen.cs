@@ -1,4 +1,5 @@
 using Godot;
+using WoadRaiders.Shared;
 
 namespace WoadRaiders.Client;
 
@@ -20,6 +21,7 @@ public partial class TitleScreen : Control
     private LineEdit _nameEdit = null!;
     private LineEdit _serverEdit = null!;
     private GothicButton _playButton = null!;
+    private VBoxContainer _menu = null!;
 
     public override void _Ready()
     {
@@ -106,25 +108,54 @@ public partial class TitleScreen : Control
         // The menu is narrower than the title, so it gets its own centring.
         var menuCenter = new CenterContainer();
         column.AddChild(menuCenter);
-        var menu = new VBoxContainer { CustomMinimumSize = new Vector2(470, 0) };
-        menu.AddThemeConstantOverride("separation", 12);
-        menuCenter.AddChild(menu);
+        _menu = new VBoxContainer { CustomMinimumSize = new Vector2(470, 0) };
+        _menu.AddThemeConstantOverride("separation", 12);
+        menuCenter.AddChild(_menu);
 
-        _nameEdit = AddField(menu, "Name", ClientConfig.PlayerName);
-        _serverEdit = AddField(menu, "Server", ClientConfig.ServerText);
+        _nameEdit = AddField(_menu, "Name", ClientConfig.PlayerName);
+        _serverEdit = AddField(_menu, "Server", ClientConfig.ServerText);
         _serverEdit.TextSubmitted += _ => Play(); // Enter in the server box starts the game
 
-        menu.AddChild(new Control { CustomMinimumSize = new Vector2(0, 10) }); // spacer
+        _menu.AddChild(new Control { CustomMinimumSize = new Vector2(0, 10) }); // spacer
 
         _playButton = new GothicButton { Text = "Play" };
         _playButton.Pressed += Play;
-        menu.AddChild(_playButton);
+        _menu.AddChild(_playButton);
 
         var quit = new GothicButton { Text = "Quit" };
         quit.Pressed += () => GetTree().Quit();
-        menu.AddChild(quit);
+        _menu.AddChild(quit);
 
         _nameEdit.GrabFocus();
+        CheckForUpdates();
+    }
+
+    /// <summary>Ask GitHub whether a newer build exists — fire-and-forget, so the
+    /// title screen never waits on the network. Godot's synchronization context
+    /// resumes the await on the main thread, where touching the tree is safe.</summary>
+    private async void CheckForUpdates()
+    {
+        var manifest = await UpdateManifest.FetchAsync(ClientConfig.ManifestUrl);
+        // The player may have hit Play (or quit) while we were fetching.
+        if (manifest is null || !manifest.IsNewerThan(NetConfig.ConnectionKey) || !IsInsideTree())
+            return;
+
+        NetConfig.TryParseVersion(manifest.Key, out var released);
+        NetConfig.TryParseVersion(NetConfig.ConnectionKey, out var current);
+
+        var notice = new Label
+        {
+            Text = $"A NEWER BUILD IS OUT — V{released} (THIS IS V{current})",
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        notice.AddThemeFontOverride("font", UiTheme.BodyFont());
+        notice.AddThemeFontSizeOverride("font_size", 17);
+        notice.AddThemeColorOverride("font_color", new Color(1f, 0.8f, 0.4f)); // amber, like the HUD banner
+        _menu.AddChild(notice);
+
+        var get = new GothicButton { Text = "Get the update" };
+        get.Pressed += () => OS.ShellOpen(manifest.Page.Length > 0 ? manifest.Page : NetConfig.DownloadUrl);
+        _menu.AddChild(get);
     }
 
     private static LineEdit AddField(VBoxContainer column, string label, string initial)

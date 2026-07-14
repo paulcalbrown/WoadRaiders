@@ -21,6 +21,8 @@ namespace WoadRaiders.Client;
 ///   --dungeon-select       boot straight to the dungeon-select screen (dev)
 ///   --raid-select          boot straight to the raid-select screen (dev)
 ///   --screenshot=path.png  save the current screen's stills there and exit (dev)
+///   --manifest=URL         fetch the update manifest from here instead of
+///                          GitHub Releases (dev — point it at a local file server)
 /// </summary>
 public static class ClientConfig
 {
@@ -60,6 +62,9 @@ public static class ClientConfig
     /// <summary>Render the title screen, save PNG stills at this path, then quit (dev convenience).</summary>
     public static string? ScreenshotPath { get; private set; }
 
+    /// <summary>Where the startup update check fetches latest.json (dev override).</summary>
+    public static string ManifestUrl { get; private set; } = UpdateManifest.Url;
+
     private static bool _loaded;
 
     /// <summary>Parse the user args once. Idempotent — every screen calls it in _Ready,
@@ -92,6 +97,8 @@ public static class ClientConfig
                 (Mode, InstanceId) = (JoinMode.Join, instance);
             else if (arg.StartsWith("--screenshot="))
                 ScreenshotPath = arg["--screenshot=".Length..];
+            else if (arg.StartsWith("--manifest="))
+                ManifestUrl = arg["--manifest=".Length..];
         }
     }
 

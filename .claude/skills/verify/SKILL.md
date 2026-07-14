@@ -50,6 +50,11 @@ tools/<Probe>.cs` with the server up):
   junk connect data) is rejected WITH a `ConnectDenied` payload naming the
   server's key + download URL, and the current key connects. Re-run it after
   every `ConnectionKey` bump — the payload's format is frozen across versions.
+- `UpdateProbe.cs` fetches and validates the `latest.json` release manifest
+  (no server needed — it hits GitHub Releases, or a URL/file you pass). Run
+  it after every `tools/release.ps1 -Publish`. The client-side notice can be
+  tested without a release: serve a fake manifest locally and launch the
+  client with `--manifest=http://127.0.0.1:PORT/latest.json --screenshot=out.png`.
 Adapt their skeletons for new protocol checks.
 
 A minimal console probe (project ref to `WoadRaiders.Shared`, LiteNetLib comes

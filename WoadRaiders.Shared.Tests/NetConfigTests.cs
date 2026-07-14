@@ -41,4 +41,34 @@ public class NetConfigTests
     {
         Assert.Equal(("myhost", NetConfig.DefaultPort), NetConfig.ParseEndpoint(text));
     }
+
+    [Fact]
+    public void The_current_connection_key_parses_to_its_version()
+    {
+        Assert.True(NetConfig.TryParseVersion(NetConfig.ConnectionKey, out var version));
+        Assert.True(version >= 13); // the key this feature shipped with; only ever bumped
+    }
+
+    [Theory]
+    [InlineData("WoadRaiders.v13", 13)]
+    [InlineData("WoadRaiders.v999", 999)]
+    public void A_well_formed_key_parses(string key, int expected)
+    {
+        Assert.True(NetConfig.TryParseVersion(key, out var version));
+        Assert.Equal(expected, version);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("WoadRaiders.v")]
+    [InlineData("WoadRaiders.vbanana")]
+    [InlineData("WoadRaiders.v0")]
+    [InlineData("WoadRaiders.v-3")]
+    [InlineData("SomeOtherGame.v13")]
+    [InlineData("woadraiders.v13")]
+    public void A_foreign_or_mangled_key_does_not_parse(string? key)
+    {
+        Assert.False(NetConfig.TryParseVersion(key, out _));
+    }
 }
