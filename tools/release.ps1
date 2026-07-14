@@ -27,7 +27,11 @@ param(
     [string]$Tag,
     [switch]$Publish,
     [switch]$SkipExport,
-    [switch]$SkipImage
+    [switch]$SkipImage,
+    # The Godot editor binary. The Scoop shim name locally; CI passes the path
+    # of the freshly downloaded Linux editor. Runs under Windows PowerShell 5.1
+    # and pwsh-on-Linux alike — keep every change compatible with both.
+    [string]$GodotBin = 'godot-mono'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,9 +41,9 @@ $repoUrl = 'https://github.com/paulcalbrown/WoadRaiders'
 
 # The protocol version IS the release identity: read it straight from the source
 # of truth so the manifest can never disagree with the build being shipped.
-$netConfig = Get-Content (Join-Path $repoRoot 'WoadRaiders.Shared\NetConfig.cs') -Raw
+$netConfig = Get-Content (Join-Path $repoRoot 'WoadRaiders.Shared/NetConfig.cs') -Raw
 if ($netConfig -notmatch 'ConnectionKey\s*=\s*"WoadRaiders\.v(\d+)"') {
-    throw 'Could not find ConnectionKey = "WoadRaiders.vN" in WoadRaiders.Shared\NetConfig.cs'
+    throw 'Could not find ConnectionKey = "WoadRaiders.vN" in WoadRaiders.Shared/NetConfig.cs'
 }
 $version = [int]$Matches[1]
 $key = "WoadRaiders.v$version"
@@ -51,9 +55,16 @@ if (-not $SkipExport) {
     New-Item -ItemType Directory -Force $buildDir | Out-Null
     $clientDir = Join-Path $repoRoot 'WoadRaiders.Client'
 
+    # Build the asset-import cache first: .godot/ is gitignored, so a clean
+    # clone (CI in particular) has none and the export would ship broken
+    # resources. Costs nothing when the cache is already current.
+    Write-Host 'Importing assets ...'
+    & $GodotBin --headless --path $clientDir --import
+    if ($LASTEXITCODE -ne 0) { throw "Asset import failed with exit code $LASTEXITCODE" }
+
     foreach ($preset in @('Windows Desktop', 'macOS')) {
         Write-Host "Exporting `"$preset`" (the headless exporter lingers after DONE; be patient) ..."
-        & godot-mono --headless --path $clientDir --export-release $preset
+        & $GodotBin --headless --path $clientDir --export-release $preset
         if ($LASTEXITCODE -ne 0) { throw "Export `"$preset`" failed with exit code $LASTEXITCODE" }
     }
 }
@@ -100,7 +111,7 @@ if (-not $SkipImage) {
     if (-not $engine) { throw 'No docker or podman on PATH - install one, or pass -SkipImage.' }
 
     Write-Host "Building $imageRef with $engine ..."
-    & $engine build -f (Join-Path $repoRoot 'tools\server.Dockerfile') `
+    & $engine build -f (Join-Path $repoRoot 'tools/server.Dockerfile') `
         -t $imageRef -t "${imageRepo}:latest" (Join-Path $buildDir 'server-linux-x64')
     if ($LASTEXITCODE -ne 0) { throw "$engine build failed with exit code $LASTEXITCODE" }
 

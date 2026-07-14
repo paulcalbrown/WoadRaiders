@@ -123,9 +123,16 @@ dotnet test   # resolves WoadRaiders.slnx — runs Core, Shared, and Server test
 ```
 
 ### 5. Ship a release
+Releases are CI/CD: **bump the `ConnectionKey` version and merge to main** — the
+[Release workflow](.github/workflows/release.yml) tests every push, and when the new version has
+no tag yet it builds everything on a clean runner and publishes automatically (Actions'
+`GITHUB_TOKEN` also pushes the container image to ghcr.io, which local runs can't without a
+`write:packages` token). Manual dispatch offers `publish=false` (full dry-run build, artifacts
+attached to the run) and `force=true` (re-issue an existing version's release from the current
+commit). The workflow drives the same script a local release uses, so the paths can't drift:
 ```powershell
 .\tools\release.ps1            # export the client (Windows + macOS), publish the server
-                               # (win-x64 + linux-x64), hash, write build/latest.json (dry run)
+                               # (win-x64 + linux-x64), build the image, write build/latest.json
 .\tools\release.ps1 -Publish   # ...and create the GitHub release (needs an authenticated gh)
 ```
 A release ships the two client builds, a self-contained dedicated server for Windows and Linux
