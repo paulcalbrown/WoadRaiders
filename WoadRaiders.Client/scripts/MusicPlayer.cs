@@ -19,10 +19,12 @@ public static class MusicPlayer
             return null;
 
         // The wav carries its loop in a smpl chunk, but only the editor import
-        // honours it — re-assert so the raw-file path loops too.
+        // honours it — re-assert so the raw-file path loops too. Frame count
+        // must come from the duration, not Data.Length byte math: the editor
+        // import compresses Data (QOA), so bytes no longer map to frames.
         stream.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
         stream.LoopBegin = 0;
-        stream.LoopEnd = stream.Data.Length / 2; // 16-bit mono: two bytes per frame
+        stream.LoopEnd = (int)Math.Round(stream.GetLength() * stream.MixRate);
         return stream;
     }
 
