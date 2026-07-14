@@ -5,26 +5,36 @@ public static class NetConfig
 {
     public const int DefaultPort = 9050;
 
-    /// <summary>Default server endpoint for a client with no override (the local dev loop).</summary>
+    /// <summary>Default server endpoint for the dev loop: the editor, tools, and
+    /// probes all point here unless told otherwise.</summary>
     public const string DefaultHost = "127.0.0.1";
+
+    /// <summary>The public dev server (Azure Container Instances; CI rolls it on every
+    /// release — see tools/deploy-aci.ps1). Exported clients default here so a
+    /// downloaded build connects with no typing.</summary>
+    public const string PublicHost = "woadraiders.eastus.azurecontainer.io";
 
     /// <summary>
     /// Parse a user-supplied "host[:port]" endpoint (IPv4 or hostname; IPv6 is not
     /// supported — the last ':' is taken as the port separator). This parses
     /// title-screen and CLI input, so anything missing or malformed falls back to
     /// the defaults instead of failing: best effort, never crash.
+    /// <paramref name="defaultHost"/> overrides what "no host given" means — the
+    /// client passes its build-appropriate default (<see cref="PublicHost"/> on
+    /// exported builds); null keeps the dev-loop <see cref="DefaultHost"/>.
     /// </summary>
-    public static (string Host, int Port) ParseEndpoint(string? text)
+    public static (string Host, int Port) ParseEndpoint(string? text, string? defaultHost = null)
     {
+        var fallback = defaultHost ?? DefaultHost;
         var value = (text ?? "").Trim();
         if (value.Length == 0)
-            return (DefaultHost, DefaultPort);
+            return (fallback, DefaultPort);
 
         var colon = value.LastIndexOf(':');
         if (colon < 0)
             return (value, DefaultPort);
 
-        var host = colon == 0 ? DefaultHost : value[..colon];
+        var host = colon == 0 ? fallback : value[..colon];
         var port = int.TryParse(value[(colon + 1)..], out var parsed) && parsed is > 0 and <= 65535
             ? parsed
             : DefaultPort;

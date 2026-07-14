@@ -11,7 +11,8 @@ namespace WoadRaiders.Client;
 /// whole scene tree, and this must survive them. Matchmaking (PlayFab) will
 /// eventually hand out the endpoint; this stays as the dev/manual override.
 ///
-///   --server=host[:port]   target server (default 127.0.0.1)
+///   --server=host[:port]   target server (default: the public dev server on
+///                          exported builds; 127.0.0.1 when run from the editor)
 ///   --name=RaiderName      player name sent in the JoinRequest
 ///   --class=knight|rogue|mage|ranger   raid as this class (default knight)
 ///   --dungeon=barrow|cairn forge an instance of this dungeon (default barrow)
@@ -26,8 +27,14 @@ namespace WoadRaiders.Client;
 /// </summary>
 public static class ClientConfig
 {
-    public static string Host { get; private set; } = NetConfig.DefaultHost;
+    public static string Host { get; private set; } = DefaultServerHost;
     public static int Port { get; private set; } = NetConfig.DefaultPort;
+
+    /// <summary>What "no server given" means for THIS build: exported players get
+    /// the public dev server so a downloaded exe just works; the editor keeps the
+    /// local dev loop. The title-screen box and --server override either.</summary>
+    private static string DefaultServerHost =>
+        OS.HasFeature("editor") ? NetConfig.DefaultHost : NetConfig.PublicHost;
     public static string PlayerName { get; set; } = "Woad Raider";
 
     /// <summary>The class to raid as; the character-select screen sets it.</summary>
@@ -106,7 +113,7 @@ public static class ClientConfig
     public static string ServerText => Port == NetConfig.DefaultPort ? Host : $"{Host}:{Port}";
 
     /// <summary>Set the endpoint from user text ("host[:port]"); malformed input falls back to defaults.</summary>
-    public static void SetServer(string text) => (Host, Port) = NetConfig.ParseEndpoint(text);
+    public static void SetServer(string text) => (Host, Port) = NetConfig.ParseEndpoint(text, DefaultServerHost);
 
     /// <summary>Parse a class name, case-insensitive; anything unrecognized is a Knight.</summary>
     private static CharacterClass ParseClass(string text) =>

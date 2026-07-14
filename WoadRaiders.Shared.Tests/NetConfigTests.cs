@@ -42,6 +42,21 @@ public class NetConfigTests
         Assert.Equal(("myhost", NetConfig.DefaultPort), NetConfig.ParseEndpoint(text));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(":9051")]
+    public void A_missing_host_takes_the_caller_supplied_default(string text)
+    {
+        var (host, _) = NetConfig.ParseEndpoint(text, NetConfig.PublicHost);
+        Assert.Equal(NetConfig.PublicHost, host);
+    }
+
+    [Fact]
+    public void An_explicit_host_beats_the_caller_supplied_default()
+    {
+        Assert.Equal(("myhost", 9051), NetConfig.ParseEndpoint("myhost:9051", NetConfig.PublicHost));
+    }
+
     [Fact]
     public void The_current_connection_key_parses_to_its_version()
     {

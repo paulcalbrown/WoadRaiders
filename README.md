@@ -91,8 +91,9 @@ command is `godot-mono`). The client csproj is pinned to `Godot.NET.Sdk/4.7.0` t
 two in lockstep if you upgrade Godot.
 1. Open the `WoadRaiders.Client` folder in the Godot editor once (it generates the `.godot/`
    import cache), then press **Play**. From the CLI: `godot-mono --path WoadRaiders.Client`.
-2. The flow: a Celtic/gothic **title screen** (your name + server endpoint, defaulting to
-   `127.0.0.1:9050`) → **character select** (Knight, Rogue, Mage, or Ranger — per-class stats
+2. The flow: a Celtic/gothic **title screen** (your name + server endpoint — exported builds
+   default to the public dev server `woadraiders.eastus.azurecontainer.io`; editor runs default
+   to `127.0.0.1:9050`) → **character select** (Knight, Rogue, Mage, or Ranger — per-class stats
    live in `Core.ClassArchetypes`; Mage and Ranger fire real projectiles) → **dungeon select**
    (The Barrow or The Cairn) → the **raid browser**, where you forge a fresh instance or join a
    live one → the run itself. You arrive through a blue entrance portal; fellow raiders wear
@@ -115,7 +116,9 @@ two in lockstep if you upgrade Godot.
 Start the server, then launch **two** client instances (Godot editor "Play" + an exported build,
 or two editor windows). Forge a raid in the first client; it then appears in the second client's
 raid browser — join it and both characters share one authoritative instance. (Two clients that
-each *forge* get isolated worlds — that's the instancing working as intended.)
+each *forge* get isolated worlds — that's the instancing working as intended.) Note an exported
+build defaults to the **public** server — point it at the local one with `--server=127.0.0.1`
+or by typing it in the title-screen box.
 
 ### 4. Run the tests
 ```bash

@@ -88,8 +88,19 @@ public static class UiTheme
         using var dir = DirAccess.Open("res://assets/fonts");
         if (dir == null)
             return null;
-        foreach (var file in dir.GetFiles())
+        foreach (var listed in dir.GetFiles())
         {
+            // An exported pack does not contain the raw ttf: it lists the
+            // import stub ("font.ttf.remap") whose source name ResourceLoader
+            // still resolves. Strip the stub suffix or the extension check
+            // below skips every bundled font in a release build (shipping the
+            // system-font fallback instead — that bug hid until a screenshot
+            // of an exported build was compared against the editor's).
+            var file = listed;
+            if (file.EndsWith(".remap"))
+                file = file[..^".remap".Length];
+            else if (file.EndsWith(".import"))
+                file = file[..^".import".Length];
             if (!file.EndsWith(".ttf") && !file.EndsWith(".otf"))
                 continue;
             var path = $"res://assets/fonts/{file}";
