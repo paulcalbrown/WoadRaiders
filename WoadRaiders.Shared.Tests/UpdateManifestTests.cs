@@ -16,6 +16,10 @@ public class UpdateManifestTests
           "downloads": {
             "windows": { "url": "https://example.test/WoadRaiders.exe", "sha256": "aa11" },
             "macos": { "url": "https://example.test/WoadRaiders-macOS.zip", "sha256": "bb22" }
+          },
+          "server": {
+            "windows": { "url": "https://example.test/WoadRaiders-Server-win-x64.zip", "sha256": "cc33" },
+            "linux": { "url": "https://example.test/WoadRaiders-Server-linux-x64.zip", "sha256": "dd44" }
           }
         }
         """;
@@ -31,6 +35,10 @@ public class UpdateManifestTests
         Assert.Equal("aa11", manifest.Windows?.Sha256);
         Assert.Equal("https://example.test/WoadRaiders-macOS.zip", manifest.MacOS?.DownloadUrl);
         Assert.Equal("bb22", manifest.MacOS?.Sha256);
+        Assert.Equal("https://example.test/WoadRaiders-Server-win-x64.zip", manifest.ServerWindows?.DownloadUrl);
+        Assert.Equal("cc33", manifest.ServerWindows?.Sha256);
+        Assert.Equal("https://example.test/WoadRaiders-Server-linux-x64.zip", manifest.ServerLinux?.DownloadUrl);
+        Assert.Equal("dd44", manifest.ServerLinux?.Sha256);
     }
 
     [Fact]
@@ -42,6 +50,8 @@ public class UpdateManifestTests
         Assert.Equal("", manifest.Page);
         Assert.Null(manifest.Windows);
         Assert.Null(manifest.MacOS);
+        Assert.Null(manifest.ServerWindows);
+        Assert.Null(manifest.ServerLinux);
     }
 
     [Fact]

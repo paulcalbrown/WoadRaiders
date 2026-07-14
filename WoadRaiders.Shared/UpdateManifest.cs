@@ -34,6 +34,11 @@ public sealed class UpdateManifest
     public Artifact? Windows;
     public Artifact? MacOS;
 
+    /// <summary>Dedicated-server builds. Not consumed by the client's update
+    /// check — published for self-hosters and future hosting tooling.</summary>
+    public Artifact? ServerWindows;
+    public Artifact? ServerLinux;
+
     /// <summary>True when this manifest describes a build strictly newer than
     /// <paramref name="currentKey"/>. False whenever either key doesn't parse —
     /// and for a dev build running ahead of the published release.</summary>
@@ -62,6 +67,12 @@ public sealed class UpdateManifest
             {
                 manifest.Windows = ReadArtifact(downloads, "windows");
                 manifest.MacOS = ReadArtifact(downloads, "macos");
+            }
+            if (root.TryGetProperty("server", out var server)
+                && server.ValueKind == JsonValueKind.Object)
+            {
+                manifest.ServerWindows = ReadArtifact(server, "windows");
+                manifest.ServerLinux = ReadArtifact(server, "linux");
             }
             return manifest.Key.Length > 0;
         }

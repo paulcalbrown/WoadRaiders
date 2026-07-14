@@ -124,10 +124,14 @@ dotnet test   # resolves WoadRaiders.slnx — runs Core, Shared, and Server test
 
 ### 5. Ship a release
 ```powershell
-.\tools\release.ps1            # export Windows + macOS, hash, write build/latest.json (dry run)
+.\tools\release.ps1            # export the client (Windows + macOS), publish the server
+                               # (win-x64 + linux-x64), hash, write build/latest.json (dry run)
 .\tools\release.ps1 -Publish   # ...and create the GitHub release (needs an authenticated gh)
 ```
-Every release carries a `latest.json` manifest beside the binaries; GitHub's stable
+A release ships four binaries: the two client builds and a self-contained dedicated server for
+Windows and Linux (`WoadRaiders-Server-<rid>.zip`, maps included — unzip and run; on Linux
+`chmod +x WoadRaiders.Server` first, zips don't carry the execute bit). Every release also
+carries a `latest.json` manifest beside the binaries; GitHub's stable
 `releases/latest/download/latest.json` redirect makes the newest release the answer. The client
 fetches it when the title screen opens (in the background — offline or slow networks just mean
 no news) and shows a **"get the update"** notice when the released protocol version is ahead of

@@ -5,11 +5,14 @@ to GitHub Releases together with the latest.json manifest that every client
 polls at startup (see WoadRaiders.Shared/UpdateManifest.cs).
 
 .DESCRIPTION
-  .\tools\release.ps1                 export both platforms, hash, write build/latest.json (dry run)
+  .\tools\release.ps1                 export the client (both platforms), publish the server
+                                      (win-x64 + linux-x64), hash, write build/latest.json (dry run)
   .\tools\release.ps1 -Publish        ...then create the GitHub release via gh
   .\tools\release.ps1 -Tag v13.1      override the tag (default: v<N> from the ConnectionKey;
                                       use this for a re-release within one protocol version)
-  .\tools\release.ps1 -SkipExport     reuse the artifacts already in build/ (dev)
+  .\tools\release.ps1 -SkipExport     reuse the CLIENT artifacts already in build/ (dev).
+                                      The server is always re-published — dotnet publish is
+                                      seconds, unlike the Godot exports.
 
 Needs: godot-mono on PATH with the version-matched export templates installed,
 and (for -Publish) an authenticated gh CLI. Windows PowerShell 5.1 compatible.
@@ -50,7 +53,32 @@ if (-not $SkipExport) {
 
 $exe = Join-Path $buildDir 'WoadRaiders.exe'
 $zip = Join-Path $buildDir 'WoadRaiders-macOS.zip'
-foreach ($artifact in @($exe, $zip)) {
+
+# The dedicated server: a plain dotnet publish per platform, zipped with the
+# maps that land beside the binary (the csproj links them in as Content).
+# Entry paths MUST be forward-slash or Linux unzip tools extract files
+# literally named "maps\Barrow.json"; on the .NET Framework that PowerShell
+# 5.1 hosts, ZipFile only does that with this legacy switch turned off
+# (Compress-Archive has the same disease with no cure — hence ZipFile).
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[AppContext]::SetSwitch('Switch.System.IO.Compression.ZipFile.UseBackslash', $false)
+$serverZips = [ordered]@{}
+foreach ($rid in @('win-x64', 'linux-x64')) {
+    Write-Host "Publishing the dedicated server for $rid ..."
+    $stage = Join-Path $buildDir "server-$rid"
+    # A pristine stage: dotnet publish overwrites but never removes strays, and
+    # everything in this directory ends up in the shipped zip.
+    if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+    & dotnet publish (Join-Path $repoRoot 'WoadRaiders.Server') -c Release -r $rid `
+        --self-contained -p:PublishSingleFile=true -p:DebugType=embedded -o $stage --nologo -v quiet
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with exit code $LASTEXITCODE" }
+    $serverZip = Join-Path $buildDir "WoadRaiders-Server-$rid.zip"
+    if (Test-Path $serverZip) { Remove-Item $serverZip -Force }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($stage, $serverZip)
+    $serverZips[$rid] = $serverZip
+}
+
+foreach ($artifact in @($exe, $zip) + @($serverZips.Values)) {
     if (-not (Test-Path $artifact) -or (Get-Item $artifact).Length -lt 10MB) {
         throw "Artifact missing or suspiciously small: $artifact"
     }
@@ -72,6 +100,16 @@ $manifest = [ordered]@{
             sha256 = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
         }
     }
+    server = [ordered]@{
+        windows = [ordered]@{
+            url = "$repoUrl/releases/download/$Tag/WoadRaiders-Server-win-x64.zip"
+            sha256 = (Get-FileHash $serverZips['win-x64'] -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
+        linux = [ordered]@{
+            url = "$repoUrl/releases/download/$Tag/WoadRaiders-Server-linux-x64.zip"
+            sha256 = (Get-FileHash $serverZips['linux-x64'] -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
+    }
 }
 $manifestPath = Join-Path $buildDir 'latest.json'
 $json = $manifest | ConvertTo-Json -Depth 4
@@ -82,8 +120,11 @@ Write-Host $json
 
 if ($Publish) {
     $notes = "Protocol $key. Clients from v13 on learn about this release automatically " +
-        "via ``releases/latest/download/latest.json`` and point outdated players here."
-    & gh release create $Tag $exe $zip $manifestPath `
+        "via ``releases/latest/download/latest.json`` and point outdated players here.`n`n" +
+        "To host a dedicated server, unzip the server build for your platform and run it " +
+        "(Linux: ``chmod +x WoadRaiders.Server`` first - zip archives don't carry the execute bit). " +
+        "It listens on udp/9050 by default."
+    & gh release create $Tag $exe $zip $serverZips['win-x64'] $serverZips['linux-x64'] $manifestPath `
         --repo paulcalbrown/WoadRaiders --title "WoadRaiders $Tag" --notes $notes
     if ($LASTEXITCODE -ne 0) { throw "gh release create failed with exit code $LASTEXITCODE" }
     Write-Host "Published $repoUrl/releases/tag/$Tag"
