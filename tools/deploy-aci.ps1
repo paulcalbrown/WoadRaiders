@@ -42,6 +42,13 @@ az container create `
     --output none
 if ($LASTEXITCODE -ne 0) { throw "az container create failed with exit code $LASTEXITCODE" }
 
+# `create` on an unchanged spec is a no-op, so a same-tag re-release (force)
+# would leave the old bytes running. Restart re-pulls the image (verified:
+# the event log shows Pulling -> Pulled -> Started); a redundant restart
+# after a real change just costs seconds on a dev server.
+az container restart --resource-group $ResourceGroup --name $Name
+if ($LASTEXITCODE -ne 0) { throw "az container restart failed with exit code $LASTEXITCODE" }
+
 $fqdn = az container show --resource-group $ResourceGroup --name $Name --query "ipAddress.fqdn" -o tsv
 $state = az container show --resource-group $ResourceGroup --name $Name --query "instanceView.state" -o tsv
 Write-Host "Deployed: $fqdn (udp/9050), state: $state"
