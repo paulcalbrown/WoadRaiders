@@ -39,6 +39,14 @@ public sealed class UpdateManifest
     public Artifact? ServerWindows;
     public Artifact? ServerLinux;
 
+    /// <summary>The server's container image reference (ghcr.io), "" when the
+    /// release shipped without one.</summary>
+    public string ServerImage = "";
+
+    /// <summary>The same image as a `docker load`-able release asset, for
+    /// deployments without registry access.</summary>
+    public Artifact? ServerImageArchive;
+
     /// <summary>True when this manifest describes a build strictly newer than
     /// <paramref name="currentKey"/>. False whenever either key doesn't parse —
     /// and for a dev build running ahead of the published release.</summary>
@@ -73,6 +81,16 @@ public sealed class UpdateManifest
             {
                 manifest.ServerWindows = ReadArtifact(server, "windows");
                 manifest.ServerLinux = ReadArtifact(server, "linux");
+                if (server.TryGetProperty("image", out var image)
+                    && image.ValueKind == JsonValueKind.Object)
+                {
+                    manifest.ServerImage = ReadString(image, "ref");
+                    manifest.ServerImageArchive = new Artifact
+                    {
+                        DownloadUrl = ReadString(image, "url"),
+                        Sha256 = ReadString(image, "sha256"),
+                    };
+                }
             }
             return manifest.Key.Length > 0;
         }

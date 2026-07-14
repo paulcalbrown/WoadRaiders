@@ -40,6 +40,8 @@ Console.WriteLine($"[probe] windows:      {manifest.Windows?.DownloadUrl ?? "MIS
 Console.WriteLine($"[probe] macos:        {manifest.MacOS?.DownloadUrl ?? "MISSING"} sha256={manifest.MacOS?.Sha256 ?? "-"}");
 Console.WriteLine($"[probe] server win:   {manifest.ServerWindows?.DownloadUrl ?? "MISSING"} sha256={manifest.ServerWindows?.Sha256 ?? "-"}");
 Console.WriteLine($"[probe] server linux: {manifest.ServerLinux?.DownloadUrl ?? "MISSING"} sha256={manifest.ServerLinux?.Sha256 ?? "-"}");
+Console.WriteLine($"[probe] server image: {(manifest.ServerImage.Length > 0 ? manifest.ServerImage : "MISSING")} " +
+    $"archive={manifest.ServerImageArchive?.DownloadUrl ?? "MISSING"}");
 
 Check(NetConfig.TryParseVersion(manifest.Key, out var released), "the manifest key parses as WoadRaiders.vN");
 Check(manifest.Page.StartsWith("https://", StringComparison.Ordinal), "the releases page is https");
@@ -47,6 +49,8 @@ Check(manifest.Windows is { DownloadUrl.Length: > 0, Sha256.Length: 64 }, "the W
 Check(manifest.MacOS is { DownloadUrl.Length: > 0, Sha256.Length: 64 }, "the macOS artifact has a url and a sha256");
 Check(manifest.ServerWindows is { DownloadUrl.Length: > 0, Sha256.Length: 64 }, "the Windows server artifact has a url and a sha256");
 Check(manifest.ServerLinux is { DownloadUrl.Length: > 0, Sha256.Length: 64 }, "the Linux server artifact has a url and a sha256");
+Check(manifest.ServerImage.StartsWith("ghcr.io/", StringComparison.Ordinal), "the server image ref points at ghcr.io");
+Check(manifest.ServerImageArchive is { DownloadUrl.Length: > 0, Sha256.Length: 64 }, "the image archive has a url and a sha256");
 
 NetConfig.TryParseVersion(NetConfig.ConnectionKey, out var local);
 Check(released <= local,

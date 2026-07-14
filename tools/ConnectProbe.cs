@@ -2,8 +2,8 @@
 // to end against a running dedicated server (see .claude/skills/verify). A
 // .NET 10 file-based app:
 //
-//   dotnet run --project WoadRaiders.Server        (in one shell)
-//   dotnet run tools/ConnectProbe.cs [port]        (in another)
+//   dotnet run --project WoadRaiders.Server              (in one shell)
+//   dotnet run tools/ConnectProbe.cs [host[:port]]       (in another)
 //
 // It dials the server three ways and asserts, from the wire alone:
 //   A) a stale connection key is rejected, and the reject carries a
@@ -21,12 +21,12 @@ using LiteNetLib;
 using LiteNetLib.Utils;
 using WoadRaiders.Shared;
 
-const string Host = "127.0.0.1";
-var port = args.Length > 0 && int.TryParse(args[0], out var parsed) ? parsed : NetConfig.DefaultPort;
+var (host, port) = NetConfig.ParseEndpoint(args.Length > 0 ? args[0] : null);
 var failures = 0;
+Console.WriteLine($"[probe] target {host}:{port}");
 
 // --- A: a stale build ---------------------------------------------------
-var stale = Dial("stale key \"WoadRaiders.v0\"", net => net.Connect(Host, port, "WoadRaiders.v0"));
+var stale = Dial("stale key \"WoadRaiders.v0\"", net => net.Connect(host, port, "WoadRaiders.v0"));
 Check(!stale.Connected, "a stale build is not let in");
 Check(stale.Reason == DisconnectReason.ConnectionRejected, "the refusal is a connection reject");
 Check(stale.Denial != null, "the reject carries a ConnectDenied payload");
@@ -38,13 +38,13 @@ Check(stale.Denial?.Message.Contains(NetConfig.DownloadUrl) == true,
 // --- B: hostile connect data --------------------------------------------
 var junkData = new NetDataWriter();
 junkData.Put(0xDEADBEEF); // not a LiteNetLib string — the server must still answer, not choke
-var junk = Dial("non-string connect data", net => net.Connect(Host, port, junkData));
+var junk = Dial("non-string connect data", net => net.Connect(host, port, junkData));
 Check(!junk.Connected, "junk connect data is not let in");
 Check(junk.Denial != null, "even junk is told why (ConnectDenied payload)");
 
 // --- C: the current build ------------------------------------------------
 var current = Dial($"current key \"{NetConfig.ConnectionKey}\"",
-    net => net.Connect(Host, port, NetConfig.ConnectionKey));
+    net => net.Connect(host, port, NetConfig.ConnectionKey));
 Check(current.Connected, "the matching build connects");
 
 Console.WriteLine(failures == 0 ? "[probe] ALL CHECKS PASSED" : $"[probe] {failures} CHECK(S) FAILED");

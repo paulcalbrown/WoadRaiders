@@ -73,5 +73,11 @@ Gotchas:
   is rejected at connect. Since v13 the reject carries a `ConnectDenied`
   payload (server key + reason) in `DisconnectInfo.AdditionalData`; a probe
   that dials with the wrong key can read it to learn the server's key.
+- To verify the server CONTAINER image (podman on this machine), probe the
+  podman machine's IP, not 127.0.0.1 — Windows' WSL2 localhost relay does not
+  forward UDP, so a published `-p 9050:9050/udp` port is unreachable via
+  localhost and every dial just times out. Get the IP with
+  `podman machine ssh "ip -4 addr show eth0"`, then
+  `dotnet run tools/ConnectProbe.cs <machine-ip>`.
 - The Godot client (`WoadRaiders.Client`) needs `godot-mono` and a window;
   probe the socket instead unless the change is client-rendering code.
