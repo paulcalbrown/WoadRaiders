@@ -129,7 +129,11 @@ no tag yet it builds everything on a clean runner and publishes automatically (A
 `GITHUB_TOKEN` also pushes the container image to ghcr.io, which local runs can't without a
 `write:packages` token). Manual dispatch offers `publish=false` (full dry-run build, artifacts
 attached to the run) and `force=true` (re-issue an existing version's release from the current
-commit). The workflow drives the same script a local release uses, so the paths can't drift:
+commit). After publishing, CI rolls the **public dev server** — an Azure Container Instance at
+`woadraiders.eastus.azurecontainer.io` (udp/9050; ACI because Container Apps has no UDP
+ingress) — onto the new image via `tools/deploy-aci.ps1` and OIDC federated login (no stored
+Azure secrets). Stop it when idle with `az container stop -g woadraiders -n woadraiders-server`.
+The workflow drives the same script a local release uses, so the paths can't drift:
 ```powershell
 .\tools\release.ps1            # export the client (Windows + macOS), publish the server
                                # (win-x64 + linux-x64), build the image, write build/latest.json
