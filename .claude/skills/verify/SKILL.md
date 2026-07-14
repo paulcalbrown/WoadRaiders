@@ -46,6 +46,10 @@ tools/<Probe>.cs` with the server up):
   opens in the snapshot, walking in yields a RunComplete and removal from
   the world. It needs the tiny arena so the fight is fast — start the server
   with `--map tools/maps/portal_arena.json`.
+- `ConnectProbe.cs` verifies the connect-refusal handshake: a stale key (and
+  junk connect data) is rejected WITH a `ConnectDenied` payload naming the
+  server's key + download URL, and the current key connects. Re-run it after
+  every `ConnectionKey` bump — the payload's format is frozen across versions.
 Adapt their skeletons for new protocol checks.
 
 A minimal console probe (project ref to `WoadRaiders.Shared`, LiteNetLib comes
@@ -61,6 +65,8 @@ and split into chunks.
 
 Gotchas:
 - The ConnectionKey is version-gated (`WoadRaiders.vN`) — a stale probe build
-  is silently rejected at connect.
+  is rejected at connect. Since v13 the reject carries a `ConnectDenied`
+  payload (server key + reason) in `DisconnectInfo.AdditionalData`; a probe
+  that dials with the wrong key can read it to learn the server's key.
 - The Godot client (`WoadRaiders.Client`) needs `godot-mono` and a window;
   probe the socket instead unless the change is client-rendering code.

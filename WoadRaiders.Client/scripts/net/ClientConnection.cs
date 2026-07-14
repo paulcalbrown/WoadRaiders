@@ -22,6 +22,10 @@ public enum ConnectionState
 
     /// <summary>Lost (or never had) the server; a retry is counting down.</summary>
     Disconnected,
+
+    /// <summary>The server refused this build's version. Terminal — retrying cannot
+    /// fix it; the player needs a newer client (see <see cref="ClientConnection.RefusalMessage"/>).</summary>
+    Incompatible,
 }
 
 /// <summary>
@@ -31,7 +35,8 @@ public enum ConnectionState
 /// lifecycle: Connecting → Lobby (peer up; <see cref="Connected"/> fires and the
 /// owner decides what to send — the raid browser lists instances, the game screen
 /// joins) → Joining (<see cref="SendJoin"/>) → Playing (Welcome received), dropping
-/// to Disconnected and auto-retrying on loss. A denied join falls back to Lobby.
+/// to Disconnected and auto-retrying on loss. A denied join falls back to Lobby;
+/// a version-refused connect parks in Incompatible (terminal — see <see cref="RefusalMessage"/>).
 /// Everything above this class deals in typed packets and events only.
 /// </summary>
 public sealed class ClientConnection
@@ -50,6 +55,11 @@ public sealed class ClientConnection
     private double _retryIn;
 
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
+
+    /// <summary>Why the server refused us, straight from its ConnectDenied reject
+    /// payload (or a stock line for a bare rejection). Null once connected, and
+    /// while nothing has been refused. The UI shows it verbatim.</summary>
+    public string? RefusalMessage { get; private set; }
 
     /// <summary>Transport is up (fires on every connect, including retries). The owner
     /// sends what its screen needs: a list request, a join, or nothing yet.</summary>
@@ -113,6 +123,7 @@ public sealed class ClientConnection
         {
             _server = peer;
             State = ConnectionState.Lobby;
+            RefusalMessage = null; // whatever turned us away before, we're in now
             // A fresh connection can be to a restarted server whose ticks begin
             // again at zero — stale-tick tracking from the old session would
             // swallow every snapshot, so it starts over too.
@@ -126,6 +137,28 @@ public sealed class ClientConnection
         _listener.PeerDisconnectedEvent += (_, info) =>
         {
             _server = null;
+
+            // A v13+ server's rejection says why, via a ConnectDenied payload
+            // whose format is frozen across version gates. A key mismatch is
+            // terminal — no retry makes this build compatible — while everything
+            // else (full server, plain loss, old server's bare reject) keeps the
+            // retry loop alive.
+            if (ReadDenial(info) is { } denied)
+            {
+                RefusalMessage = denied.Message;
+                if (denied.ServerKey != NetConfig.ConnectionKey)
+                {
+                    State = ConnectionState.Incompatible;
+                    GD.PrintErr($"Server refused this build: {denied.Message}");
+                    return;
+                }
+            }
+            else if (info.Reason == DisconnectReason.ConnectionRejected)
+            {
+                // A bare reject (pre-v13 server): full or version-skewed, it won't say.
+                RefusalMessage = "The server turned us away — it may be full, or running a different build.";
+            }
+
             State = ConnectionState.Disconnected;
             _retryIn = RetrySeconds;
             GD.Print($"Disconnected from server ({info.Reason}) — retrying in {RetrySeconds:0}s.");
@@ -192,6 +225,23 @@ public sealed class ClientConnection
         {
             GD.PrintErr($"Bad packet from server — disconnecting ({e.GetType().Name}: {e.Message})");
             peer.Disconnect();
+        }
+    }
+
+    /// <summary>The ConnectDenied payload off a rejection, or null — absent (an old
+    /// server, a plain connection loss) and unparseable (hostile wire) look the same.</summary>
+    private static ConnectDeniedPacket? ReadDenial(DisconnectInfo info)
+    {
+        if (info.Reason != DisconnectReason.ConnectionRejected
+            || info.AdditionalData is not { AvailableBytes: > 0 } data)
+            return null;
+        try
+        {
+            return Read<ConnectDeniedPacket>(data);
+        }
+        catch
+        {
+            return null;
         }
     }
 

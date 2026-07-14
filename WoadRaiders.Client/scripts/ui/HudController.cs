@@ -131,8 +131,10 @@ public partial class HudController : CanvasLayer
     /// <summary>Call when a snapshot shows the local player just took a hit.</summary>
     public void OnDamage() => _chip.OnDamage();
 
-    /// <summary>Redraw everything from the current state; runs once per frame.</summary>
-    public void Refresh(ClientState state, ConnectionState connection, double delta)
+    /// <summary>Redraw everything from the current state; runs once per frame.
+    /// <paramref name="refusal"/> is the server's stated reason when it turned us
+    /// away (<see cref="ClientConnection.RefusalMessage"/>), shown over the stock lines.</summary>
+    public void Refresh(ClientState state, ConnectionState connection, double delta, string? refusal = null)
     {
         // The fill snaps to current health; the chip behind it lingers then drains,
         // so a hit leaves a brief pale trail of what was lost.
@@ -152,7 +154,10 @@ public partial class HudController : CanvasLayer
         {
             ConnectionState.Connecting => "Connecting to server ...",
             ConnectionState.Lobby or ConnectionState.Joining => "Joining ...",
-            ConnectionState.Disconnected => "Connection lost — retrying ...",
+            ConnectionState.Disconnected => refusal is { } why
+                ? $"{why} Retrying ..."
+                : "Connection lost — retrying ...",
+            ConnectionState.Incompatible => refusal ?? "This build is out of date.",
             _ => "",
         };
 

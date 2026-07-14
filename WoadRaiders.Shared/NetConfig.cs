@@ -50,9 +50,14 @@ public static class NetConfig
     /// v10 = dungeon instances (JoinRequest create/join mode + instance fields,
     ///       WelcomePacket.InstanceId, instance list and join-denied packets),
     /// v11 = the boss portal (WorldSnapshotPacket portal fields, RunComplete),
-    /// v12 = PlayerSnapshot.Name (fellow raiders' overhead nameplates).
+    /// v12 = PlayerSnapshot.Name (fellow raiders' overhead nameplates),
+    /// v13 = connect rejects carry a <see cref="ConnectDeniedPacket"/> payload
+    ///       (server key + reason), so an outdated client learns why.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v12";
+    public const string ConnectionKey = "WoadRaiders.v13";
+
+    /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
+    public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";
 
     /// <summary>Co-op party size cap for one dungeon instance.</summary>
     public const int MaxPlayersPerInstance = 8;

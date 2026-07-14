@@ -120,7 +120,7 @@ public partial class GameScreen : Node3D
             _camera.Follow(Vector3.Zero, delta);
         }
 
-        _hud.Refresh(_state, _connection.State, delta);
+        _hud.Refresh(_state, _connection.State, delta, _connection.RefusalMessage);
     }
 
     public override void _Input(InputEvent @event)

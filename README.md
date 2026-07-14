@@ -59,9 +59,12 @@ target from `Core`/`Shared`.
   loot piles up) — so every snapshot is framed as one or more tick-stamped chunks (most fit in
   one), and the client's `SnapshotAssembler` reassembles them with a tick guard that restores
   the never-deliver-stale property the old Sequenced channel provided.
-- The **connection key** (`WoadRaiders.v12`) is bumped whenever the wire format changes — the
-  only build-compatibility gate at connect time. Inbound messages are **rate-limited per
-  connection** (token bucket), so one hot client can't starve the loop.
+- The **connection key** (`WoadRaiders.v13`) is bumped whenever the wire format changes — the
+  only build-compatibility gate at connect time. A refused connect is answered with a
+  `ConnectDenied` payload (frozen format, readable across version gates) saying why — outdated
+  build (with the download URL) or full server — so the client can tell the player instead of
+  silently retrying forever. Inbound messages are **rate-limited per connection** (token
+  bucket), so one hot client can't starve the loop.
 - The server steps each instance's simulation at **30 Hz** and broadcasts snapshots at **20 Hz**;
   it hosts up to **16 live instances** of **8 raiders** each.
 

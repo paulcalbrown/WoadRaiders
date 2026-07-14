@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using LiteNetLib;
+using LiteNetLib.Utils;
 using WoadRaiders.Core;
 using WoadRaiders.Shared;
 
@@ -159,10 +160,27 @@ public sealed class GameServer
     {
         _listener.ConnectionRequestEvent += request =>
         {
-            if (_net.ConnectedPeersCount < NetConfig.MaxConnections)
-                request.AcceptIfKey(NetConfig.ConnectionKey);
+            // Refusals say why: a ConnectDenied payload rides the connection-layer
+            // reject, so even a build this server won't talk to can read it (the
+            // payload's format is frozen). The version check runs first — when a
+            // stale client hits a full server, "update your build" is the answer
+            // that still helps once a slot frees up.
+            if (!request.Data.TryGetString(out var clientKey) || clientKey != NetConfig.ConnectionKey)
+            {
+                _log.Info($"[!] Refused {request.RemoteEndPoint}: client build \"{clientKey}\" (server is {NetConfig.ConnectionKey})");
+                request.Reject(ConnectDenied(
+                    $"This server runs {NetConfig.ConnectionKey}, which cannot talk to your build — " +
+                    $"get the latest at {NetConfig.DownloadUrl}"));
+            }
+            else if (_net.ConnectedPeersCount >= NetConfig.MaxConnections)
+            {
+                _log.Info($"[!] Refused {request.RemoteEndPoint}: server full ({_net.ConnectedPeersCount} online)");
+                request.Reject(ConnectDenied("Every raid slot is taken — try again shortly."));
+            }
             else
-                request.Reject();
+            {
+                request.Accept();
+            }
         };
 
         _listener.PeerConnectedEvent += peer =>
@@ -189,6 +207,14 @@ public sealed class GameServer
         };
 
         _listener.NetworkReceiveEvent += OnReceive;
+    }
+
+    /// <summary>Frame a connect refusal for <see cref="ConnectionRequest.Reject(NetDataWriter)"/>.</summary>
+    private static NetDataWriter ConnectDenied(string message)
+    {
+        var writer = new NetDataWriter();
+        new ConnectDeniedPacket { ServerKey = NetConfig.ConnectionKey, Message = message }.Serialize(writer);
+        return writer;
     }
 
     private void OnReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)

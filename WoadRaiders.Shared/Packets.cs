@@ -25,6 +25,40 @@ public enum JoinDenyReason : byte
     ServerFull = 2,
 }
 
+/// <summary>
+/// Server → client, riding the connection-layer reject (LiteNetLib's
+/// <c>ConnectionRequest.Reject(data)</c> → <c>DisconnectInfo.AdditionalData</c>) —
+/// NOT the <see cref="MessageType"/> framing, which never gets a chance to run.
+/// Tells a refused client why: a version-skewed build, or a full server.
+///
+/// FROZEN FORMAT — this is the one packet that must cross version gates, since
+/// its whole job is to be read by a client whose build does NOT match the
+/// server's. Never remove, reorder, or retype these fields; only append.
+/// </summary>
+public sealed class ConnectDeniedPacket : INetSerializable
+{
+    /// <summary>The server's <see cref="NetConfig.ConnectionKey"/>. A client whose own
+    /// key differs is outdated and should stop retrying; a client whose key matches was
+    /// refused for a transient reason (e.g. a full server) and may retry.</summary>
+    public string ServerKey = "";
+
+    /// <summary>Human-readable reason, ready to show on screen (includes the
+    /// download URL when the refusal is a version mismatch).</summary>
+    public string Message = "";
+
+    public void Serialize(NetDataWriter w)
+    {
+        w.Put(ServerKey);
+        w.Put(Message);
+    }
+
+    public void Deserialize(NetDataReader r)
+    {
+        ServerKey = r.GetString();
+        Message = r.GetString();
+    }
+}
+
 /// <summary>Client → server. Sent once, right after connecting.</summary>
 public sealed class JoinRequest : INetSerializable
 {

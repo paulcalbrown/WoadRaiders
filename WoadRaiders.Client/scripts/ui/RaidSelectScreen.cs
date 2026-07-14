@@ -68,7 +68,10 @@ public partial class RaidSelectScreen : Control
         _status.Text = _connection.State switch
         {
             ConnectionState.Connecting => $"Seeking the warband-fires at {ClientConfig.ServerText} ...",
-            ConnectionState.Disconnected => "The server is beyond reach — retrying ...",
+            ConnectionState.Incompatible => _connection.RefusalMessage ?? "This build is out of date.",
+            ConnectionState.Disconnected => _connection.RefusalMessage is { } why
+                ? $"{why} Retrying ..."
+                : "The server is beyond reach — retrying ...",
             _ => _notice,
         };
     }
