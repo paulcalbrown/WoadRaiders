@@ -5,6 +5,9 @@ obj/
 *.suo
 .vs/
 
+# Exported game builds (godot --export → repo-root build/)
+build/
+
 # Rider / JetBrains
 .idea/
 *.DotSettings.user
@@ -13,7 +16,8 @@ obj/
 .godot/
 .import/
 export.cfg
-export_presets.cfg
+# export_presets.cfg IS tracked: its paths are repo-relative, so the CLI
+# export setup reproduces from a clean clone. (Godot ignores it by default.)
 *.translation
 
 # Claude Code (personal/local settings)
