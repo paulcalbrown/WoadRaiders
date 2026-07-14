@@ -1,8 +1,12 @@
-# CI/CD for WoadRaiders releases. Every push to main builds and tests; a
-# release is published automatically when the protocol version in
-# NetConfig.ConnectionKey ("WoadRaiders.vN") has no tag yet — so bumping the
-# key and merging IS the release action. Ordinary commits within a version
-# just get CI.
+# CI/CD for WoadRaiders releases. Every push to main builds, tests, and
+# publishes, so the release download always reflects the tip of main. The
+# protocol version in NetConfig.ConnectionKey ("WoadRaiders.vN") is the
+# release identity: a brand-new version creates its tag "vN", while a push
+# within an existing version re-issues that tag — moving it to the new commit
+# and refreshing every asset (client exe/zip, server builds, image,
+# latest.json) — then redeploys the dev server. Bumping the key still starts a
+# new protocol generation; commits within a version now keep its release
+# current instead of only running CI.
 #
 # The build/publish engine is tools/release.ps1 — the same script used for
 # local releases — so the two paths cannot drift. Actions' GITHUB_TOKEN has
@@ -51,15 +55,18 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet test WoadRaiders.slnx
 
-  # Decide what this run does: build nothing (CI only), build a dry run, or
-  # build and publish. The protocol version in NetConfig is the release
-  # identity, exactly as in tools/release.ps1.
+  # Decide what this run does. A push to main always builds and publishes,
+  # re-issuing the current version's tag when it already exists. Manual
+  # dispatch can dry-run (publish=false) or force a re-release of an existing
+  # tag. The protocol version in NetConfig is the release identity, exactly as
+  # in tools/release.ps1.
   gate:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.decide.outputs.tag }}
       build: ${{ steps.decide.outputs.build }}
       publish: ${{ steps.decide.outputs.publish }}
+      exists: ${{ steps.decide.outputs.exists }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -77,8 +84,12 @@ jobs:
           build=false
           publish=false
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            # A push only releases a brand-new protocol version.
-            if [ "$exists" = "false" ]; then build=true; publish=true; fi
+            # Every push to main refreshes the release: a brand-new protocol
+            # version creates its tag, a push within an existing version
+            # re-issues that tag (moving it to this commit — see the delete
+            # step below) so the download always matches main.
+            build=true
+            publish=true
           else
             build=true
             if [ "${{ inputs.publish }}" = "true" ]; then
@@ -88,6 +99,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
           echo "$tag: exists=$exists -> build=$build publish=$publish"
 
   release:
@@ -124,8 +136,12 @@ jobs:
           unzip -q /tmp/templates.tpz -d /tmp/godot-templates
           mv /tmp/godot-templates/templates ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
 
+      # Re-issuing an existing tag: gh release create refuses a tag that already
+      # has a release, so clear it first. --cleanup-tag drops the git tag too,
+      # and release.ps1 recreates it at this commit — the tag follows main.
+      # Fires for a same-version push and for a forced manual re-release alike.
       - name: Delete the release being re-issued
-        if: needs.gate.outputs.publish == 'true' && inputs.force == true
+        if: needs.gate.outputs.publish == 'true' && needs.gate.outputs.exists == 'true'
         run: gh release delete "${{ needs.gate.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
 
       - name: Build (and publish) the release
