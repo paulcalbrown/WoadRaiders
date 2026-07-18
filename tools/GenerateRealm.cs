@@ -1,29 +1,29 @@
-// Generates The Crag — the first open realm — as ONE file, the authored-format
-// Godot scene:
+// Generates The Crag — the first open realm — as a matched pair of artifacts:
 //
-//   WoadRaiders.Client/maps/Crag.tscn   BUILT-IN Godot nodes and resources
-//                                       ONLY — no scripts of any kind, so the
-//                                       scene opens whole in any Godot editor
-//                                       with nothing to build first. The
-//                                       terrain is a subdivided PlaneMesh
-//                                       displaced by a heightmap Image through
-//                                       a ShaderMaterial (visible in editor
-//                                       and game alike); the simulation's
-//                                       heightfield rides as plain metadata on
-//                                       the scene root; braziers, the dusk sky
-//                                       and sun, stone visuals + collision,
-//                                       and the spawn/enemy/boss markers are
-//                                       ordinary nodes.
+//   WoadRaiders.Client/maps/Crag.json   the simulation geometry the server
+//                                       hosts (heightfield, solids, spawns,
+//                                       props), pointing at the scene.
+//   WoadRaiders.Client/maps/Crag.tscn   the realm's Godot scene, saved by
+//                                       GODOT'S OWN SERIALIZER — exactly what
+//                                       a naturally-authored scene looks like:
+//                                       built-in nodes and resources only, a
+//                                       REAL displaced terrain ArrayMesh, no
+//                                       scripts, no metadata, nothing a
+//                                       vanilla Godot editor doesn't already
+//                                       understand.
 //
-// A .NET 10 file-based app:
+// A .NET 10 file-based app (godot-mono and the client build are driven
+// automatically):
 //
 //   dotnet run tools/GenerateRealm.cs
 //
-// The .tscn IS the map: the server parses it directly through the shared
-// scene-to-geometry pipeline (Core.DungeonSceneFile reads the root metadata —
-// the same code this tool validates its output with below), so there is no
-// JSON to export or keep in step. Hand-edit the scene freely; check it
-// afterwards with tools/ValidateRealm.cs — the same bar hand-made realms pass.
+// The flow: compute and validate the realm → write the JSON → have Godot
+// build the scene from it (tools/build_realm_scene.gd → RealmSceneBuilder,
+// ResourceSaver.save) → normalize the serializer's random sub-resource ids so
+// regeneration is deterministic → ROUND-TRIP VERIFY by baking the scene back
+// through the standard hand-made pipeline (tools/bake_realm.gd samples the
+// real terrain mesh) and comparing against the JSON. The scene you can hand-
+// edit and the geometry the server simulates are proven to agree.
 //
 // The land is computed, not drawn: a "wild" highland of crags is the default,
 // and the playable realm is carved into it as a chain of smooth-blended plates
@@ -35,7 +35,7 @@
 // route climbs ~260 units, ledges drop you back down one-way, cliffs are
 // simply terrain too steep to walk.
 //
-// The tool validates its own output with the REAL simulation rules:
+// Validation runs the REAL simulation rules:
 //   - a virtual raider walks the whole route with DungeonGeometry.Move at
 //     player speed and must reach the boss court (and end up high);
 //   - Core.RealmValidator proves every camp comfortably reachable, the borders
@@ -45,9 +45,10 @@
 #:project ../WoadRaiders.Core/WoadRaiders.Core.csproj
 #:property PublishAot=false
 
-using System.Globalization;
+using System.Diagnostics;
 using System.Numerics;
 using System.Text;
+using System.Text.RegularExpressions;
 using WoadRaiders.Core;
 
 const float Cell = 40f;         // world units between height samples
@@ -198,9 +199,9 @@ float HeightAt(float x, float z)
 
 // ------------------------------------------------------------- bake the field
 
-// Heights are rounded to 3 decimals so the .tscn (text floats), the JSON, and
-// the wire all carry the IDENTICAL value — re-exporting the scene reproduces
-// the sim geometry bit for bit.
+// Heights are rounded to 3 decimals so the JSON, the scene's mesh vertices,
+// and the wire all carry the IDENTICAL value — the scene-bake round trip below
+// reproduces the sim geometry exactly.
 var heights = new float[W * D];
 for (var j = 0; j < D; j++)
     for (var i = 0; i < W; i++)
@@ -289,407 +290,18 @@ var bossSpawn = OnGround(4200, 4820);
 ];
 var props = brazierSpots.Select(b => new DungeonProp(PropType.Brazier, OnGround(b.x, b.z))).ToList();
 
-// ------------------------------------------------------------- write TSCN
-// The same data as an authored-format Godot scene. Sub-resource recipes
-// (flame stack, stone material) follow the conventions the old dungeon
-// generators established, at world scale.
+// ------------------------------------------------------------- geometry & validation
 
-string F(float v) => v.ToString("0.######", CultureInfo.InvariantCulture);
-
-// A DirectionalLight3D basis from YXZ Euler degrees (pitch around X, yaw
-// around Y), written row-major as .tscn Transform3D expects: M = Ry * Rx.
-string DirTransform(float pitchDeg, float yawDeg)
+var json = DungeonGeometryFile.ToJson(new DungeonGeometry(
+    playerSpawn, solids,
+    enemies.Select(e => new EnemySpawnPoint(OnGround(e.x, e.z), e.type)).ToList(),
+    field)
 {
-    var p = pitchDeg * MathF.PI / 180f;
-    var y = yawDeg * MathF.PI / 180f;
-    float cp = MathF.Cos(p), sp = MathF.Sin(p), cy = MathF.Cos(y), sy = MathF.Sin(y);
-    float[] m = { cy, sy * sp, sy * cp, 0f, cp, -sp, -sy, cy * sp, cy * cp };
-    return $"Transform3D({string.Join(", ", m.Select(F))}, 0, 0, 0)";
-}
-
-string At(float x, float yy, float z) => $"Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, {F(x)}, {F(yy)}, {F(z)})";
-
-// The terrain shader: displaces the subdivided plane by the heightmap (one
-// texel per height sample, fetched exactly — no filtering), shades the land by
-// height and steepness (the same biome banding the client's fallback renderer
-// uses), and breaks it up with a cheap value noise. Pure built-in Godot: a
-// Shader resource, not a script.
-const string TerrainShaderCode = """
-shader_type spatial;
-
-// The land, displaced by the same heightfield the simulation walks (the sim
-// copy rides as metadata on the scene root). The Terrain node must stay
-// translation-only: model space is treated as world-aligned.
-uniform sampler2D heightmap : filter_nearest;
-uniform vec2 field_origin = vec2(0.0, 0.0);
-uniform float cell_size = 40.0;
-
-varying vec3 biome;
-
-float height_at(ivec2 cell) {
-	ivec2 size = textureSize(heightmap, 0);
-	cell = clamp(cell, ivec2(0), size - 1);
-	return texelFetch(heightmap, cell, 0).r;
-}
-
-void vertex() {
-	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	ivec2 cell = ivec2(round((world.xz - field_origin) / cell_size));
-	float h = height_at(cell);
-	VERTEX.y = h - MODEL_MATRIX[3].y;
-
-	float hw = height_at(cell + ivec2(-1, 0));
-	float he = height_at(cell + ivec2(1, 0));
-	float hn = height_at(cell + ivec2(0, -1));
-	float hs = height_at(cell + ivec2(0, 1));
-	vec3 normal = normalize(vec3(hw - he, 2.0 * cell_size, hn - hs));
-	NORMAL = normal;
-
-	// The dusk-lit biome bands: gorge stone, glen grass, heather moor, pale
-	// upland, bare crag — with steep ground shedding its soil into rock.
-	vec3 gorge = vec3(0.14, 0.13, 0.15);
-	vec3 glen = vec3(0.22, 0.32, 0.16);
-	vec3 moor = vec3(0.30, 0.27, 0.18);
-	vec3 upland = vec3(0.33, 0.33, 0.23);
-	vec3 crag = vec3(0.33, 0.32, 0.35);
-	vec3 by_height =
-		h < -60.0 ? gorge :
-		h < 20.0 ? mix(gorge, glen, (h + 60.0) / 80.0) :
-		h < 140.0 ? mix(glen, moor, (h - 20.0) / 120.0) :
-		h < 280.0 ? mix(moor, upland, (h - 140.0) / 140.0) :
-		h < 420.0 ? mix(upland, crag, (h - 280.0) / 140.0) : crag;
-	float rockiness = clamp((0.80 - normal.y) / 0.35, 0.0, 1.0);
-	biome = mix(by_height, crag * 0.9, rockiness);
-}
-
-float noise_hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float value_noise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f);
-	return mix(mix(noise_hash(i), noise_hash(i + vec2(1.0, 0.0)), f.x),
-			mix(noise_hash(i + vec2(0.0, 1.0)), noise_hash(i + vec2(1.0, 1.0)), f.x), f.y);
-}
-
-void fragment() {
-	vec3 world = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	float grain = value_noise(world.xz * 0.025) * 0.6 + value_noise(world.xz * 0.1) * 0.4;
-	ALBEDO = biome * mix(0.82, 1.12, grain);
-	ROUGHNESS = 1.0;
-}
-""";
-
-var subCount = 25 + solids.Count * 2; // fixed recipes + a BoxMesh and BoxShape3D per solid
-
-var scene = new StringBuilder();
-scene.AppendLine($"[gd_scene load_steps={1 + subCount} format=3]");
-scene.AppendLine();
-
-// --- the sky and light rig
-scene.AppendLine("""
-[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
-sky_top_color = Color(0.09, 0.12, 0.22, 1)
-sky_horizon_color = Color(0.46, 0.28, 0.22, 1)
-ground_bottom_color = Color(0.05, 0.05, 0.07, 1)
-ground_horizon_color = Color(0.3, 0.2, 0.17, 1)
-sun_angle_max = 30.0
-sun_curve = 0.6
-
-[sub_resource type="Sky" id="sky"]
-sky_material = SubResource("sky_mat")
-
-[sub_resource type="Environment" id="env"]
-background_mode = 2
-sky = SubResource("sky")
-ambient_light_source = 3
-ambient_light_energy = 0.55
-fog_enabled = true
-fog_light_color = Color(0.23, 0.2, 0.24, 1)
-fog_density = 0.00016
-fog_sky_affect = 0.25
-""");
-
-// --- the brazier bowl and its flame (the proven torch-flame recipe, at world scale)
-scene.AppendLine("""
-[sub_resource type="StandardMaterial3D" id="bowl_mat"]
-albedo_color = Color(0.1, 0.09, 0.09, 1)
-roughness = 0.9
-
-[sub_resource type="CylinderMesh" id="bowl"]
-material = SubResource("bowl_mat")
-top_radius = 15.0
-bottom_radius = 9.0
-height = 26.0
-radial_segments = 10
-
-[sub_resource type="Gradient" id="flame_grad"]
-offsets = PackedFloat32Array(0, 0.45, 1)
-colors = PackedColorArray(0.9, 0.16, 0.04, 1, 0.72, 0.06, 0.02, 1, 0.35, 0.01, 0.005, 0)
-
-[sub_resource type="GradientTexture1D" id="flame_ramp"]
-gradient = SubResource("flame_grad")
-
-[sub_resource type="Curve" id="flame_curve"]
-_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.5, 0.4), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
-point_count = 3
-
-[sub_resource type="CurveTexture" id="flame_scale"]
-curve = SubResource("flame_curve")
-
-[sub_resource type="Gradient" id="dot_grad"]
-offsets = PackedFloat32Array(0, 0.6, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="flame_dot"]
-gradient = SubResource("dot_grad")
-width = 32
-height = 32
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(0.5, 0)
-
-[sub_resource type="ParticleProcessMaterial" id="flame_process"]
-emission_shape = 1
-emission_sphere_radius = 3.0
-direction = Vector3(0, 1, 0)
-spread = 5.0
-gravity = Vector3(0, 6, 0)
-initial_velocity_min = 34.0
-initial_velocity_max = 52.0
-scale_min = 9.0
-scale_max = 15.0
-scale_curve = SubResource("flame_scale")
-color = Color(1, 1, 1, 1)
-color_ramp = SubResource("flame_ramp")
-
-[sub_resource type="StandardMaterial3D" id="flame_mat"]
-shading_mode = 0
-transparency = 1
-billboard_mode = 3
-billboard_keep_scale = true
-vertex_color_use_as_albedo = true
-albedo_texture = SubResource("flame_dot")
-
-[sub_resource type="QuadMesh" id="flame_mesh"]
-material = SubResource("flame_mat")
-size = Vector2(1, 1)
-""");
-
-// --- the terrain: a heightmap Image displacing a subdivided PlaneMesh through
-// --- a ShaderMaterial — all built-in resources, no scripts. The shader also
-// --- shades the land by height and steepness (the biome banding) and breaks
-// --- it up with a cheap value noise, mirroring the client's fallback look.
-var heightBytes = new byte[heights.Length * 4];
-Buffer.BlockCopy(heights, 0, heightBytes, 0, heightBytes.Length); // little-endian floats, row-major
-scene.AppendLine("""[sub_resource type="Image" id="hmap_img"]""");
-scene.AppendLine("data = {");
-scene.AppendLine($"\"data\": PackedByteArray({string.Join(", ", heightBytes)}),");
-scene.AppendLine("\"format\": \"RFloat\",");
-scene.AppendLine($"\"height\": {D},");
-scene.AppendLine("\"mipmaps\": false,");
-scene.AppendLine($"\"width\": {W}");
-scene.AppendLine("}");
-scene.AppendLine();
-scene.AppendLine("""
-[sub_resource type="ImageTexture" id="hmap_tex"]
-image = SubResource("hmap_img")
-""");
-scene.AppendLine("""[sub_resource type="Shader" id="terrain_shader"]""");
-scene.AppendLine("code = \"" + TerrainShaderCode + "\"");
-scene.AppendLine();
-scene.AppendLine("""[sub_resource type="ShaderMaterial" id="terrain_mat"]""");
-scene.AppendLine("shader = SubResource(\"terrain_shader\")");
-scene.AppendLine("shader_parameter/heightmap = SubResource(\"hmap_tex\")");
-scene.AppendLine("shader_parameter/field_origin = Vector2(0, 0)");
-scene.AppendLine($"shader_parameter/cell_size = {F(Cell)}");
-scene.AppendLine();
-scene.AppendLine($"[sub_resource type=\"PlaneMesh\" id=\"terrain_plane\"]");
-scene.AppendLine("material = SubResource(\"terrain_mat\")");
-scene.AppendLine($"size = Vector2({F((W - 1) * Cell)}, {F((D - 1) * Cell)})");
-scene.AppendLine($"subdivide_width = {W - 2}"); // subdivisions + 2 = vertices → one per height sample
-scene.AppendLine($"subdivide_depth = {D - 2}");
-scene.AppendLine();
-
-// --- weathered stone for the solids (world-triplanar noise, like the client's)
-scene.AppendLine("""
-[sub_resource type="FastNoiseLite" id="stone_noise_a"]
-noise_type = 3
-seed = 3
-frequency = 0.05
-
-[sub_resource type="Gradient" id="stone_ramp"]
-offsets = PackedFloat32Array(0, 1)
-colors = PackedColorArray(0.21, 0.2, 0.22, 1, 0.38, 0.37, 0.41, 1)
-
-[sub_resource type="NoiseTexture2D" id="stone_albedo"]
-seamless = true
-color_ramp = SubResource("stone_ramp")
-noise = SubResource("stone_noise_a")
-
-[sub_resource type="FastNoiseLite" id="stone_noise_n"]
-noise_type = 3
-seed = 4
-frequency = 0.08
-
-[sub_resource type="NoiseTexture2D" id="stone_normal"]
-seamless = true
-as_normal_map = true
-bump_strength = 3.0
-noise = SubResource("stone_noise_n")
-
-[sub_resource type="StandardMaterial3D" id="stone_mat"]
-albedo_texture = SubResource("stone_albedo")
-normal_enabled = true
-normal_texture = SubResource("stone_normal")
-roughness = 0.95
-uv1_triplanar = true
-uv1_world_triplanar = true
-uv1_scale = Vector3(0.012, 0.012, 0.012)
-""");
-
-// --- a visual box and a collision shape per solid
-for (var i = 0; i < solids.Count; i++)
-{
-    var size = solids[i].Size;
-    scene.AppendLine($"[sub_resource type=\"BoxMesh\" id=\"box_{i}\"]");
-    scene.AppendLine("material = SubResource(\"stone_mat\")");
-    scene.AppendLine($"size = Vector3({F(size.X)}, {F(size.Y)}, {F(size.Z)})");
-    scene.AppendLine();
-    scene.AppendLine($"[sub_resource type=\"BoxShape3D\" id=\"shape_{i}\"]");
-    scene.AppendLine($"size = Vector3({F(size.X)}, {F(size.Y)}, {F(size.Z)})");
-    scene.AppendLine();
-}
-
-// --- nodes
-// The root carries the SIMULATION heightfield as plain metadata — the built-in
-// way to store data on a node, readable in any editor's inspector, and what
-// the scene-to-geometry pipeline (Core.DungeonSceneFile) reads to host the map.
-scene.AppendLine("""[node name="Crag" type="Node3D"]""");
-scene.AppendLine("metadata/terrain_origin_x = 0.0");
-scene.AppendLine("metadata/terrain_origin_z = 0.0");
-scene.AppendLine($"metadata/terrain_cell_size = {F(Cell)}");
-scene.AppendLine($"metadata/terrain_width = {W}");
-scene.AppendLine($"metadata/terrain_depth = {D}");
-scene.AppendLine($"metadata/terrain_heights = PackedFloat32Array({string.Join(", ", heights.Select(F))})");
-scene.AppendLine();
-scene.AppendLine("""
-[node name="Environment" type="WorldEnvironment" parent="."]
-environment = SubResource("env")
-""");
-scene.AppendLine("""[node name="Sun" type="DirectionalLight3D" parent="."]""");
-scene.AppendLine($"transform = {DirTransform(-26f, -40f)}");
-scene.AppendLine("""
-light_color = Color(1, 0.8, 0.58, 1)
-light_energy = 1.05
-shadow_enabled = true
-directional_shadow_max_distance = 2400.0
-""");
-scene.AppendLine("""[node name="Fill" type="DirectionalLight3D" parent="."]""");
-scene.AppendLine($"transform = {DirTransform(-32f, 145f)}");
-scene.AppendLine("""
-light_color = Color(0.55, 0.62, 0.85, 1)
-light_energy = 0.18
-""");
-
-// The terrain visual: the shader-displaced plane, centred over the field. Its
-// bounding box must be told about the displacement (a GPU-displaced mesh keeps
-// its flat AABB and would be frustum-culled wrongly otherwise); "no_fade"
-// keeps the occlusion fader off the land. The node must stay translation-only
-// — the shader treats its model space as world-aligned.
-var lowest = heights.Min();
-var highest = heights.Max();
-scene.AppendLine("""[node name="Terrain" type="MeshInstance3D" parent="." groups=["no_fade"]]""");
-scene.AppendLine($"transform = {At((W - 1) * Cell / 2f, 0, (D - 1) * Cell / 2f)}");
-scene.AppendLine("mesh = SubResource(\"terrain_plane\")");
-scene.AppendLine($"custom_aabb = AABB({F(-(W - 1) * Cell / 2f)}, {F(lowest - 10f)}, {F(-(D - 1) * Cell / 2f)}, " +
-                 $"{F((W - 1) * Cell)}, {F(highest - lowest + 20f)}, {F((D - 1) * Cell)})");
-scene.AppendLine();
-
-// Solid visuals and their matching collision (the collision is the sim truth
-// the exporter reads back; keep the pairs in step when hand-editing).
-scene.AppendLine("""[node name="SolidVisuals" type="Node3D" parent="."]""");
-scene.AppendLine();
-scene.AppendLine("""[node name="Static" type="StaticBody3D" parent="."]""");
-scene.AppendLine();
-for (var i = 0; i < solids.Count; i++)
-{
-    var c = solids[i].Center;
-    scene.AppendLine($"[node name=\"Solid_{i}\" type=\"MeshInstance3D\" parent=\"SolidVisuals\"]");
-    scene.AppendLine($"transform = {At(c.X, c.Y, c.Z)}");
-    scene.AppendLine($"mesh = SubResource(\"box_{i}\")");
-    scene.AppendLine();
-    scene.AppendLine($"[node name=\"Col_{i}\" type=\"CollisionShape3D\" parent=\"Static\"]");
-    scene.AppendLine($"transform = {At(c.X, c.Y, c.Z)}");
-    scene.AppendLine($"shape = SubResource(\"shape_{i}\")");
-    scene.AppendLine();
-}
-
-// Braziers: real nodes (bowl + ember light + flame), each in the "brazier"
-// group so the export tool carries them into the sim geometry as props.
-scene.AppendLine("""[node name="Braziers" type="Node3D" parent="."]""");
-scene.AppendLine();
-for (var i = 0; i < props.Count; i++)
-{
-    var p = props[i].Position;
-    scene.AppendLine($"[node name=\"Brazier{i}\" type=\"Node3D\" parent=\"Braziers\" groups=[\"brazier\"]]");
-    scene.AppendLine($"transform = {At(p.X, p.Y, p.Z)}");
-    scene.AppendLine();
-    scene.AppendLine($"[node name=\"Bowl\" type=\"MeshInstance3D\" parent=\"Braziers/Brazier{i}\"]");
-    scene.AppendLine($"transform = {At(0, 13, 0)}");
-    scene.AppendLine("mesh = SubResource(\"bowl\")");
-    scene.AppendLine();
-    scene.AppendLine($"[node name=\"Ember\" type=\"OmniLight3D\" parent=\"Braziers/Brazier{i}\"]");
-    scene.AppendLine($"transform = {At(0, 46, 0)}");
-    scene.AppendLine("light_color = Color(1, 0.62, 0.3, 1)");
-    scene.AppendLine("light_energy = 6.0");
-    scene.AppendLine("omni_range = 380.0");
-    scene.AppendLine();
-    scene.AppendLine($"[node name=\"Flame\" type=\"GPUParticles3D\" parent=\"Braziers/Brazier{i}\"]");
-    scene.AppendLine($"transform = {At(0, 28, 0)}");
-    scene.AppendLine("amount = 18");
-    scene.AppendLine("lifetime = 0.6");
-    scene.AppendLine("randomness = 0.4");
-    scene.AppendLine("preprocess = 0.6");
-    scene.AppendLine("process_material = SubResource(\"flame_process\")");
-    scene.AppendLine("draw_pass_1 = SubResource(\"flame_mesh\")");
-    scene.AppendLine();
-}
-
-// Markers: the sim cast, in the exporter's naming convention.
-scene.AppendLine("""[node name="PlayerSpawn" type="Marker3D" parent="."]""");
-scene.AppendLine($"transform = {At(playerSpawn.X, playerSpawn.Y, playerSpawn.Z)}");
-scene.AppendLine();
-for (var i = 0; i < enemies.Length; i++)
-{
-    var e = enemies[i];
-    var suffix = e.type switch { EnemyType.Rogue => "_Rogue", EnemyType.Mage => "_Mage", _ => "" };
-    var pos = OnGround(e.x, e.z);
-    scene.AppendLine($"[node name=\"EnemySpawn{i}{suffix}\" type=\"Marker3D\" parent=\".\"]");
-    scene.AppendLine($"transform = {At(pos.X, pos.Y, pos.Z)}");
-    scene.AppendLine();
-}
-scene.AppendLine("""[node name="BossSpawn" type="Marker3D" parent="."]""");
-scene.AppendLine($"transform = {At(bossSpawn.X, bossSpawn.Y, bossSpawn.Z)}");
-
-var scenePath = Path.Combine("WoadRaiders.Client", "maps", "Crag.tscn");
-File.WriteAllText(scenePath, scene.ToString());
-
-// ------------------------------------------------------------- validation
-// Read the scene BACK through the shared scene-to-geometry pipeline — the
-// exact code the server uses to host it — and validate what actually parsed,
-// not what this tool intended to write.
-
-var geometry = DungeonSceneFile.Load(scenePath);
-if (geometry.Terrain is null || geometry.EnemySpawns.Count != enemies.Length
-    || geometry.Solids.Count != solids.Count || geometry.Props.Count != props.Count
-    || geometry.BossSpawn is null)
-    throw new InvalidOperationException(
-        $"the scene did not parse back whole: terrain={geometry.Terrain is not null}, " +
-        $"{geometry.EnemySpawns.Count}/{enemies.Length} camps, {geometry.Solids.Count}/{solids.Count} solids, " +
-        $"{geometry.Props.Count}/{props.Count} props, boss={geometry.BossSpawn is not null}");
+    ScenePath = "res://maps/Crag.tscn", // the authored scene the client renders
+    BossSpawn = bossSpawn,
+    Props = props,
+});
+var geometry = DungeonGeometryFile.Parse(json); // validate what will actually be served
 
 // The shared realm checks (Core.RealmValidator): comfortable reachability of
 // every camp and the boss, sealed borders, no stranding pits.
@@ -732,7 +344,121 @@ Vector2[] route =
     Console.WriteLine($"Route walk OK — the raider stands at ({pos.X:0}, {pos.Y:0}, {pos.Z:0}) before the boss.");
 }
 
+File.WriteAllText(Path.Combine("WoadRaiders.Client", "maps", "Crag.json"), json);
+
+// ------------------------------------------------------------- the scene
+// Godot builds and saves the .tscn itself (build_realm_scene.gd →
+// RealmSceneBuilder → ResourceSaver), so the file is exactly what a naturally-
+// authored scene looks like. Then the serializer's random sub-resource ids are
+// normalized (regeneration stays deterministic), and the scene is baked BACK
+// through the standard hand-made pipeline to prove it carries the same
+// simulation geometry as the JSON.
+
+Step("dotnet", "build WoadRaiders.Client/WoadRaiders.Client.csproj -v q --nologo",
+    "building the client (the scene tools are C# in it)");
+Step("godot-mono", "--headless --path WoadRaiders.Client -s res://tools/build_realm_scene.gd -- " +
+    "res://maps/Crag.json res://maps/Crag.tscn", "building Crag.tscn with Godot's own serializer");
+
+NormalizeSceneIds(Path.Combine("WoadRaiders.Client", "maps", "Crag.tscn"));
+
+var roundtrip = Path.Combine("WoadRaiders.Client", "maps", "Crag.roundtrip.tmp.json");
+if (File.Exists(roundtrip))
+    File.Delete(roundtrip);
+Step("godot-mono", "--headless --path WoadRaiders.Client -s res://tools/bake_realm.gd -- " +
+    "res://maps/Crag.tscn res://maps/Crag.roundtrip.tmp.json", "baking the scene back (round-trip check)");
+CompareRealms(geometry, DungeonGeometryFile.Load(roundtrip));
+File.Delete(roundtrip);
+
 var span = geometry.Bounds;
-Console.WriteLine($"Wrote Crag.tscn (parsed back through DungeonSceneFile): {W}x{D} terrain samples over " +
+Console.WriteLine($"Wrote Crag.json + Crag.tscn (round trip verified): {W}x{D} terrain samples over " +
                   $"{(W - 1) * Cell:0}x{(D - 1) * Cell:0} units (heights {span.Min.Y:0}..{span.Max.Y:0}), " +
                   $"{solids.Count} solids, {props.Count} braziers, {enemies.Length} enemy camps + the boss.");
+
+// ------------------------------------------------------------- helpers
+
+static void Step(string exe, string args, string what)
+{
+    Console.WriteLine($"[{what}] {exe} {args}");
+    var process = Process.Start(new ProcessStartInfo(exe, args)
+    {
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+    }) ?? throw new InvalidOperationException($"could not start {exe}");
+    // Drain both pipes concurrently — a chatty stderr (Godot's) would otherwise
+    // fill its buffer and deadlock a sequential read.
+    var stdout = process.StandardOutput.ReadToEndAsync();
+    var stderr = process.StandardError.ReadToEndAsync();
+    process.WaitForExit();
+    var output = stdout.Result + stderr.Result;
+    if (process.ExitCode != 0)
+        throw new InvalidOperationException($"{what} failed (exit {process.ExitCode}):\n{output}");
+    foreach (var line in output.Split('\n'))
+        if (line.Contains("built ") || line.Contains("baked ") || line.Contains("sampled "))
+            Console.WriteLine("  " + line.Trim());
+}
+
+// ResourceSaver invents random identifiers on every save — sub-resource ids
+// (e.g. "Image_kg5hl"), per-node unique_id stamps, and the scene uid. Rename
+// the resource ids deterministically (Type_1, Type_2, ...) and drop the
+// random-per-save attributes (both optional — the editor regenerates them on
+// its next save), so regenerating an unchanged realm rewrites nothing. Ids
+// are opaque references — any Godot reads the result identically.
+static void NormalizeSceneIds(string path)
+{
+    var text = File.ReadAllText(path);
+    text = Regex.Replace(text, @" uid=""uid://[^""]*""", "");
+    text = Regex.Replace(text, @" unique_id=\d+", "");
+
+    var counters = new Dictionary<string, int>();
+    var renames = new Dictionary<string, string>();
+    foreach (Match match in Regex.Matches(text, @"\[sub_resource type=""([^""]+)"" id=""([^""]+)""\]"))
+    {
+        var type = match.Groups[1].Value;
+        var old = match.Groups[2].Value;
+        counters[type] = counters.GetValueOrDefault(type) + 1;
+        renames[old] = $"{type}_{counters[type]}";
+    }
+    var builder = new StringBuilder(text);
+    foreach (var (old, fresh) in renames)
+        builder.Replace($"\"{old}\"", $"\"{fresh}\"");
+    File.WriteAllText(path, builder.ToString());
+}
+
+// The baked scene must carry the same simulation geometry as the JSON.
+static void CompareRealms(DungeonGeometry expected, DungeonGeometry baked)
+{
+    static string Key(Aabb s) =>
+        $"{s.Min.X:0.##},{s.Min.Y:0.##},{s.Min.Z:0.##}:{s.Max.X:0.##},{s.Max.Y:0.##},{s.Max.Z:0.##}";
+    static string SpawnKey(EnemySpawnPoint e) =>
+        $"{e.Type}:{e.Position.X:0.##},{e.Position.Y:0.##},{e.Position.Z:0.##}";
+    static string PropKey(DungeonProp p) =>
+        $"{p.Type}:{p.Position.X:0.##},{p.Position.Y:0.##},{p.Position.Z:0.##}";
+
+    void Demand(bool ok, string what)
+    {
+        if (!ok)
+            throw new InvalidOperationException($"round-trip mismatch: {what} — the scene and the JSON disagree");
+    }
+
+    var a = expected.Terrain!;
+    var b = baked.Terrain ?? throw new InvalidOperationException("round-trip mismatch: the baked scene has no terrain");
+    Demand(a.Width == b.Width && a.Depth == b.Depth && MathF.Abs(a.CellSize - b.CellSize) < 0.001f
+           && MathF.Abs(a.OriginX - b.OriginX) < 0.001f && MathF.Abs(a.OriginZ - b.OriginZ) < 0.001f,
+        $"terrain grid ({a.Width}x{a.Depth}@{a.CellSize} vs {b.Width}x{b.Depth}@{b.CellSize})");
+    var worst = 0f;
+    for (var i = 0; i < a.Heights.Count; i++)
+        worst = MathF.Max(worst, MathF.Abs(a.Heights[i] - b.Heights[i]));
+    Demand(worst <= 0.002f, $"terrain heights (largest sample difference {worst})");
+
+    Demand(Vector3.Distance(expected.SpawnPoint, baked.SpawnPoint) < 0.01f, "player spawn");
+    Demand(expected.BossSpawn is { } eb && baked.BossSpawn is { } bb && Vector3.Distance(eb, bb) < 0.01f, "boss spawn");
+    Demand(expected.Solids.Select(Key).OrderBy(k => k).SequenceEqual(baked.Solids.Select(Key).OrderBy(k => k)),
+        $"solids ({expected.Solids.Count} vs {baked.Solids.Count})");
+    Demand(expected.EnemySpawns.Select(SpawnKey).OrderBy(k => k)
+            .SequenceEqual(baked.EnemySpawns.Select(SpawnKey).OrderBy(k => k)),
+        $"enemy spawns ({expected.EnemySpawns.Count} vs {baked.EnemySpawns.Count})");
+    Demand(expected.Props.Select(PropKey).OrderBy(k => k).SequenceEqual(baked.Props.Select(PropKey).OrderBy(k => k)),
+        $"props ({expected.Props.Count} vs {baked.Props.Count})");
+    Console.WriteLine("Round trip OK — the scene bakes back to the exact geometry the server hosts.");
+}

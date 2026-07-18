@@ -4,11 +4,11 @@ namespace WoadRaiders.Core;
 
 /// <summary>
 /// Builds a <see cref="DungeonGeometry"/> straight from a Godot .tscn text
-/// scene — the shared scene-to-geometry pipeline. The server loads realm
-/// scenes with it directly (no export step), the realm generator re-reads its
-/// own output through it (so what ships is what parsed), the client's
-/// map-preview cards render from it, and it is plain C#: unit-tested without
-/// an engine.
+/// scene — the shared scene-to-geometry pipeline behind the map tools: the
+/// bake tool (RealmBaker) reads a scene's markers, collision, and props
+/// through it when baking server geometry JSON, and ValidateRealm accepts
+/// scenes via it. Plain C#: unit-tested without an engine. (The server itself
+/// hosts baked JSON — scenes are the AUTHORING format, not the serving one.)
 ///
 /// Authoring conventions it reads (any scene built in the Godot editor):
 ///   - Solids:       CollisionShape3D nodes with a BoxShape3D (rotated boxes
@@ -297,7 +297,7 @@ public static class DungeonSceneFile
 /// <summary>
 /// Loads a map file by its format: .tscn scenes through the shared
 /// scene-to-geometry pipeline, .json through the classic geometry format.
-/// The server (and the validation tool) accept either.
+/// For the TOOLS (ValidateRealm accepts either); the server hosts JSON.
 /// </summary>
 public static class MapLoader
 {

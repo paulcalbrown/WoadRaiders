@@ -84,10 +84,11 @@ Without arguments it loads **every catalog realm** (The Crag) from the `maps/`
 directory beside its binary (the build copies the canonical JSON there from
 `WoadRaiders.Client/maps/`, so a published server is self-contained) and lets players
 forge/join instances of them. Options: a bare number sets the
-port (`… -- 9060`); `--map path/to/map.tscn` (or `.json`) pins every instance to one map (dev
-convenience for map work, e.g. `--map WoadRaiders.Client/maps/TestArena.json`). **Realm .tscn
-scenes are parsed directly** — the server reads Godot's text scene format through the
-engine-free `Core.DungeonSceneFile`, so the scene you edit is the map you serve.
+port (`… -- 9060`); `--map path/to/map.json` pins every instance to one map (dev
+convenience for map work, e.g. `--map WoadRaiders.Client/maps/TestArena.json`). The server
+hosts **geometry JSON**; realm `.tscn` scenes are the *authoring* format, baked to JSON by
+the map tools (the generator does it automatically, hand-made scenes via
+`WoadRaiders.Client/tools/bake_realm.gd`).
 
 ### 2. The Godot client
 Requires the **.NET/Mono build** of Godot (installed here as **Godot 4.7** via Scoop — the CLI
@@ -214,24 +215,27 @@ core loop earns it.
       destination, a rise beyond `SimConstants.StepHeight` (18) is a wall or cliff, drops are
       unlimited (one-way jump-downs are level design). Sight lines respect terrain crests;
       player bolts **hug the slopes** and sail level over gorges, enemy bolts aim in full 3D so
-      overlook mages rain fire downhill. Realms are authored as **Godot .tscn scenes built
-      from BUILT-IN nodes and resources only** — no scripts, so a realm opens whole in any
-      Godot editor with nothing to build first: the terrain is a subdivided `PlaneMesh`
-      displaced and biome-shaded by a heightmap `Image` through a `ShaderMaterial` (editor
-      preview and in-game render alike; clients missing a custom map's scene rebuild the
-      realm from the wire geometry instead), and the simulation's heightfield rides as plain
-      **metadata on the scene root**. The camera became a perspective **chase rig** that
-      swings behind your travel and keeps clear of the land (movement keys are
-      camera-relative). The first realm, **The Crag**
+      overlook mages rain fire downhill. Realms are authored as **natural Godot .tscn
+      scenes**: the generated scene is saved by **Godot's own serializer** and contains only
+      built-in nodes and resources — a REAL displaced terrain `ArrayMesh`, stone, braziers,
+      lights, markers; no scripts, no metadata — so it opens whole in any Godot editor,
+      exactly as if someone had modelled it there (clients missing a custom map's scene
+      rebuild the realm from the wire geometry instead). The camera became a perspective
+      **chase rig** that swings behind your travel and keeps clear of the land (movement
+      keys are camera-relative). The first realm, **The Crag**
       (glen → gorge bridge → switchback climbs → rolling moor with a standing-stone circle →
-      walled summit court, ~260 units of climb), is computed by `tools/GenerateRealm.cs` as
-      ONE file — `Crag.tscn` — because **the .tscn IS the map**: the server parses realm
-      scenes directly through the engine-free `Core.DungeonSceneFile` (a unit-tested C# reader
-      of Godot's text scene format), so there is no exported geometry to keep in step.
-      The generator validates by reading its own scene back through that same pipeline, then
-      running the real sim rules: a virtual raider walks the whole route with `Move`, and
-      `Core.RealmValidator` flood fills prove every camp reachable / borders sealed / no
-      stranding pits — the same checks hand-made realms get (`tools/ValidateRealm.cs`).
+      walled summit court, ~260 units of climb), is computed by `tools/GenerateRealm.cs` as a
+      matched pair: `Crag.json` (the geometry the server hosts) and `Crag.tscn` (the natural
+      scene, built and saved BY GODOT — the generator drives `godot-mono` headless through
+      `tools/build_realm_scene.gd`/`RealmSceneBuilder`, then normalizes the serializer's
+      random sub-resource ids so regeneration is deterministic). The generator then
+      **round-trip verifies**: the scene is baked back through the standard hand-made
+      pipeline (`bake_realm.gd` samples the real terrain mesh) and must match the JSON —
+      the scene you hand-edit and the geometry the server simulates are proven to agree.
+      Validation runs the real sim rules: a virtual raider walks the whole route with
+      `Move`, and `Core.RealmValidator` flood fills prove every camp reachable / borders
+      sealed / no stranding pits — the same checks hand-made realms get
+      (`tools/ValidateRealm.cs`).
       The Barrow and Cairn dungeons were removed with the old camera. Wire `v14`; probes:
       `tools/TerrainProbe.cs` (terrain on the wire, spawn on the ground, the authoritative Y
       climbing as you walk, replay determinism) + the existing class/instance/portal probes.
@@ -241,25 +245,22 @@ core loop earns it.
       and shared verbatim by server and client prediction. Ships over the wire on join.
 - [x] **Hand-crafted maps from the Godot editor** — author any scene with `CollisionShape3D`/
       `BoxShape3D` solids, a `Marker3D` named `PlayerSpawn`, typed `EnemySpawn*` markers (name
-      contains `Rogue`/`Mage` for those types), and an optional `BossSpawn`, then serve the
-      scene itself: `dotnet run --project WoadRaiders.Server -- --map maps/YourRealm.tscn`
-      (`Core.DungeonSceneFile` parses it directly — no export step). `maps/TestArena.tscn`
-      is a working example of the conventions. **The game only ever consumes map files** —
-      runtime procedural generation stays out by design; the shipping maps are hand-crafted
-      or generated *offline* into the same authored format. **Open realms are authored the
-      same way** (see the open-realms entry above): give the scene terrain — root metadata
-      (`metadata/terrain_heights` + `terrain_width`/`terrain_depth`, with optional
-      `terrain_origin_x`/`terrain_origin_z`/`terrain_cell_size` — served directly, all
-      built-in, how the generated realm carries it), a `RealmTerrain` node (also served
-      directly), or ANY meshes in the `terrain` group, which
-      `WoadRaiders.Client/tools/bake_realm.gd` samples from above onto a heightfield grid
-      (the one engine-bound step; `terrain_cell_size` metadata on the root overrides the
-      40-unit default; put big ground meshes in `no_fade` too) — plus nodes in the `brazier`
-      group for fire props, then check it with `dotnet run tools/ValidateRealm.cs` (camps
-      reachable, borders sealed, no stranding pits — the same bar the generated realm
-      passes). Clients that have the scene render it as authored; clients that don't rebuild
-      the realm from the wire geometry, so a custom-map server never shows anyone an empty
-      world.
+      contains `Rogue`/`Mage` for those types), and an optional `BossSpawn`; bake it to the
+      geometry the server hosts with `WoadRaiders.Client/tools/bake_realm.gd`, then serve:
+      `dotnet run --project WoadRaiders.Server -- --map maps/YourRealm.json`.
+      `maps/TestArena.tscn` is a working example of the conventions. **The game only ever
+      consumes map files** — runtime procedural generation stays out by design; the shipping
+      maps are hand-crafted or generated *offline* into the same formats. **Open realms are
+      authored the same way** (see the open-realms entry above): give the scene terrain —
+      ANY meshes in the `terrain` group (sculpt in Blender, use CSG, or edit the generated
+      realm's Terrain mesh), which the bake tool samples from above onto a heightfield grid
+      (`terrain_cell_size` metadata on the root overrides the 40-unit default; put big
+      ground meshes in `no_fade` too; the sampling math is the unit-tested
+      `Core.TerrainSampler`) — plus nodes in the `brazier` group for fire props, then check
+      the baked JSON with `dotnet run tools/ValidateRealm.cs` (camps reachable, borders
+      sealed, no stranding pits — the same bar the generated realm passes). Clients that
+      have the scene render it as authored; clients that don't rebuild the realm from the
+      wire geometry, so a custom-map server never shows anyone an empty world.
 - [x] **Dungeon art pass** — hand-crafted maps **render their own Godot scene** (meshes,
       materials, lights authored in the editor; the collision boxes stay the sim truth). The export
       tool records the source scene in the JSON; the server passes it over the wire; the client
@@ -352,11 +353,13 @@ core loop earns it.
 | `WoadRaiders.Server.Tests` | Server-internals tests | Server |
 
 `tools/` holds .NET 10 file-based apps (`dotnet run tools/<Name>.cs`): the realm generator
-(`GenerateRealm.cs` — computes The Crag as a .tscn + JSON pair and self-validates), the realm
-checker (`ValidateRealm.cs` — the same playability bar for hand-made exports, plus `--compare`
-for pipeline round-trip proofs), the two music generators, and scripted LiteNetLib **probes**
-(`ClassProbe`, `InstanceProbe`, `PortalProbe`, `TerrainProbe`) that verify class stats,
-instance isolation, the portal flow, and the terrain/verticality end-to-end against a running
-server — no Godot needed. The Godot-side tools (`bake_realm.gd` — sampling mesh-terrain
-scenes via the C# `RealmBaker` + `Core.TerrainSampler`; scene measurement) live in
+(`GenerateRealm.cs` — computes The Crag, drives Godot to build its natural scene, and
+round-trip-verifies the pair), the realm checker (`ValidateRealm.cs` — the same playability
+bar for hand-made bakes, plus `--compare` for cross-format geometry proofs), the two music
+generators, and scripted LiteNetLib **probes** (`ClassProbe`, `InstanceProbe`, `PortalProbe`,
+`TerrainProbe`) that verify class stats, instance isolation, the portal flow, and the
+terrain/verticality end-to-end against a running server — no Godot needed. The Godot-side
+tools (`bake_realm.gd` — baking any scene to server geometry via the C# `RealmBaker` +
+`Core.TerrainSampler`; `build_realm_scene.gd` — building a natural scene from geometry JSON
+via `RealmSceneBuilder` + ResourceSaver; scene measurement) live in
 `WoadRaiders.Client/tools/`.

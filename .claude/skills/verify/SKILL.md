@@ -15,10 +15,10 @@ dotnet test WoadRaiders.slnx --no-build
 ## Run the dedicated server
 
 ```powershell
-dotnet run --project WoadRaiders.Server -- [port] --map <map.tscn|map.json>
-# Without --map it loads EVERY catalog realm map (DungeonCatalog: Crag.tscn —
-# the server parses Godot scenes DIRECTLY via Core.DungeonSceneFile; classic
-# geometry .json also accepted, via Core.MapLoader's extension dispatch).
+dotnet run --project WoadRaiders.Server -- [port] --map <map.json>
+# Without --map it loads EVERY catalog realm map (DungeonCatalog: Crag.json).
+# The server hosts geometry JSON only; .tscn scenes are the AUTHORING format,
+# baked to JSON by the tools below.
 # Players forge/join INSTANCES of them: a JoinRequest either creates a
 # fresh instance (Mode=Create, naming the realm) or enters a live one by id
 # (Mode=Join); each instance is its own GameSession/world. With --map only that
@@ -35,40 +35,36 @@ heightfield: originX/originZ/cellSize/width/depth + row-major `heights` — the
 base plane movement rides; see the verticality rules in `DungeonGeometry`) and
 `props` (cosmetic braziers).
 
-**Realms are authored as Godot .tscn scenes — the .tscn IS the map — and the
-generated scene is BUILT-IN NODES ONLY** (no scripts: it opens whole in any
-Godot editor with nothing built). `dotnet run tools/GenerateRealm.cs` emits
-`WoadRaiders.Client/maps/Crag.tscn`: terrain = subdivided PlaneMesh displaced
-and biome-shaded by a heightmap Image via ShaderMaterial (keep that node
-translation-only; its custom_aabb covers the displacement or culling clips
-it); the SIM heightfield = plain metadata on the scene root
-(`metadata/terrain_*` + `terrain_heights`); plus braziers, sky, solid
-visuals + collision, markers. The generator parses its output back through
-the same `Core.DungeonSceneFile` the server uses and validates THAT. Rerun
-it after editing the layout code; after hand-editing the .tscn instead, just
-re-run ValidateRealm on it.
+**Realms are authored as Godot .tscn scenes and PLAYED from baked JSON.**
+The generated scene is a NATURAL Godot file — saved by Godot's own
+ResourceSaver, built-in nodes and resources only, a REAL displaced terrain
+ArrayMesh, no scripts, no metadata; it opens whole in any Godot editor.
+`dotnet run tools/GenerateRealm.cs` does the whole chain: computes and
+validates the realm → writes `Crag.json` (what the server hosts) → drives
+godot-mono to build `Crag.tscn` from it (tools/build_realm_scene.gd →
+RealmSceneBuilder → ResourceSaver) → normalizes the serializer's random
+sub-resource ids (deterministic regeneration) → bakes the scene BACK through
+the hand-made pipeline and proves it matches the JSON. Rerun it after editing
+the layout code; after hand-editing the .tscn instead, re-bake (step 2 below).
 The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
-  1. Terrain, any of: root metadata (`metadata/terrain_heights` +
-     `terrain_width`/`terrain_depth`; optional `terrain_origin_x`/`_z`,
-     `terrain_cell_size` default 40) — served directly, all built-in; a
-     `RealmTerrain` node (group `realm_terrain`) — served directly, needs the
-     client C# built to preview; or ANY meshes in group `terrain` (put big
-     ground meshes in `no_fade` too). Collision: axis-aligned `BoxShape3D`
-     CollisionShape3Ds. Markers: `PlayerSpawn` (required),
-     `EnemySpawnN[_Rogue|_Mage]`, `BossSpawn`; braziers = group `brazier`.
-  2. Mesh-sampled terrain ONLY: bake it (the one engine-bound step —
-     extracting triangles; the sampling math is unit-tested Core code):
-     `dotnet build WoadRaiders.Client`, then `godot-mono --headless --path
-     WoadRaiders.Client -s res://tools/bake_realm.gd --
-     res://maps/MyRealm.tscn res://maps/MyRealm.json` (cell 40; root metadata
-     `terrain_cell_size` overrides).
-  3. `dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.tscn`
-     (or the baked .json) — Core.RealmValidator proves camps reachable,
-     borders sealed, no stranding pits. `--compare` proves two maps carry
-     identical sim geometry across formats.
-  4. Serve with `--map` (the .tscn itself, or the baked .json); clients with
-     the scene render it, clients without it rebuild the realm from the wire
-     geometry.
+  1. Terrain: ANY meshes in group `terrain` (the natural way — sculpt in
+     Blender, CSG, or edit the generated Terrain mesh; put big ground meshes
+     in `no_fade` too). A `RealmTerrain` node or `metadata/terrain_*` on the
+     root also work (bake reads them without sampling). Collision:
+     axis-aligned `BoxShape3D` CollisionShape3Ds. Markers: `PlayerSpawn`
+     (required), `EnemySpawnN[_Rogue|_Mage]`, `BossSpawn`; braziers = nodes
+     in group `brazier`.
+  2. Bake to server geometry: `dotnet build WoadRaiders.Client`, then
+     `godot-mono --headless --path WoadRaiders.Client -s
+     res://tools/bake_realm.gd -- res://maps/MyRealm.tscn
+     res://maps/MyRealm.json` (sampling cell 40; root metadata
+     `terrain_cell_size` overrides; the sampling math is unit-tested
+     Core.TerrainSampler).
+  3. `dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.json`
+     — Core.RealmValidator proves camps reachable, borders sealed, no
+     stranding pits. `--compare` proves two maps carry identical sim geometry.
+  4. Serve the JSON with `--map`; clients that have the scene render it as
+     authored, clients that don't rebuild the realm from the wire geometry.
 `SpawnDirector` clamps the live population to 40 regulars no matter how many
 markers the map has. An all-Mage map keeps projectiles in the snapshot, which
 is the cheapest way to inflate world size.

@@ -7,12 +7,13 @@ using SysVec3 = System.Numerics.Vector3;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// Bakes a hand-made realm scene whose terrain is sculpted MESHES (grouped
-/// "terrain") into server geometry JSON. This is the only map-pipeline step
-/// that needs the engine at all — extracting the meshes' triangles; everything
-/// else (the sampling math, the scene parsing, validation) is engine-free Core
-/// code, unit-tested there. Scenes that carry a RealmTerrain node need no
-/// baking: the server loads their .tscn directly via DungeonSceneFile.
+/// Bakes a realm scene into the server geometry JSON it is played from —
+/// how any .tscn (hand-made or generated) becomes a hostable map. Terrain
+/// meshes in the "terrain" group are sampled from above (the one step that
+/// needs the engine — extracting triangles); everything else (the sampling
+/// math, the scene parsing, validation) is engine-free Core code, unit-tested
+/// there. The realm generator also runs this over its own scene as a
+/// round-trip proof that scene and JSON agree.
 ///
 /// Driven headless by tools/bake_realm.gd (Godot cannot run a C# script from
 /// the command line, so a two-line GDScript shim instantiates this class).

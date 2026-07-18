@@ -2,14 +2,14 @@ using WoadRaiders.Core;
 using WoadRaiders.Server;
 using WoadRaiders.Shared;
 
-// Usage: WoadRaiders.Server [port] [--map path/to/map.tscn|.json]
+// Usage: WoadRaiders.Server [port] [--map path/to/map.json]
 // Without --map, every catalog realm found in the maps directory beside the
 // binary (the build copies it there; see GameServer.MapsDirectory) is loaded
 // and players forge/join instances of them. With --map, only that map is
 // loaded and every forged instance uses it (dev convenience for map work).
-// Maps are Godot .tscn scenes — authored in the editor or generated
-// (tools/GenerateRealm.cs) — parsed directly by Core.DungeonSceneFile;
-// classic geometry .json is also accepted.
+// Maps are geometry JSON, baked from Godot .tscn scenes: generated realms by
+// tools/GenerateRealm.cs (which also emits the natural, script-free scene),
+// hand-made scenes by WoadRaiders.Client/tools/bake_realm.gd.
 int port = NetConfig.DefaultPort;
 string? mapPath = null;
 

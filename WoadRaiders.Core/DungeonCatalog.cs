@@ -14,8 +14,8 @@ public readonly record struct DungeonInfo(
     DungeonId Id,
     string Name,
     string Tagline,
-    string MapFile,   // map file in the maps directory (canonical copy: WoadRaiders.Client/maps);
-                      // .tscn parses through DungeonSceneFile, .json through DungeonGeometryFile
+    string MapFile,   // geometry JSON in the maps directory (canonical copy: WoadRaiders.Client/maps),
+                      // baked from the realm's .tscn scene
     string ScenePath, // the authored res:// scene the client renders (terrain realms fall back
                       // to rendering from the geometry when a client lacks the scene)
     string MusicKey); // assets/audio/<key>_theme.wav
@@ -30,7 +30,7 @@ public static class DungeonCatalog
     {
         new(DungeonId.Crag, "The Crag",
             "A broken highland — glen and gorge, the windswept moor, and the walled court on the summit.",
-            "Crag.tscn", "res://maps/Crag.tscn", "barrow"),
+            "Crag.json", "res://maps/Crag.tscn", "barrow"),
     };
 
     public static DungeonInfo Of(DungeonId id) => All[(int)id];

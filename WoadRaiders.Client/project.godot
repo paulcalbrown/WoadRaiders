@@ -29,12 +29,6 @@ window/stretch/aspect="keep_height"
 
 project/assembly_name="WoadRaiders.Client"
 
-[editor]
-
-; Keep .tscn files as TEXT in exported builds: the realm-select preview (and
-; anything else using DungeonSceneFile) reads map scenes as text at runtime.
-export/convert_text_resources_to_binary=false
-
 [rendering]
 
 textures/vram_compression/import_etc2_astc=true

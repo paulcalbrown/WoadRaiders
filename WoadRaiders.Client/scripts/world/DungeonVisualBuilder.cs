@@ -75,147 +75,15 @@ public static class DungeonVisualBuilder
 
         foreach (var prop in geometry.Props)
             if (prop.Type == PropType.Brazier)
-                parent.AddChild(MakeBrazier(prop.Position.ToGodot()));
+                parent.AddChild(RealmDressing.MakeBrazier(prop.Position.ToGodot()));
 
-        AddRealmSky(parent);
+        // The open dusk: sky environment, the low warm sun, the cold counter-glow.
+        parent.AddChild(new WorldEnvironment { Environment = RealmDressing.RealmEnvironment() });
+        parent.AddChild(RealmDressing.MakeSun());
+        parent.AddChild(RealmDressing.MakeFill());
+
         GD.Print($"Rendering open realm '{geometry.ScenePath}' from geometry " +
                  $"({terrain.Width}x{terrain.Depth} terrain, {geometry.Solids.Count} solids, {geometry.Props.Count} props)");
-    }
-
-    /// <summary>A burning waymarker: a dark iron bowl, a warm pool of light, and a
-    /// billboarded flame — the realm's landmarks after dusk.</summary>
-    private static Node3D MakeBrazier(Vector3 ground)
-    {
-        var brazier = new Node3D { Position = ground };
-
-        var iron = new StandardMaterial3D { AlbedoColor = new Color(0.10f, 0.09f, 0.09f), Roughness = 0.9f };
-        brazier.AddChild(new MeshInstance3D
-        {
-            Mesh = new CylinderMesh { TopRadius = 15f, BottomRadius = 9f, Height = 26f, RadialSegments = 10 },
-            Position = new Vector3(0f, 13f, 0f),
-            MaterialOverride = iron,
-        });
-
-        brazier.AddChild(new OmniLight3D
-        {
-            Position = new Vector3(0f, 46f, 0f),
-            LightColor = new Color(1.0f, 0.62f, 0.30f),
-            LightEnergy = 6f,
-            OmniRange = 380f,
-            ShadowEnabled = false, // dozens of braziers — keep each cheap
-        });
-
-        brazier.AddChild(MakeFlame(new Vector3(0f, 28f, 0f)));
-        return brazier;
-    }
-
-    /// <summary>The proven torch-flame recipe (tall tapering embers, billboarded,
-    /// preprocessed so it burns from the first frame), built in code.</summary>
-    private static GpuParticles3D MakeFlame(Vector3 position)
-    {
-        var colorRamp = new Gradient();
-        colorRamp.SetColor(0, new Color(0.9f, 0.16f, 0.04f));
-        colorRamp.SetColor(1, new Color(0.35f, 0.01f, 0.005f, 0f));
-        colorRamp.AddPoint(0.45f, new Color(0.72f, 0.06f, 0.02f)); // after the ends — AddPoint reindexes
-
-        var scaleCurve = new Curve();
-        scaleCurve.AddPoint(new Vector2(0f, 1f));
-        scaleCurve.AddPoint(new Vector2(0.5f, 0.4f));
-        scaleCurve.AddPoint(new Vector2(1f, 0f));
-
-        var dot = new Gradient();
-        dot.SetColor(0, Colors.White);
-        dot.SetColor(1, new Color(1f, 1f, 1f, 0f));
-        dot.AddPoint(0.6f, Colors.White); // after the ends — AddPoint reindexes
-
-        var process = new ParticleProcessMaterial
-        {
-            EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Sphere,
-            EmissionSphereRadius = 3f,
-            Direction = new Vector3(0f, 1f, 0f),
-            Spread = 5f,
-            Gravity = new Vector3(0f, 6f, 0f),
-            InitialVelocityMin = 34f,
-            InitialVelocityMax = 52f,
-            ScaleMin = 9f,
-            ScaleMax = 15f,
-            ScaleCurve = new CurveTexture { Curve = scaleCurve },
-            Color = Colors.White,
-            ColorRamp = new GradientTexture1D { Gradient = colorRamp },
-        };
-
-        var flameMaterial = new StandardMaterial3D
-        {
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            BillboardMode = BaseMaterial3D.BillboardModeEnum.Particles,
-            BillboardKeepScale = true,
-            VertexColorUseAsAlbedo = true,
-            AlbedoTexture = new GradientTexture2D
-            {
-                Gradient = dot, Width = 32, Height = 32,
-                Fill = GradientTexture2D.FillEnum.Radial,
-                FillFrom = new Vector2(0.5f, 0.5f), FillTo = new Vector2(0.5f, 0f),
-            },
-        };
-
-        return new GpuParticles3D
-        {
-            Position = position,
-            Amount = 18,
-            Lifetime = 0.6f,
-            Randomness = 0.4f,
-            Preprocess = 0.6f,
-            ProcessMaterial = process,
-            DrawPass1 = new QuadMesh { Material = flameMaterial, Size = new Vector2(1f, 1f) },
-        };
-    }
-
-    /// <summary>An open dusk over the highland: a procedural sky, one low warm sun,
-    /// a faint cool counter-light, and distance fog to sink the far crags into.</summary>
-    private static void AddRealmSky(Node3D parent)
-    {
-        var sky = new ProceduralSkyMaterial
-        {
-            SkyTopColor = new Color(0.09f, 0.12f, 0.22f),
-            SkyHorizonColor = new Color(0.46f, 0.28f, 0.22f), // dusk ember at the rim
-            GroundBottomColor = new Color(0.05f, 0.05f, 0.07f),
-            GroundHorizonColor = new Color(0.30f, 0.20f, 0.17f),
-            SunAngleMax = 30f,
-            SunCurve = 0.6f,
-        };
-
-        parent.AddChild(new WorldEnvironment
-        {
-            Environment = new Godot.Environment
-            {
-                BackgroundMode = Godot.Environment.BGMode.Sky,
-                Sky = new Sky { SkyMaterial = sky },
-                AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-                AmbientLightEnergy = 0.55f,
-                // Gentle depth fog: sinks the far crags, leaves the brazier pools alone.
-                FogEnabled = true,
-                FogLightColor = new Color(0.23f, 0.20f, 0.24f),
-                FogDensity = 0.00016f,
-                FogSkyAffect = 0.25f,
-            },
-        });
-
-        // The setting sun: low, warm, and the realm's only shadow-caster.
-        parent.AddChild(new DirectionalLight3D
-        {
-            RotationDegrees = new Vector3(-26f, -40f, 0f),
-            LightColor = new Color(1.0f, 0.80f, 0.58f),
-            LightEnergy = 1.05f,
-            ShadowEnabled = true,
-            DirectionalShadowMaxDistance = 2400f, // shadows near the action; the fog owns the distance
-        });
-        parent.AddChild(new DirectionalLight3D
-        {
-            RotationDegrees = new Vector3(-32f, 145f, 0f),
-            LightColor = new Color(0.55f, 0.62f, 0.85f), // cold woad counter-glow
-            LightEnergy = 0.18f,
-        });
     }
 
     private static bool TryLoadAuthoredScene(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
