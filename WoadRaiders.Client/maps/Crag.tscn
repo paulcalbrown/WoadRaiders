@@ -2395,6 +2395,36 @@ particles_anim_loop = false
 [sub_resource type="QuadMesh" id="QuadMesh_34"]
 material = SubResource("StandardMaterial3D_70")
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_71"]
+albedo_color = Color(0.36, 0.34, 0.33, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_1"]
+material = SubResource("StandardMaterial3D_71")
+radius = 1.0
+height = 1.8
+radial_segments = 9
+rings = 6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_72"]
+albedo_color = Color(0.32, 0.31, 0.34, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_2"]
+material = SubResource("StandardMaterial3D_72")
+radius = 1.0
+height = 1.6
+radial_segments = 10
+rings = 6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_73"]
+albedo_color = Color(0.27, 0.27, 0.3, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_3"]
+material = SubResource("StandardMaterial3D_73")
+radius = 1.0
+height = 1.4
+radial_segments = 8
+rings = 5
+
 [node name="Crag" type="Node3D"]
 
 [node name="Environment" type="WorldEnvironment" parent="."]
@@ -3402,3 +3432,281 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4300, 262.78476, 4900)
 
 [node name="BossSpawn" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4200, 262.5015, 4820)
+
+[node name="Boulders" type="Node3D" parent="."]
+
+[node name="Rock_0" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(1.7056181, -0.17065609, 20.599447, 3.9166684, 15.047358, 0, -24.209925, 2.4223304, 1.4512558, 566.2785, 309.4847, 225.33246)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_1" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-17.48569, -1.7495353, -9.035607, -3.3014567, 12.683789, 0, 10.619285, 1.0625154, -14.878011, 719.76825, 156.76794, 240.05798)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_2" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-15.870944, -1.5879716, 11.686254, -3.387138, 13.012966, 0, -13.73451, -1.3742101, -13.504077, 822.9543, 312.42618, 166.25226)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_3" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(16.915646, 0, 8.587732, 0, 12.254356, 0, -10.223491, 0, 14.209142, 1435.8112, 310.06094, 176.5572)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_4" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-9.559292, 0.9564576, 1.1811637, 1.5588549, 5.988929, 0, -1.3881869, 0.13889542, -8.133696, 4794.8823, 317.2443, 177.00424)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_5" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-13.767653, -1.3775264, 1.778675, -2.2472818, 8.63378, 0, -2.0904243, -0.20915797, -11.714455, 5729.758, 312.6901, 164.31598)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_6" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(5.896187, 0.58994466, -7.1381807, -1.654791, 6.357503, 0, 8.389294, 0.839393, 5.016876, 3309.615, 161.09206, 279.21268)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_7" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(12.25603, 1.2262803, 0.748713, -1.9829628, 7.6182985, 0, -0.87994033, -0.08804267, 10.428263, 3518.4507, 334.2598, 295.57242)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_8" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(7.8042417, 0.7808555, -15.737761, -3.239722, 12.446611, 0, 18.496126, 1.8506348, 6.640379, 323.64197, 209.04181, 420.85263)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_9" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(9.844195, 0.98496366, 6.4549627, -2.0056589, 7.705494, 0, -7.5863276, -0.75905204, 8.37611, 2590.177, 4.3959584, 466.14197)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_10" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(0.39960647, -0.039982732, -11.619649, 2.2047787, 8.470488, 0, 13.656232, -1.3663781, 0.3400123, 2951.1484, -46.869545, 476.6999)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_11" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(14.682595, 1.469071, 10.053412, -3.0414107, 11.684726, 0, -11.815479, -1.182201, 12.4929495, 1264.4677, 315.4236, 538.2753)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_12" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-9.377731, 0, 16.643393, 0, 13.590862, 0, -19.813562, 0, -7.8772936, 278.57617, -3.279323, 683.8781)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_13" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(7.409031, 0, 23.28169, 0, 17.787485, 0, -27.7163, 0, 6.2235856, 1663.6421, 125.76006, 638.2124)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_14" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(2.474741, 0, 16.881695, 0, 12.554411, 0, -20.097256, 0, 2.0787823, 1739.3999, 11.15305, 688.41895)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_15" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-15.592022, 1.5600641, -12.533757, 3.461582, 13.298971, 0, 14.730557, -1.4738699, -13.266751, 2028.3462, 186.44806, 691.3747)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_16" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-5.32353, 0.53264725, 6.627985, 1.5226135, 5.849694, 0, -7.789676, 0.77939814, -4.5296206, 3600.8342, 324.7327, 642.8824)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_17" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(5.579265, 0.5582349, 23.10794, -4.4742866, 17.189657, 0, -27.158083, -2.7173092, 4.7472177, 220.90735, 289.3677, 790.9898)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_18" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-10.240378, -1.0246037, 15.547417, -3.3802998, 12.986694, 0, -18.27242, -1.828252, -8.713209, 1145.4882, 204.02357, 905.7795)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_19" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-5.9005384, -0.59037995, -8.642626, -1.8957081, 7.283077, 0, 10.157424, 1.0163038, -5.020579, 1242.7885, 4.564206, 877.04974)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_20" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-3.5696611, 0, -22.764206, 0, 16.947289, 0, 27.100248, 0, -2.9985151, 1357.1942, 262.52762, 954.19305)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_21" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-8.505892, 0, 6.615858, 0, 7.187239, 0, -7.876022, 0, -7.144949, 3045.7002, 65.91617, 898.0678)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_22" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-6.9872394, -0.6991101, -8.077568, -1.9022582, 7.308241, 0, 9.493329, 0.94985753, -5.9452176, 3840.5476, 185.85678, 891.30585)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_23" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(14.976055, 1.4984332, 15.065577, -3.7424355, 14.377975, 0, -17.70613, -1.7715915, 12.742644, 455.00705, 84.21783, 1074.4539)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_24" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(10.382493, -1.0388232, 5.6604633, 1.9899662, 7.6452045, 0, -6.6525764, 0.66562533, 8.83413, 1006.7794, 195.54303, 1045.847)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_25" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(11.995344, -1.2001973, -15.890518, 3.5820007, 13.761605, 0, 18.675657, -1.8685981, 10.206452, 3565.4045, 33.85919, 1007.1615)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_26" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-9.456757, -0.9461983, 4.480429, -1.7467641, 6.710852, 0, -5.265716, -0.5268627, -8.046451, 3918.134, 43.499237, 1015.6185)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_27" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(14.100393, 0, 10.324778, 0, 11.597475, 0, -12.291402, 0, 11.844331, 4187.453, 241.54486, 1020.7031)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_28" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-12.694204, 1.270122, -10.4527855, 2.8508055, 10.952443, 0, 12.284852, -1.2291641, -10.80109, 4547.5967, 317.4748, 1067.1099)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_29" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-1.81554, 0.18165435, -13.747634, 2.6238484, 10.080502, 0, 16.15719, -1.6166121, -1.5447847, 4618.6426, 327.90497, 1069.776)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_30" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-12.153969, 0, -10.191604, 0, 10.647502, 0, 12.132861, 0, -10.209334, 2220.4307, 165.6626, 1185.3539)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_31" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-10.926976, 0, 7.879467, 0, 8.928628, 0, -9.380318, 0, -9.17866, 2746.8423, 46.23389, 1202.734)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_32" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(9.822751, 0, 5.0231147, 0, 7.1298823, 0, -5.9798985, 0, 8.251111, 3066.6406, -16.45105, 1154.1207)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_33" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-9.323022, -0.9328175, 18.761127, -3.8633275, 14.842427, 0, -22.0494, -2.2061586, -7.9326606, 3521.814, -32.966568, 1122.3522)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_34" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(17.086193, -1.7095636, 5.799534, 2.9686637, 11.405239, 0, -6.8160214, 0.6819789, 14.538094, 2470.8945, 213.64072, 1303.2805)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_35" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(13.882204, 0, -0.34475002, 0, 8.610727, 0, 0.4104167, 0, 11.661052, 3562.972, 205.25002, 1312.5935)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_36" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-7.4103093, 0.7414405, 16.613367, 3.370267, 12.948149, 0, -19.525202, 1.9535992, -6.3051944, 3769.754, 45.209534, 1315.3777)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_37" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(3.7605243, 0, 21.093811, 0, 15.74285, 0, -25.111681, 0, 3.1588402, 4924.5747, 290.5321, 1257.2878)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_38" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-12.560737, 1.2567679, -10.869731, 2.8912137, 11.107686, 0, 12.774875, -1.2781935, -10.687528, 3636.2283, 317.31824, 1512.3727)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_39" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-0.65375113, 0, -20.65927, 0, 15.253895, 0, 24.594368, 0, -0.54915094, 4640.097, 183.24464, 1541.147)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_40" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-0.6269556, 0.06273021, 21.868105, 4.148838, 15.939323, 0, -25.700941, 2.5715144, -0.5334564, 2996.9048, 314.3147, 1655.5819)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_41" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(9.510876, 0.9516132, -5.5753326, -1.8638618, 7.160727, 0, 6.5525246, 0.6556147, 8.092499, 4019.5977, 142.28442, 1734.9917)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_42" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(4.4061356, 0.44085708, -6.7261605, -1.4604974, 5.6110506, 0, 7.9050584, 0.7909428, 3.7490394, 2615.8142, 208.52545, 1884.7572)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_43" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-8.138918, -0.81434166, 15.003538, -3.1341383, 12.040974, 0, -17.633217, -1.7642963, -6.9251437, 3479.0806, 202.60364, 1880.3552)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_44" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-3.900392, -0.39025477, 24.393969, -4.6692915, 17.938843, 0, -28.669514, -2.868536, -3.3187184, 3535.1038, 206.82474, 1850.8671)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_45" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(11.274018, 0, 12.711364, 0, 11.699753, 0, -15.132577, 0, 9.470175, 4276.7036, 297.44397, 1838.7056)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_46" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-17.085556, 0, -16.198624, 0, 15.973777, 0, 19.284075, 0, -14.351867, 4429.226, 149.47911, 2029.9622)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_47" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(11.712824, -1.1719297, 21.453772, 4.4866257, 17.237062, 0, -25.213987, 2.522792, 9.966066, 2962.8699, 296.75848, 2150.1335)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_48" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-16.049181, 1.6058052, 7.378513, 2.943906, 11.310124, 0, -8.671749, 0.86765426, -13.655733, 2758.0698, 184.04997, 2215.6787)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_49" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(14.71102, 0, -4.0703335, 0, 9.602883, 0, 4.8456354, 0, 12.357257, 3427.1885, 20.068745, 2212.95)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_50" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-4.6197333, 0, -9.406725, 0, 7.510653, 0, 11.1984825, 0, -3.880576, 2967.6812, 82.060165, 2467.635)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_51" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-10.3853445, -1.0391084, 8.266438, -2.2950091, 8.8171425, 0, -9.715301, -0.97206694, -8.836556, 3410.0435, 115.83648, 2699.473)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_52" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-7.9833727, 0.7987785, 16.913162, 3.4568782, 13.2809, 0, -19.877542, 1.9888529, -6.792795, 2634.0498, 329.0872, 2979.9424)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_53" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(8.866472, 0.88713723, -5.0528274, -1.7221494, 6.616286, 0, 5.9384394, 0.5941722, 7.5441957, 5377.312, 175.0326, 2982.6143)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_54" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(3.2779822, 0, -13.00962, 0, 9.815058, 0, 15.487644, 0, 2.7535048, 163.42093, 332.62854, 3308.031)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_55" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-1.425547, -0.1426335, -20.064234, -3.812421, 14.646852, 0, 23.580904, 2.3593938, -1.2129521, 3800.3545, 326.5262, 3278.362)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_56" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-19.54187, -1.9552673, -0.67895454, -3.1562848, 12.126057, 0, 0.79795533, 0.07983963, -16.627552, 3595.594, 149.36252, 3422.5413)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_57" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-5.4392405, 0.5442247, 9.476009, 2.0001638, 7.6843824, 0, -11.136875, 1.114303, -4.628075, 2843.1377, 309.4734, 3542.3523)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_58" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(11.860957, 1.1867511, 11.085884, -2.843371, 10.923881, 0, -13.028913, -1.3036114, 10.092107, 3404.7815, 160.44089, 3574.0222)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_59" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(0.44776618, -0.044801373, 22.69355, 4.3047686, 16.53839, 0, -26.671062, 2.6685803, 0.3809899, 4659.8633, 304.376, 3532.638)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_60" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(4.0783463, 0, -21.249508, 0, 15.88668, 0, 25.297033, 0, 3.4258106, 5256.1553, 218.34491, 4078.7324)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_61" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-13.615537, 0, 21.952013, 0, 18.269863, 0, -26.133348, 0, -11.437051, 169.47655, 333.3812, 4320.161)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_62" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-21.841242, 0, 6.649045, 0, 14.403435, 0, -7.91553, 0, -18.346642, 4360.432, 288.54147, 4275.79)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_63" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(11.234556, -1.1240765, -19.112059, 4.0530014, 15.571131, 0, 22.461842, -2.2474256, 9.559122, 4062.103, 266.17407, 4375.931)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_64" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-13.239033, 1.3246349, -9.863386, 2.8397737, 10.91006, 0, 11.592147, -1.1598555, -11.2646675, 3806.8997, 264.75293, 4750.3105)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_65" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(20.458189, 2.0469494, -2.6113608, -3.338475, 12.826009, 0, 3.0690556, 0.30707517, 17.407217, 4518.156, 305.89172, 5015.7847)
+mesh = SubResource("SphereMesh_2")
+
+[node name="Rock_66" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(15.038427, -1.504674, -2.1987066, 2.462461, 9.460472, 0, 2.5840752, -0.25855035, 12.795714, 4023.4785, 296.4687, 5125.929)
+mesh = SubResource("SphereMesh_1")
+
+[node name="Rock_67" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(-14.384871, 0, -3.792672, 0, 9.347629, 0, 4.5150857, 0, -12.083291, 4133.0977, 261.4306, 5133.016)
+mesh = SubResource("SphereMesh_3")
+
+[node name="Rock_68" type="MeshInstance3D" parent="Boulders" groups=["no_fade"]]
+transform = Transform3D(8.28169, -0.8286267, -7.1666226, 1.9062502, 7.3235784, 0, 8.422722, -0.8427376, 7.0466237, 177.06285, 326.76828, 5754.704)
+mesh = SubResource("SphereMesh_1")

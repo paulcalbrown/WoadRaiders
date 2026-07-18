@@ -224,17 +224,18 @@ core loop earns it.
       **chase rig** that swings behind your travel and keeps clear of the land (movement
       keys are camera-relative). The first realm, **The Crag**
       (glen → gorge bridge → switchback climbs → rolling moor with a standing-stone circle →
-      walled summit court, ~260 units of climb), is computed by `tools/GenerateRealm.cs` as a
-      matched pair: `Crag.json` (the geometry the server hosts) and `Crag.tscn` (the natural
-      scene, built and saved BY GODOT — the generator drives `godot-mono` headless through
-      `tools/build_realm_scene.gd`/`RealmSceneBuilder`, then normalizes the serializer's
-      random sub-resource ids so regeneration is deterministic). The generator then
-      **round-trip verifies**: the scene is baked back through the standard hand-made
-      pipeline (`bake_realm.gd` samples the real terrain mesh) and must match the JSON —
-      the scene you hand-edit and the geometry the server simulates are proven to agree.
-      Validation runs the real sim rules: a virtual raider walks the whole route with
-      `Move`, and `Core.RealmValidator` flood fills prove every camp reachable / borders
-      sealed / no stranding pits — the same checks hand-made realms get
+      walled summit court, ~260 units of climb), is **generated scene-first**: its design
+      lives client-side (`scripts/tools/CragDesign.cs` — the layout math — consumed by
+      `RealmSceneBuilder`, which has the whole engine to dress the realm with: any meshes,
+      materials, particles, or asset kits; boulder fields are the first pure scenery).
+      `tools/GenerateRealm.cs` orchestrates: Godot builds and saves `Crag.tscn` itself
+      (ResourceSaver, random ids normalized so regeneration is byte-deterministic), then
+      `Crag.json` — the geometry the server hosts — is **baked FROM the scene** by the same
+      `bake_realm.gd` every hand-sculpted realm uses; nothing is ever generated from the
+      JSON, so the sim format never limits what a realm can look like. Validation runs the
+      real sim rules against the BAKED geometry: a virtual raider walks the whole route
+      with `Move`, and `Core.RealmValidator` flood fills prove every camp reachable /
+      borders sealed / no stranding pits — the same checks hand-made realms get
       (`tools/ValidateRealm.cs`).
       The Barrow and Cairn dungeons were removed with the old camera. Wire `v14`; probes:
       `tools/TerrainProbe.cs` (terrain on the wire, spawn on the ground, the authoritative Y
@@ -353,13 +354,13 @@ core loop earns it.
 | `WoadRaiders.Server.Tests` | Server-internals tests | Server |
 
 `tools/` holds .NET 10 file-based apps (`dotnet run tools/<Name>.cs`): the realm generator
-(`GenerateRealm.cs` — computes The Crag, drives Godot to build its natural scene, and
-round-trip-verifies the pair), the realm checker (`ValidateRealm.cs` — the same playability
-bar for hand-made bakes, plus `--compare` for cross-format geometry proofs), the two music
-generators, and scripted LiteNetLib **probes** (`ClassProbe`, `InstanceProbe`, `PortalProbe`,
-`TerrainProbe`) that verify class stats, instance isolation, the portal flow, and the
-terrain/verticality end-to-end against a running server — no Godot needed. The Godot-side
-tools (`bake_realm.gd` — baking any scene to server geometry via the C# `RealmBaker` +
-`Core.TerrainSampler`; `build_realm_scene.gd` — building a natural scene from geometry JSON
-via `RealmSceneBuilder` + ResourceSaver; scene measurement) live in
-`WoadRaiders.Client/tools/`.
+(`GenerateRealm.cs` — orchestrates the scene-first chain: Godot builds The Crag's scene
+from its design, the served JSON is baked from it, and the baked geometry is validated),
+the realm checker (`ValidateRealm.cs` — the same playability bar for hand-made bakes, plus
+`--compare` for cross-format geometry proofs), the two music generators, and scripted
+LiteNetLib **probes** (`ClassProbe`, `InstanceProbe`, `PortalProbe`, `TerrainProbe`) that
+verify class stats, instance isolation, the portal flow, and the terrain/verticality
+end-to-end against a running server — no Godot needed. The Godot-side pieces (the
+`CragDesign` layout math + `RealmSceneBuilder`, `bake_realm.gd` — baking any scene to
+server geometry via the C# `RealmBaker` + `Core.TerrainSampler`, `build_realm_scene.gd`,
+scene measurement) live in `WoadRaiders.Client/`.

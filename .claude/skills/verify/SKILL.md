@@ -35,17 +35,22 @@ heightfield: originX/originZ/cellSize/width/depth + row-major `heights` — the
 base plane movement rides; see the verticality rules in `DungeonGeometry`) and
 `props` (cosmetic braziers).
 
-**Realms are authored as Godot .tscn scenes and PLAYED from baked JSON.**
+**Realms are authored as Godot .tscn scenes and PLAYED from baked JSON —
+and the SCENE COMES FIRST, for generated and hand-made realms alike.**
 The generated scene is a NATURAL Godot file — saved by Godot's own
 ResourceSaver, built-in nodes and resources only, a REAL displaced terrain
-ArrayMesh, no scripts, no metadata; it opens whole in any Godot editor.
-`dotnet run tools/GenerateRealm.cs` does the whole chain: computes and
-validates the realm → writes `Crag.json` (what the server hosts) → drives
-godot-mono to build `Crag.tscn` from it (tools/build_realm_scene.gd →
-RealmSceneBuilder → ResourceSaver) → normalizes the serializer's random
-sub-resource ids (deterministic regeneration) → bakes the scene BACK through
-the hand-made pipeline and proves it matches the JSON. Rerun it after editing
-the layout code; after hand-editing the .tscn instead, re-bake (step 2 below).
+ArrayMesh plus free-form scenery (boulder fields today), no scripts, no
+metadata; it opens whole in any Godot editor. The design lives CLIENT-SIDE
+(`WoadRaiders.Client/scripts/tools/CragDesign.cs` — layout math — consumed by
+`RealmSceneBuilder`), so it can place ANYTHING Godot can express; nothing is
+ever generated from the geometry JSON. `dotnet run tools/GenerateRealm.cs`
+does the whole chain: builds the client → drives godot-mono to build
+`Crag.tscn` from the design (tools/build_realm_scene.gd) → normalizes the
+serializer's random ids (deterministic regeneration) → bakes `Crag.json`
+FROM the scene via the standard hand-made pipeline (bake_realm.gd) →
+validates the BAKED geometry (RealmValidator + the route walk). Reshape the
+realm by editing CragDesign.cs and rerunning; hand-edits to Crag.tscn are
+equally fine — re-bake + ValidateRealm afterwards (steps 2–3 below).
 The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
   1. Terrain: ANY meshes in group `terrain` (the natural way — sculpt in
      Blender, CSG, or edit the generated Terrain mesh; put big ground meshes
