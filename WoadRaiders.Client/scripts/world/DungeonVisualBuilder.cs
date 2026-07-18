@@ -1,18 +1,22 @@
 using System;
+using System.Linq;
 using Godot;
 using WoadRaiders.Core;
 
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// Builds the map's visuals once the geometry arrives. A terrain-bearing realm
-/// is built straight from the geometry the server sent — the smooth heightfield
-/// becomes one continuous mesh under an open dusk sky, the solids become stone,
-/// the braziers burn along the way — so what you see IS what you collide with.
-/// Hand-crafted maps render their authored scene; a missing scene falls back to
-/// placeholder boxes. Either way, the fade-eligible meshes are registered with
-/// the <see cref="OcclusionFader"/>, and a blue entrance portal is stood at the
-/// spawn — the mirror of the boss's green exit.
+/// Builds the map's visuals once the geometry arrives. The authored .tscn is
+/// the visual truth: when the map names a scene this client has (generated
+/// realms like Crag.tscn, or hand-made ones), it is instantiated and renders
+/// itself — terrain via its <see cref="RealmTerrain"/> node, braziers, lights,
+/// and sky all as authored. Without the scene, a terrain-bearing realm is
+/// rebuilt from the geometry the server sent (heightfield mesh, stone solids,
+/// braziers, dusk sky — playable even when a custom map's scene isn't in this
+/// build), and a flat map falls back to placeholder boxes. Either way, the
+/// fade-eligible meshes are registered with the <see cref="OcclusionFader"/>,
+/// and a blue entrance portal is stood at the spawn — the mirror of the boss's
+/// green exit.
 /// </summary>
 public static class DungeonVisualBuilder
 {
@@ -23,10 +27,13 @@ public static class DungeonVisualBuilder
 
     public static void Build(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
     {
-        if (geometry.Terrain is { } terrain)
-            BuildRealm(parent, geometry, terrain, fader);
-        else if (!TryLoadAuthoredScene(parent, geometry, fader))
-            BuildPlaceholderMeshes(parent, geometry, fader);
+        if (!TryLoadAuthoredScene(parent, geometry, fader))
+        {
+            if (geometry.Terrain is { } terrain)
+                BuildRealm(parent, geometry, terrain, fader);
+            else
+                BuildPlaceholderMeshes(parent, geometry, fader);
+        }
 
         // The entrance portal stands at the realm's mouth, set back BEHIND the spawn
         // (between spawn and the chase camera) so raiders walk forward out of it — a
@@ -48,14 +55,20 @@ public static class DungeonVisualBuilder
 
     // ------------------------------------------------------------- open realms
 
-    /// <summary>Stand up a terrain realm: the heightfield as one smooth mesh, solids
-    /// as stone, braziers as fire and light, all under an open dusk sky.</summary>
+    /// <summary>Stand up a terrain realm straight from the wire geometry (the
+    /// fallback when the map's authored scene isn't in this build): the
+    /// heightfield as a <see cref="RealmTerrain"/> node, solids as stone,
+    /// braziers as fire and light, all under an open dusk sky.</summary>
     private static void BuildRealm(Node3D parent, DungeonGeometry geometry, HeightField terrain, OcclusionFader fader)
     {
-        parent.AddChild(new MeshInstance3D
+        parent.AddChild(new RealmTerrain
         {
-            Mesh = BuildTerrainMesh(terrain),
-            MaterialOverride = TerrainMaterial(),
+            OriginX = terrain.OriginX,
+            OriginZ = terrain.OriginZ,
+            CellSize = terrain.CellSize,
+            TerrainWidth = terrain.Width,
+            TerrainDepth = terrain.Depth,
+            Heights = terrain.Heights.ToArray(),
         });
 
         BuildSolids(parent, geometry, fader);
@@ -65,124 +78,8 @@ public static class DungeonVisualBuilder
                 parent.AddChild(MakeBrazier(prop.Position.ToGodot()));
 
         AddRealmSky(parent);
-        GD.Print($"Rendering open realm '{geometry.ScenePath}' " +
+        GD.Print($"Rendering open realm '{geometry.ScenePath}' from geometry " +
                  $"({terrain.Width}x{terrain.Depth} terrain, {geometry.Solids.Count} solids, {geometry.Props.Count} props)");
-    }
-
-    /// <summary>One continuous smooth-shaded mesh over the whole heightfield, coloured
-    /// per vertex by height and steepness — grass in the glens, heather on the moor,
-    /// bare rock where it's too steep to walk, dark stone in the gorge.</summary>
-    private static ArrayMesh BuildTerrainMesh(HeightField terrain)
-    {
-        int w = terrain.Width, d = terrain.Depth;
-        var cell = terrain.CellSize;
-        var vertices = new Vector3[w * d];
-        var normals = new Vector3[w * d];
-        var colors = new Color[w * d];
-
-        for (var j = 0; j < d; j++)
-        {
-            for (var i = 0; i < w; i++)
-            {
-                var idx = j * w + i;
-                var h = terrain.At(i, j);
-                vertices[idx] = new Vector3(terrain.OriginX + i * cell, h, terrain.OriginZ + j * cell);
-
-                // Central differences (clamped at the rim) give smooth normals.
-                var hw = terrain.At(Math.Max(i - 1, 0), j);
-                var he = terrain.At(Math.Min(i + 1, w - 1), j);
-                var hn = terrain.At(i, Math.Max(j - 1, 0));
-                var hs = terrain.At(i, Math.Min(j + 1, d - 1));
-                var normal = new Vector3(hw - he, 2f * cell, hn - hs).Normalized();
-                normals[idx] = normal;
-                colors[idx] = TerrainColor(h, normal.Y);
-            }
-        }
-
-        var indices = new int[(w - 1) * (d - 1) * 6];
-        var k = 0;
-        for (var j = 0; j < d - 1; j++)
-        {
-            for (var i = 0; i < w - 1; i++)
-            {
-                var a = j * w + i;         // clockwise winding — Godot front faces
-                indices[k++] = a;
-                indices[k++] = a + 1;
-                indices[k++] = a + w;
-                indices[k++] = a + 1;
-                indices[k++] = a + w + 1;
-                indices[k++] = a + w;
-            }
-        }
-
-        var arrays = new Godot.Collections.Array();
-        arrays.Resize((int)Mesh.ArrayType.Max);
-        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
-        arrays[(int)Mesh.ArrayType.Normal] = normals;
-        arrays[(int)Mesh.ArrayType.Color] = colors;
-        arrays[(int)Mesh.ArrayType.Index] = indices;
-
-        var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-        return mesh;
-    }
-
-    private static Color TerrainColor(float height, float normalY)
-    {
-        // The height bands of the realm, dusk-lit: gorge stone, glen grass,
-        // heather moor, pale upland, then bare crag on the border peaks.
-        var gorge = new Color(0.14f, 0.13f, 0.15f);
-        var glen = new Color(0.22f, 0.32f, 0.16f);
-        var moor = new Color(0.30f, 0.27f, 0.18f);
-        var upland = new Color(0.33f, 0.33f, 0.23f);
-        var crag = new Color(0.33f, 0.32f, 0.35f);
-
-        var byHeight = height switch
-        {
-            < -60f => gorge,
-            < 20f => gorge.Lerp(glen, (height + 60f) / 80f),
-            < 140f => glen.Lerp(moor, (height - 20f) / 120f),
-            < 280f => moor.Lerp(upland, (height - 140f) / 140f),
-            < 420f => upland.Lerp(crag, (height - 280f) / 140f),
-            _ => crag,
-        };
-
-        // Steep ground sheds its soil: blend toward bare rock as the surface
-        // tips past walkable — cliffs read as cliffs at a glance.
-        var rockiness = Mathf.Clamp((0.80f - normalY) / 0.35f, 0f, 1f);
-        return byHeight.Lerp(crag * 0.9f, rockiness);
-    }
-
-    private static StandardMaterial3D TerrainMaterial()
-    {
-        // Vertex colours carry the biome; a seamless world-triplanar noise pair
-        // breaks them up so the ground reads as land, not as a gradient.
-        var ramp = new Gradient();
-        ramp.SetColor(0, new Color(0.78f, 0.76f, 0.72f));
-        ramp.SetColor(1, new Color(1.06f, 1.05f, 1.02f));
-
-        var albedoNoise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, Frequency = 0.04f, Seed = 11 };
-        var albedo = new NoiseTexture2D { Noise = albedoNoise, Width = 256, Height = 256, Seamless = true, ColorRamp = ramp };
-
-        var normalNoise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, Frequency = 0.07f, Seed = 12 };
-        var normal = new NoiseTexture2D
-        {
-            Noise = normalNoise, Width = 256, Height = 256, Seamless = true, AsNormalMap = true, BumpStrength = 4f,
-        };
-
-        return new StandardMaterial3D
-        {
-            VertexColorUseAsAlbedo = true,
-            AlbedoColor = Colors.White,
-            AlbedoTexture = albedo,
-            NormalEnabled = true,
-            NormalTexture = normal,
-            Roughness = 1f,
-            Metallic = 0f,
-            Uv1Triplanar = true,
-            Uv1WorldTriplanar = true,
-            Uv1Scale = new Vector3(0.010f, 0.010f, 0.010f),
-        };
     }
 
     /// <summary>A burning waymarker: a dark iron bowl, a warm pool of light, and a

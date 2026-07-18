@@ -212,14 +212,19 @@ core loop earns it.
       destination, a rise beyond `SimConstants.StepHeight` (18) is a wall or cliff, drops are
       unlimited (one-way jump-downs are level design). Sight lines respect terrain crests;
       player bolts **hug the slopes** and sail level over gorges, enemy bolts aim in full 3D so
-      overlook mages rain fire downhill. The client renders the whole realm from the geometry
-      itself (one smooth vertex-coloured terrain mesh, dusk sky, braziers) — no scene file — and
-      the camera became a perspective **chase rig** that swings behind your travel and keeps
-      clear of the land (movement keys are camera-relative). The first realm, **The Crag**
+      overlook mages rain fire downhill. Realms are authored as **Godot .tscn scenes**: the
+      `RealmTerrain` tool node stores the heightfield in the scene and builds its smooth
+      vertex-coloured mesh on ready (editor preview and in-game render alike; clients missing
+      a custom map's scene rebuild the realm from the wire geometry instead), and the camera
+      became a perspective **chase rig** that swings behind your travel and keeps clear of the
+      land (movement keys are camera-relative). The first realm, **The Crag**
       (glen → gorge bridge → switchback climbs → rolling moor with a standing-stone circle →
-      walled summit court, ~260 units of climb), is computed by `tools/GenerateRealm.cs`, which
-      validates itself with the real sim rules: a virtual raider walks the whole route with
-      `Move`, flood fills prove every camp reachable / borders sealed / no stranding pits.
+      walled summit court, ~260 units of climb), is computed by `tools/GenerateRealm.cs` as a
+      matched `Crag.tscn` + `Crag.json` pair sharing identical heights (re-exporting the scene
+      reproduces the sim geometry bit for bit — proven by `tools/ValidateRealm.cs --compare`).
+      Validation runs the real sim rules: a virtual raider walks the whole route with `Move`,
+      and `Core.RealmValidator` flood fills prove every camp reachable / borders sealed / no
+      stranding pits — the same checks hand-made realm exports get.
       The Barrow and Cairn dungeons were removed with the old camera. Wire `v14`; probes:
       `tools/TerrainProbe.cs` (terrain on the wire, spawn on the ground, the authoritative Y
       climbing as you walk, replay determinism) + the existing class/instance/portal probes.
@@ -233,8 +238,16 @@ core loop earns it.
       it with `WoadRaiders.Client/tools/export_dungeon.gd` (runs headless) to JSON; serve it with
       `dotnet run --project WoadRaiders.Server -- --map maps/YourMap.json`. `maps/TestArena.tscn`
       is a working example. **The game only ever consumes map files** — runtime procedural
-      generation stays out by design; the shipping dungeons are hand-crafted or generated
-      *offline* into the same static format (see The Cairn below).
+      generation stays out by design; the shipping maps are hand-crafted or generated
+      *offline* into the same static format. **Open realms are authored the same way** (see
+      the open-realms entry above): give the scene terrain — a `RealmTerrain` node, or ANY
+      meshes in the `terrain` group, which the exporter samples from above onto a heightfield
+      grid (`terrain_cell_size` metadata on the root overrides the 40-unit default; put big
+      ground meshes in `no_fade` too) — plus nodes in the `brazier` group for fire props, then
+      export and check it with `dotnet run tools/ValidateRealm.cs` (camps reachable, borders
+      sealed, no stranding pits — the same bar the generated realm passes). Clients that have
+      the scene render it as authored; clients that don't rebuild the realm from the wire
+      geometry, so a custom-map server never shows anyone an empty world.
 - [x] **Dungeon art pass** — hand-crafted maps **render their own Godot scene** (meshes,
       materials, lights authored in the editor; the collision boxes stay the sim truth). The export
       tool records the source scene in the JSON; the server passes it over the wire; the client
@@ -327,8 +340,10 @@ core loop earns it.
 | `WoadRaiders.Server.Tests` | Server-internals tests | Server |
 
 `tools/` holds .NET 10 file-based apps (`dotnet run tools/<Name>.cs`): the realm generator
-(`GenerateRealm.cs` — computes and self-validates The Crag), the two music generators, and
-scripted LiteNetLib **probes** (`ClassProbe`, `InstanceProbe`, `PortalProbe`, `TerrainProbe`)
-that verify class stats, instance isolation, the portal flow, and the terrain/verticality
-end-to-end against a running server — no Godot needed. The Godot-side editor tools
-(map export, scene measurement) live in `WoadRaiders.Client/tools/`.
+(`GenerateRealm.cs` — computes The Crag as a .tscn + JSON pair and self-validates), the realm
+checker (`ValidateRealm.cs` — the same playability bar for hand-made exports, plus `--compare`
+for pipeline round-trip proofs), the two music generators, and scripted LiteNetLib **probes**
+(`ClassProbe`, `InstanceProbe`, `PortalProbe`, `TerrainProbe`) that verify class stats,
+instance isolation, the portal flow, and the terrain/verticality end-to-end against a running
+server — no Godot needed. The Godot-side editor tools (the terrain-aware map export, scene
+measurement) live in `WoadRaiders.Client/tools/`.

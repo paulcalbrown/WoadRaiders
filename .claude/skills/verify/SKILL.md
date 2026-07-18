@@ -31,10 +31,30 @@ Custom maps are plain JSON (see `DungeonGeometryFile` docs): `spawn: [x,y,z]`,
 2 Mage — parallel array), optional `bossSpawn`, optional `terrain` (a smooth
 heightfield: originX/originZ/cellSize/width/depth + row-major `heights` — the
 base plane movement rides; see the verticality rules in `DungeonGeometry`) and
-`props` (cosmetic braziers). The shipping realm, The Crag, is emitted by
-`dotnet run tools/GenerateRealm.cs`, which self-validates with the REAL sim
-rules (a route walk via `Move`, reachability/containment/no-stranding flood
-fills) — rerun it after editing the layout; never hand-edit Crag.json.
+`props` (cosmetic braziers).
+
+**Realms are authored as Godot .tscn scenes** and baked to that JSON. The
+shipping realm is a matched pair: `dotnet run tools/GenerateRealm.cs` emits
+`WoadRaiders.Client/maps/Crag.tscn` (the hand-editable scene: a RealmTerrain
+node carrying the heightfield, braziers, sky, solid visuals + collision,
+markers) AND `Crag.json`, sharing identical rounded heights — rerun it after
+editing the layout code; after hand-editing the .tscn instead, re-export.
+The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
+  1. Terrain: a `RealmTerrain` node (group `realm_terrain`), or ANY meshes in
+     group `terrain` — the exporter samples them from above on a grid (cell 40,
+     root metadata `terrain_cell_size` overrides). Big ground meshes also go in
+     `no_fade`. Collision: axis-aligned `BoxShape3D` CollisionShape3Ds. Markers:
+     `PlayerSpawn`, `EnemySpawnN[_Rogue|_Mage]`, `BossSpawn`; braziers = nodes
+     in group `brazier`.
+  2. `dotnet build WoadRaiders.Client` (the exporter instantiates C# nodes),
+     then `godot-mono --headless --path WoadRaiders.Client -s
+     res://tools/export_dungeon.gd -- res://maps/MyRealm.tscn res://maps/MyRealm.json`
+  3. `dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.json`
+     — Core.RealmValidator proves camps reachable, borders sealed, no
+     stranding pits. `--compare other.json` proves two exports carry identical
+     sim geometry (used to check the Crag.tscn → export → JSON round trip).
+  4. Serve with `--map`; clients with the scene render it, clients without it
+     rebuild the realm from the wire geometry.
 `SpawnDirector` clamps the live population to 40 regulars no matter how many
 markers the map has. An all-Mage map keeps projectiles in the snapshot, which
 is the cheapest way to inflate world size.

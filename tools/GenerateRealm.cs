@@ -1,12 +1,27 @@
-// Generates The Crag — the first open realm — as the server's geometry JSON:
-// a smooth heightfield terrain (no tiles, no grid feel), solids for the gorge
-// bridge, summit ramparts, and standing stones, brazier props, typed enemy
-// camps, and the boss court. A .NET 10 file-based app:
+// Generates The Crag — the first open realm — as a matched pair of files:
+//
+//   WoadRaiders.Client/maps/Crag.tscn   the authored-format Godot scene: a
+//                                       RealmTerrain node carrying the whole
+//                                       heightfield (it builds its mesh on
+//                                       ready, in the editor and in game),
+//                                       brazier props with flames and light,
+//                                       the dusk sky and sun, stone visuals +
+//                                       collision for every solid, and the
+//                                       spawn/enemy/boss markers — fully
+//                                       hand-editable in the Godot editor.
+//   WoadRaiders.Client/maps/Crag.json   the server's simulation geometry
+//                                       (heightfield + solids + spawns +
+//                                       props), pointing at the scene.
+//
+// A .NET 10 file-based app:
 //
 //   dotnet run tools/GenerateRealm.cs
 //
-// writes WoadRaiders.Client/maps/Crag.json. The client renders the realm from
-// this same data (terrain mesh + props), so there is no .tscn to pair with it.
+// The .tscn is the visual truth and the .json the sim truth; both carry the
+// SAME rounded heightfield, so what you see is what you collide with. Editing
+// the scene by hand? Re-export the sim geometry from it afterwards with
+// WoadRaiders.Client/tools/export_dungeon.gd (terrain-aware), then check it
+// with tools/ValidateRealm.cs — the same pipeline hand-made realms use.
 //
 // The land is computed, not drawn: a "wild" highland of crags is the default,
 // and the playable realm is carved into it as a chain of smooth-blended plates
@@ -21,17 +36,16 @@
 // The tool validates its own output with the REAL simulation rules:
 //   - a virtual raider walks the whole route with DungeonGeometry.Move at
 //     player speed and must reach the boss court (and end up high);
-//   - a restrictive flood fill proves every enemy marker and the boss are
-//     comfortably reachable from the spawn;
-//   - a permissive flood fill (a cheater inching up slopes) proves the map
-//     is sealed at its borders and that everywhere you can possibly get to,
-//     the boss court is still reachable — no stranding pits;
+//   - Core.RealmValidator proves every camp comfortably reachable, the borders
+//     sealed even against slope-inching, and no reachable spot stranded;
 //   - the JSON round-trips through DungeonGeometryFile.Parse.
 
 #:project ../WoadRaiders.Core/WoadRaiders.Core.csproj
 #:property PublishAot=false
 
+using System.Globalization;
 using System.Numerics;
+using System.Text;
 using WoadRaiders.Core;
 
 const float Cell = 40f;         // world units between height samples
@@ -171,8 +185,8 @@ float HeightAt(float x, float z)
     height += Fractal(x, z, 260f, 3, 41) * 8f * (1f - 0.75f * inPlay);
 
     // The border band rises into an unclimbable rim — the realm is sealed.
-    // The grade must exceed the worst-case per-cell step (see Inching below),
-    // or the flood fill rightly reports a leak.
+    // The grade must exceed the worst-case per-cell step (RealmValidator's
+    // inching slope), or the flood fill rightly reports a leak.
     var edge = MathF.Min(MathF.Min(x, 6000f - x), MathF.Min(z, 6400f - z));
     if (edge < 160f)
         height += (160f - edge) * 5f;
@@ -182,10 +196,13 @@ float HeightAt(float x, float z)
 
 // ------------------------------------------------------------- bake the field
 
+// Heights are rounded to 3 decimals so the .tscn (text floats), the JSON, and
+// the wire all carry the IDENTICAL value — re-exporting the scene reproduces
+// the sim geometry bit for bit.
 var heights = new float[W * D];
 for (var j = 0; j < D; j++)
     for (var i = 0; i < W; i++)
-        heights[j * W + i] = HeightAt(i * Cell, j * Cell);
+        heights[j * W + i] = MathF.Round(HeightAt(i * Cell, j * Cell), 3);
 var field = new HeightField(0f, 0f, Cell, W, D, heights);
 
 // ------------------------------------------------------------- solids
@@ -275,130 +292,18 @@ var geometry = new DungeonGeometry(
     enemies.Select(e => new EnemySpawnPoint(OnGround(e.x, e.z), e.type)).ToList(),
     field)
 {
-    ScenePath = "realm:crag", // catalog identity — the client builds the realm from this geometry
+    ScenePath = "res://maps/Crag.tscn", // the authored scene the client renders
     BossSpawn = bossSpawn,
     Props = props,
 };
 
 // ------------------------------------------------------------- validation
 
-// Per-cell candidate grounds: the terrain sample plus any solid top at that
-// point, minus any candidate a wall denies (a parapet, a rampart) — mirroring
-// DungeonGeometry's walk rules at flood-fill granularity.
-List<float> GroundsAt(int i, int j)
-{
-    var x = i * Cell;
-    var z = j * Cell;
-    var list = new List<float> { field.At(i, j) };
-    foreach (var s in solids)
-        if (x >= s.Min.X && x <= s.Max.X && z >= s.Min.Z && z <= s.Max.Z && s.Max.Y > list[0])
-            list.Add(s.Max.Y);
-    list.RemoveAll(g => solids.Any(s =>
-        x >= s.Min.X && x <= s.Max.X && z >= s.Min.Z && z <= s.Max.Z &&
-        s.Min.Y < g + SimConstants.CharacterHeight - 1f && s.Max.Y > g + SimConstants.StepHeight + 1f));
-    return list;
-}
-
-var grounds = new List<float>[W * D];
-for (var j = 0; j < D; j++)
-    for (var i = 0; i < W; i++)
-        grounds[j * W + i] = GroundsAt(i, j);
-
-// Flood fill over (cell, ground-level) nodes. climbLimit is the largest
-// cell-to-cell RISE allowed; drops are always allowed, like the sim.
-HashSet<(int i, int j, int l)> Flood((int i, int j) start, float climbLimit)
-{
-    var seen = new HashSet<(int, int, int)>();
-    var frontier = new Queue<(int i, int j, int l)>();
-    for (var l = 0; l < grounds[start.j * W + start.i].Count; l++)
-    {
-        seen.Add((start.i, start.j, l));
-        frontier.Enqueue((start.i, start.j, l));
-    }
-    while (frontier.Count > 0)
-    {
-        var (i, j, l) = frontier.Dequeue();
-        var g = grounds[j * W + i][l];
-        foreach (var (ni, nj) in new[] { (i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1) })
-        {
-            if (ni < 0 || nj < 0 || ni >= W || nj >= D)
-                continue;
-            var cell = grounds[nj * W + ni];
-            for (var nl = 0; nl < cell.Count; nl++)
-            {
-                if (cell[nl] - g > climbLimit || !seen.Add((ni, nj, nl)))
-                    continue;
-                frontier.Enqueue((ni, nj, nl));
-            }
-        }
-    }
-    return seen;
-}
-
-(int i, int j) CellOf(Vector3 p) => ((int)MathF.Round(p.X / Cell), (int)MathF.Round(p.Z / Cell));
-
-// A comfortable walker: rises up to 45 per 40-unit cell. Real players climb
-// steeper (StepHeight per tick-step), so anything this fill reaches is easy.
-const float Comfortable = 45f;
-// A determined incher (worst case: diagonal micro-steps): ~138 per cell.
-const float Inching = 140f;
-
-var easy = Flood(CellOf(playerSpawn), Comfortable);
-var anywhere = Flood(CellOf(playerSpawn), Inching);
-
-bool EasyReach(Vector3 p)
-{
-    var (i, j) = CellOf(p);
-    for (var l = 0; l < grounds[j * W + i].Count; l++)
-        if (easy.Contains((i, j, l)))
-            return true;
-    return false;
-}
-
-if (!EasyReach(bossSpawn))
-    throw new InvalidOperationException("the boss court is not comfortably reachable from the spawn");
-foreach (var e in enemies)
-    if (!EasyReach(OnGround(e.x, e.z)))
-        throw new InvalidOperationException($"the {e.type} at ({e.x},{e.z}) is not comfortably reachable");
-
-// Sealed borders: even an inching cheater never reaches the outer two rings.
-foreach (var (i, j, _) in anywhere)
-    if (i < 2 || j < 2 || i >= W - 2 || j >= D - 2)
-        throw new InvalidOperationException($"the realm leaks at its border near cell ({i},{j})");
-
-// No stranding: from EVERY node anyone can possibly reach, the boss court is
-// still reachable by comfortable walking + drops. Reverse fill from the boss:
-// u can proceed to a boss-reaching v when the rise u→v is comfortable (any
-// drop qualifies automatically).
-var canReachBoss = new HashSet<(int, int, int)>();
-{
-    var (bi, bj) = CellOf(bossSpawn);
-    var frontier = new Queue<(int i, int j, int l)>();
-    for (var l = 0; l < grounds[bj * W + bi].Count; l++)
-    {
-        canReachBoss.Add((bi, bj, l));
-        frontier.Enqueue((bi, bj, l));
-    }
-    while (frontier.Count > 0)
-    {
-        var (i, j, l) = frontier.Dequeue();
-        var gv = grounds[j * W + i][l];
-        foreach (var (ni, nj) in new[] { (i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1) })
-        {
-            if (ni < 0 || nj < 0 || ni >= W || nj >= D)
-                continue;
-            var cell = grounds[nj * W + ni];
-            for (var nl = 0; nl < cell.Count; nl++)
-                if (gv - cell[nl] <= Comfortable && canReachBoss.Add((ni, nj, nl)))
-                    frontier.Enqueue((ni, nj, nl));
-        }
-    }
-}
-var stranded = anywhere.Where(n => !canReachBoss.Contains(n)).ToList();
-if (stranded.Count > 0)
-    throw new InvalidOperationException(
-        $"{stranded.Count} reachable spots cannot get back to the boss court (first: cell " +
-        $"({stranded[0].i},{stranded[0].j}) at h {grounds[stranded[0].j * W + stranded[0].i][stranded[0].l]:0}) — a stranding pit");
+// The shared realm checks (Core.RealmValidator): comfortable reachability of
+// every camp and the boss, sealed borders, no stranding pits.
+var issues = RealmValidator.Validate(geometry);
+if (issues.Count > 0)
+    throw new InvalidOperationException("the realm fails validation:\n  - " + string.Join("\n  - ", issues));
 
 // The route walk: a virtual raider walks the whole intended path with the REAL
 // Move rules at player speed. Stalls fail the build; the summit must be high.
@@ -435,14 +340,285 @@ Vector2[] route =
     Console.WriteLine($"Route walk OK — the raider stands at ({pos.X:0}, {pos.Y:0}, {pos.Z:0}) before the boss.");
 }
 
-// ------------------------------------------------------------- write
+// ------------------------------------------------------------- write JSON
 
 var json = DungeonGeometryFile.ToJson(geometry);
 DungeonGeometryFile.Parse(json); // must survive its own round trip
-var outPath = Path.Combine("WoadRaiders.Client", "maps", "Crag.json");
-File.WriteAllText(outPath, json);
+File.WriteAllText(Path.Combine("WoadRaiders.Client", "maps", "Crag.json"), json);
+
+// ------------------------------------------------------------- write TSCN
+// The same data as an authored-format Godot scene. Sub-resource recipes
+// (flame stack, stone material) follow the conventions the old dungeon
+// generators established, at world scale.
+
+string F(float v) => v.ToString("0.######", CultureInfo.InvariantCulture);
+
+// A DirectionalLight3D basis from YXZ Euler degrees (pitch around X, yaw
+// around Y), written row-major as .tscn Transform3D expects: M = Ry * Rx.
+string DirTransform(float pitchDeg, float yawDeg)
+{
+    var p = pitchDeg * MathF.PI / 180f;
+    var y = yawDeg * MathF.PI / 180f;
+    float cp = MathF.Cos(p), sp = MathF.Sin(p), cy = MathF.Cos(y), sy = MathF.Sin(y);
+    float[] m = { cy, sy * sp, sy * cp, 0f, cp, -sp, -sy, cy * sp, cy * cp };
+    return $"Transform3D({string.Join(", ", m.Select(F))}, 0, 0, 0)";
+}
+
+string At(float x, float yy, float z) => $"Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, {F(x)}, {F(yy)}, {F(z)})";
+
+const int ExtCount = 1;
+var subCount = 20 + solids.Count * 2; // fixed recipes + a BoxMesh and BoxShape3D per solid
+
+var scene = new StringBuilder();
+scene.AppendLine($"[gd_scene load_steps={1 + ExtCount + subCount} format=3]");
+scene.AppendLine();
+scene.AppendLine("""[ext_resource type="Script" path="res://scripts/world/RealmTerrain.cs" id="1_terrain"]""");
+scene.AppendLine();
+
+// --- the sky and light rig
+scene.AppendLine("""
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.09, 0.12, 0.22, 1)
+sky_horizon_color = Color(0.46, 0.28, 0.22, 1)
+ground_bottom_color = Color(0.05, 0.05, 0.07, 1)
+ground_horizon_color = Color(0.3, 0.2, 0.17, 1)
+sun_angle_max = 30.0
+sun_curve = 0.6
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_energy = 0.55
+fog_enabled = true
+fog_light_color = Color(0.23, 0.2, 0.24, 1)
+fog_density = 0.00016
+fog_sky_affect = 0.25
+""");
+
+// --- the brazier bowl and its flame (the proven torch-flame recipe, at world scale)
+scene.AppendLine("""
+[sub_resource type="StandardMaterial3D" id="bowl_mat"]
+albedo_color = Color(0.1, 0.09, 0.09, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="bowl"]
+material = SubResource("bowl_mat")
+top_radius = 15.0
+bottom_radius = 9.0
+height = 26.0
+radial_segments = 10
+
+[sub_resource type="Gradient" id="flame_grad"]
+offsets = PackedFloat32Array(0, 0.45, 1)
+colors = PackedColorArray(0.9, 0.16, 0.04, 1, 0.72, 0.06, 0.02, 1, 0.35, 0.01, 0.005, 0)
+
+[sub_resource type="GradientTexture1D" id="flame_ramp"]
+gradient = SubResource("flame_grad")
+
+[sub_resource type="Curve" id="flame_curve"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.5, 0.4), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="flame_scale"]
+curve = SubResource("flame_curve")
+
+[sub_resource type="Gradient" id="dot_grad"]
+offsets = PackedFloat32Array(0, 0.6, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="flame_dot"]
+gradient = SubResource("dot_grad")
+width = 32
+height = 32
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0)
+
+[sub_resource type="ParticleProcessMaterial" id="flame_process"]
+emission_shape = 1
+emission_sphere_radius = 3.0
+direction = Vector3(0, 1, 0)
+spread = 5.0
+gravity = Vector3(0, 6, 0)
+initial_velocity_min = 34.0
+initial_velocity_max = 52.0
+scale_min = 9.0
+scale_max = 15.0
+scale_curve = SubResource("flame_scale")
+color = Color(1, 1, 1, 1)
+color_ramp = SubResource("flame_ramp")
+
+[sub_resource type="StandardMaterial3D" id="flame_mat"]
+shading_mode = 0
+transparency = 1
+billboard_mode = 3
+billboard_keep_scale = true
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("flame_dot")
+
+[sub_resource type="QuadMesh" id="flame_mesh"]
+material = SubResource("flame_mat")
+size = Vector2(1, 1)
+""");
+
+// --- weathered stone for the solids (world-triplanar noise, like the client's)
+scene.AppendLine("""
+[sub_resource type="FastNoiseLite" id="stone_noise_a"]
+noise_type = 3
+seed = 3
+frequency = 0.05
+
+[sub_resource type="Gradient" id="stone_ramp"]
+offsets = PackedFloat32Array(0, 1)
+colors = PackedColorArray(0.21, 0.2, 0.22, 1, 0.38, 0.37, 0.41, 1)
+
+[sub_resource type="NoiseTexture2D" id="stone_albedo"]
+seamless = true
+color_ramp = SubResource("stone_ramp")
+noise = SubResource("stone_noise_a")
+
+[sub_resource type="FastNoiseLite" id="stone_noise_n"]
+noise_type = 3
+seed = 4
+frequency = 0.08
+
+[sub_resource type="NoiseTexture2D" id="stone_normal"]
+seamless = true
+as_normal_map = true
+bump_strength = 3.0
+noise = SubResource("stone_noise_n")
+
+[sub_resource type="StandardMaterial3D" id="stone_mat"]
+albedo_texture = SubResource("stone_albedo")
+normal_enabled = true
+normal_texture = SubResource("stone_normal")
+roughness = 0.95
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.012, 0.012, 0.012)
+""");
+
+// --- a visual box and a collision shape per solid
+for (var i = 0; i < solids.Count; i++)
+{
+    var size = solids[i].Size;
+    scene.AppendLine($"[sub_resource type=\"BoxMesh\" id=\"box_{i}\"]");
+    scene.AppendLine("material = SubResource(\"stone_mat\")");
+    scene.AppendLine($"size = Vector3({F(size.X)}, {F(size.Y)}, {F(size.Z)})");
+    scene.AppendLine();
+    scene.AppendLine($"[sub_resource type=\"BoxShape3D\" id=\"shape_{i}\"]");
+    scene.AppendLine($"size = Vector3({F(size.X)}, {F(size.Y)}, {F(size.Z)})");
+    scene.AppendLine();
+}
+
+// --- nodes
+scene.AppendLine("""[node name="Crag" type="Node3D"]""");
+scene.AppendLine();
+scene.AppendLine("""
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+""");
+scene.AppendLine("""[node name="Sun" type="DirectionalLight3D" parent="."]""");
+scene.AppendLine($"transform = {DirTransform(-26f, -40f)}");
+scene.AppendLine("""
+light_color = Color(1, 0.8, 0.58, 1)
+light_energy = 1.05
+shadow_enabled = true
+directional_shadow_max_distance = 2400.0
+""");
+scene.AppendLine("""[node name="Fill" type="DirectionalLight3D" parent="."]""");
+scene.AppendLine($"transform = {DirTransform(-32f, 145f)}");
+scene.AppendLine("""
+light_color = Color(0.55, 0.62, 0.85, 1)
+light_energy = 0.18
+""");
+
+// The terrain: the RealmTerrain tool node carrying the whole heightfield. It
+// builds its mesh on ready (editor and game); "no_fade" keeps the occlusion
+// fader off the land; "realm_terrain" is what the export tool looks for.
+scene.AppendLine("""[node name="Terrain" type="Node3D" parent="." groups=["no_fade", "realm_terrain"]]""");
+scene.AppendLine("script = ExtResource(\"1_terrain\")");
+scene.AppendLine("OriginX = 0.0");
+scene.AppendLine("OriginZ = 0.0");
+scene.AppendLine($"CellSize = {F(Cell)}");
+scene.AppendLine($"TerrainWidth = {W}");
+scene.AppendLine($"TerrainDepth = {D}");
+scene.AppendLine($"Heights = PackedFloat32Array({string.Join(", ", heights.Select(F))})");
+scene.AppendLine();
+
+// Solid visuals and their matching collision (the collision is the sim truth
+// the exporter reads back; keep the pairs in step when hand-editing).
+scene.AppendLine("""[node name="SolidVisuals" type="Node3D" parent="."]""");
+scene.AppendLine();
+scene.AppendLine("""[node name="Static" type="StaticBody3D" parent="."]""");
+scene.AppendLine();
+for (var i = 0; i < solids.Count; i++)
+{
+    var c = solids[i].Center;
+    scene.AppendLine($"[node name=\"Solid_{i}\" type=\"MeshInstance3D\" parent=\"SolidVisuals\"]");
+    scene.AppendLine($"transform = {At(c.X, c.Y, c.Z)}");
+    scene.AppendLine($"mesh = SubResource(\"box_{i}\")");
+    scene.AppendLine();
+    scene.AppendLine($"[node name=\"Col_{i}\" type=\"CollisionShape3D\" parent=\"Static\"]");
+    scene.AppendLine($"transform = {At(c.X, c.Y, c.Z)}");
+    scene.AppendLine($"shape = SubResource(\"shape_{i}\")");
+    scene.AppendLine();
+}
+
+// Braziers: real nodes (bowl + ember light + flame), each in the "brazier"
+// group so the export tool carries them into the sim geometry as props.
+scene.AppendLine("""[node name="Braziers" type="Node3D" parent="."]""");
+scene.AppendLine();
+for (var i = 0; i < props.Count; i++)
+{
+    var p = props[i].Position;
+    scene.AppendLine($"[node name=\"Brazier{i}\" type=\"Node3D\" parent=\"Braziers\" groups=[\"brazier\"]]");
+    scene.AppendLine($"transform = {At(p.X, p.Y, p.Z)}");
+    scene.AppendLine();
+    scene.AppendLine($"[node name=\"Bowl\" type=\"MeshInstance3D\" parent=\"Braziers/Brazier{i}\"]");
+    scene.AppendLine($"transform = {At(0, 13, 0)}");
+    scene.AppendLine("mesh = SubResource(\"bowl\")");
+    scene.AppendLine();
+    scene.AppendLine($"[node name=\"Ember\" type=\"OmniLight3D\" parent=\"Braziers/Brazier{i}\"]");
+    scene.AppendLine($"transform = {At(0, 46, 0)}");
+    scene.AppendLine("light_color = Color(1, 0.62, 0.3, 1)");
+    scene.AppendLine("light_energy = 6.0");
+    scene.AppendLine("omni_range = 380.0");
+    scene.AppendLine();
+    scene.AppendLine($"[node name=\"Flame\" type=\"GPUParticles3D\" parent=\"Braziers/Brazier{i}\"]");
+    scene.AppendLine($"transform = {At(0, 28, 0)}");
+    scene.AppendLine("amount = 18");
+    scene.AppendLine("lifetime = 0.6");
+    scene.AppendLine("randomness = 0.4");
+    scene.AppendLine("preprocess = 0.6");
+    scene.AppendLine("process_material = SubResource(\"flame_process\")");
+    scene.AppendLine("draw_pass_1 = SubResource(\"flame_mesh\")");
+    scene.AppendLine();
+}
+
+// Markers: the sim cast, in the exporter's naming convention.
+scene.AppendLine("""[node name="PlayerSpawn" type="Marker3D" parent="."]""");
+scene.AppendLine($"transform = {At(playerSpawn.X, playerSpawn.Y, playerSpawn.Z)}");
+scene.AppendLine();
+for (var i = 0; i < enemies.Length; i++)
+{
+    var e = enemies[i];
+    var suffix = e.type switch { EnemyType.Rogue => "_Rogue", EnemyType.Mage => "_Mage", _ => "" };
+    var pos = OnGround(e.x, e.z);
+    scene.AppendLine($"[node name=\"EnemySpawn{i}{suffix}\" type=\"Marker3D\" parent=\".\"]");
+    scene.AppendLine($"transform = {At(pos.X, pos.Y, pos.Z)}");
+    scene.AppendLine();
+}
+scene.AppendLine("""[node name="BossSpawn" type="Marker3D" parent="."]""");
+scene.AppendLine($"transform = {At(bossSpawn.X, bossSpawn.Y, bossSpawn.Z)}");
+
+File.WriteAllText(Path.Combine("WoadRaiders.Client", "maps", "Crag.tscn"), scene.ToString());
 
 var span = geometry.Bounds;
-Console.WriteLine($"Wrote {outPath}: {W}x{D} terrain samples over {(W - 1) * Cell:0}x{(D - 1) * Cell:0} units " +
+Console.WriteLine($"Wrote Crag.json + Crag.tscn: {W}x{D} terrain samples over {(W - 1) * Cell:0}x{(D - 1) * Cell:0} units " +
                   $"(heights {span.Min.Y:0}..{span.Max.Y:0}), {solids.Count} solids, {props.Count} braziers, " +
                   $"{enemies.Length} enemy camps + the boss.");
