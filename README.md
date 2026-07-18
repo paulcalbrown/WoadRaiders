@@ -214,12 +214,15 @@ core loop earns it.
       destination, a rise beyond `SimConstants.StepHeight` (18) is a wall or cliff, drops are
       unlimited (one-way jump-downs are level design). Sight lines respect terrain crests;
       player bolts **hug the slopes** and sail level over gorges, enemy bolts aim in full 3D so
-      overlook mages rain fire downhill. Realms are authored as **Godot .tscn scenes**: the
-      `RealmTerrain` tool node stores the heightfield in the scene and builds its smooth
-      vertex-coloured mesh on ready (editor preview and in-game render alike; clients missing
-      a custom map's scene rebuild the realm from the wire geometry instead), and the camera
-      became a perspective **chase rig** that swings behind your travel and keeps clear of the
-      land (movement keys are camera-relative). The first realm, **The Crag**
+      overlook mages rain fire downhill. Realms are authored as **Godot .tscn scenes built
+      from BUILT-IN nodes and resources only** — no scripts, so a realm opens whole in any
+      Godot editor with nothing to build first: the terrain is a subdivided `PlaneMesh`
+      displaced and biome-shaded by a heightmap `Image` through a `ShaderMaterial` (editor
+      preview and in-game render alike; clients missing a custom map's scene rebuild the
+      realm from the wire geometry instead), and the simulation's heightfield rides as plain
+      **metadata on the scene root**. The camera became a perspective **chase rig** that
+      swings behind your travel and keeps clear of the land (movement keys are
+      camera-relative). The first realm, **The Crag**
       (glen → gorge bridge → switchback climbs → rolling moor with a standing-stone circle →
       walled summit court, ~260 units of climb), is computed by `tools/GenerateRealm.cs` as
       ONE file — `Crag.tscn` — because **the .tscn IS the map**: the server parses realm
@@ -244,8 +247,11 @@ core loop earns it.
       is a working example of the conventions. **The game only ever consumes map files** —
       runtime procedural generation stays out by design; the shipping maps are hand-crafted
       or generated *offline* into the same authored format. **Open realms are authored the
-      same way** (see the open-realms entry above): give the scene terrain — a `RealmTerrain`
-      node (served directly), or ANY meshes in the `terrain` group, which
+      same way** (see the open-realms entry above): give the scene terrain — root metadata
+      (`metadata/terrain_heights` + `terrain_width`/`terrain_depth`, with optional
+      `terrain_origin_x`/`terrain_origin_z`/`terrain_cell_size` — served directly, all
+      built-in, how the generated realm carries it), a `RealmTerrain` node (also served
+      directly), or ANY meshes in the `terrain` group, which
       `WoadRaiders.Client/tools/bake_realm.gd` samples from above onto a heightfield grid
       (the one engine-bound step; `terrain_cell_size` metadata on the root overrides the
       40-unit default; put big ground meshes in `no_fade` too) — plus nodes in the `brazier`

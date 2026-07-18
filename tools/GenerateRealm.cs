@@ -1,24 +1,29 @@
 // Generates The Crag — the first open realm — as ONE file, the authored-format
 // Godot scene:
 //
-//   WoadRaiders.Client/maps/Crag.tscn   a RealmTerrain node carrying the whole
-//                                       heightfield (it builds its mesh on
-//                                       ready, in the editor and in game),
-//                                       brazier props with flames and light,
-//                                       the dusk sky and sun, stone visuals +
-//                                       collision for every solid, and the
-//                                       spawn/enemy/boss markers — fully
-//                                       hand-editable in the Godot editor.
+//   WoadRaiders.Client/maps/Crag.tscn   BUILT-IN Godot nodes and resources
+//                                       ONLY — no scripts of any kind, so the
+//                                       scene opens whole in any Godot editor
+//                                       with nothing to build first. The
+//                                       terrain is a subdivided PlaneMesh
+//                                       displaced by a heightmap Image through
+//                                       a ShaderMaterial (visible in editor
+//                                       and game alike); the simulation's
+//                                       heightfield rides as plain metadata on
+//                                       the scene root; braziers, the dusk sky
+//                                       and sun, stone visuals + collision,
+//                                       and the spawn/enemy/boss markers are
+//                                       ordinary nodes.
 //
 // A .NET 10 file-based app:
 //
 //   dotnet run tools/GenerateRealm.cs
 //
 // The .tscn IS the map: the server parses it directly through the shared
-// scene-to-geometry pipeline (Core.DungeonSceneFile — the same code this tool
-// validates its output with below), so there is no JSON to export or keep in
-// step. Hand-edit the scene freely; check it afterwards with
-// tools/ValidateRealm.cs — the same bar hand-made realms pass.
+// scene-to-geometry pipeline (Core.DungeonSceneFile reads the root metadata —
+// the same code this tool validates its output with below), so there is no
+// JSON to export or keep in step. Hand-edit the scene freely; check it
+// afterwards with tools/ValidateRealm.cs — the same bar hand-made realms pass.
 //
 // The land is computed, not drawn: a "wild" highland of crags is the default,
 // and the playable realm is carved into it as a chain of smooth-blended plates
@@ -304,13 +309,83 @@ string DirTransform(float pitchDeg, float yawDeg)
 
 string At(float x, float yy, float z) => $"Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, {F(x)}, {F(yy)}, {F(z)})";
 
-const int ExtCount = 1;
-var subCount = 20 + solids.Count * 2; // fixed recipes + a BoxMesh and BoxShape3D per solid
+// The terrain shader: displaces the subdivided plane by the heightmap (one
+// texel per height sample, fetched exactly — no filtering), shades the land by
+// height and steepness (the same biome banding the client's fallback renderer
+// uses), and breaks it up with a cheap value noise. Pure built-in Godot: a
+// Shader resource, not a script.
+const string TerrainShaderCode = """
+shader_type spatial;
+
+// The land, displaced by the same heightfield the simulation walks (the sim
+// copy rides as metadata on the scene root). The Terrain node must stay
+// translation-only: model space is treated as world-aligned.
+uniform sampler2D heightmap : filter_nearest;
+uniform vec2 field_origin = vec2(0.0, 0.0);
+uniform float cell_size = 40.0;
+
+varying vec3 biome;
+
+float height_at(ivec2 cell) {
+	ivec2 size = textureSize(heightmap, 0);
+	cell = clamp(cell, ivec2(0), size - 1);
+	return texelFetch(heightmap, cell, 0).r;
+}
+
+void vertex() {
+	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	ivec2 cell = ivec2(round((world.xz - field_origin) / cell_size));
+	float h = height_at(cell);
+	VERTEX.y = h - MODEL_MATRIX[3].y;
+
+	float hw = height_at(cell + ivec2(-1, 0));
+	float he = height_at(cell + ivec2(1, 0));
+	float hn = height_at(cell + ivec2(0, -1));
+	float hs = height_at(cell + ivec2(0, 1));
+	vec3 normal = normalize(vec3(hw - he, 2.0 * cell_size, hn - hs));
+	NORMAL = normal;
+
+	// The dusk-lit biome bands: gorge stone, glen grass, heather moor, pale
+	// upland, bare crag — with steep ground shedding its soil into rock.
+	vec3 gorge = vec3(0.14, 0.13, 0.15);
+	vec3 glen = vec3(0.22, 0.32, 0.16);
+	vec3 moor = vec3(0.30, 0.27, 0.18);
+	vec3 upland = vec3(0.33, 0.33, 0.23);
+	vec3 crag = vec3(0.33, 0.32, 0.35);
+	vec3 by_height =
+		h < -60.0 ? gorge :
+		h < 20.0 ? mix(gorge, glen, (h + 60.0) / 80.0) :
+		h < 140.0 ? mix(glen, moor, (h - 20.0) / 120.0) :
+		h < 280.0 ? mix(moor, upland, (h - 140.0) / 140.0) :
+		h < 420.0 ? mix(upland, crag, (h - 280.0) / 140.0) : crag;
+	float rockiness = clamp((0.80 - normal.y) / 0.35, 0.0, 1.0);
+	biome = mix(by_height, crag * 0.9, rockiness);
+}
+
+float noise_hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float value_noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(noise_hash(i), noise_hash(i + vec2(1.0, 0.0)), f.x),
+			mix(noise_hash(i + vec2(0.0, 1.0)), noise_hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+void fragment() {
+	vec3 world = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	float grain = value_noise(world.xz * 0.025) * 0.6 + value_noise(world.xz * 0.1) * 0.4;
+	ALBEDO = biome * mix(0.82, 1.12, grain);
+	ROUGHNESS = 1.0;
+}
+""";
+
+var subCount = 25 + solids.Count * 2; // fixed recipes + a BoxMesh and BoxShape3D per solid
 
 var scene = new StringBuilder();
-scene.AppendLine($"[gd_scene load_steps={1 + ExtCount + subCount} format=3]");
-scene.AppendLine();
-scene.AppendLine("""[ext_resource type="Script" path="res://scripts/world/RealmTerrain.cs" id="1_terrain"]""");
+scene.AppendLine($"[gd_scene load_steps={1 + subCount} format=3]");
 scene.AppendLine();
 
 // --- the sky and light rig
@@ -403,6 +478,41 @@ material = SubResource("flame_mat")
 size = Vector2(1, 1)
 """);
 
+// --- the terrain: a heightmap Image displacing a subdivided PlaneMesh through
+// --- a ShaderMaterial — all built-in resources, no scripts. The shader also
+// --- shades the land by height and steepness (the biome banding) and breaks
+// --- it up with a cheap value noise, mirroring the client's fallback look.
+var heightBytes = new byte[heights.Length * 4];
+Buffer.BlockCopy(heights, 0, heightBytes, 0, heightBytes.Length); // little-endian floats, row-major
+scene.AppendLine("""[sub_resource type="Image" id="hmap_img"]""");
+scene.AppendLine("data = {");
+scene.AppendLine($"\"data\": PackedByteArray({string.Join(", ", heightBytes)}),");
+scene.AppendLine("\"format\": \"RFloat\",");
+scene.AppendLine($"\"height\": {D},");
+scene.AppendLine("\"mipmaps\": false,");
+scene.AppendLine($"\"width\": {W}");
+scene.AppendLine("}");
+scene.AppendLine();
+scene.AppendLine("""
+[sub_resource type="ImageTexture" id="hmap_tex"]
+image = SubResource("hmap_img")
+""");
+scene.AppendLine("""[sub_resource type="Shader" id="terrain_shader"]""");
+scene.AppendLine("code = \"" + TerrainShaderCode + "\"");
+scene.AppendLine();
+scene.AppendLine("""[sub_resource type="ShaderMaterial" id="terrain_mat"]""");
+scene.AppendLine("shader = SubResource(\"terrain_shader\")");
+scene.AppendLine("shader_parameter/heightmap = SubResource(\"hmap_tex\")");
+scene.AppendLine("shader_parameter/field_origin = Vector2(0, 0)");
+scene.AppendLine($"shader_parameter/cell_size = {F(Cell)}");
+scene.AppendLine();
+scene.AppendLine($"[sub_resource type=\"PlaneMesh\" id=\"terrain_plane\"]");
+scene.AppendLine("material = SubResource(\"terrain_mat\")");
+scene.AppendLine($"size = Vector2({F((W - 1) * Cell)}, {F((D - 1) * Cell)})");
+scene.AppendLine($"subdivide_width = {W - 2}"); // subdivisions + 2 = vertices → one per height sample
+scene.AppendLine($"subdivide_depth = {D - 2}");
+scene.AppendLine();
+
 // --- weathered stone for the solids (world-triplanar noise, like the client's)
 scene.AppendLine("""
 [sub_resource type="FastNoiseLite" id="stone_noise_a"]
@@ -454,7 +564,16 @@ for (var i = 0; i < solids.Count; i++)
 }
 
 // --- nodes
+// The root carries the SIMULATION heightfield as plain metadata — the built-in
+// way to store data on a node, readable in any editor's inspector, and what
+// the scene-to-geometry pipeline (Core.DungeonSceneFile) reads to host the map.
 scene.AppendLine("""[node name="Crag" type="Node3D"]""");
+scene.AppendLine("metadata/terrain_origin_x = 0.0");
+scene.AppendLine("metadata/terrain_origin_z = 0.0");
+scene.AppendLine($"metadata/terrain_cell_size = {F(Cell)}");
+scene.AppendLine($"metadata/terrain_width = {W}");
+scene.AppendLine($"metadata/terrain_depth = {D}");
+scene.AppendLine($"metadata/terrain_heights = PackedFloat32Array({string.Join(", ", heights.Select(F))})");
 scene.AppendLine();
 scene.AppendLine("""
 [node name="Environment" type="WorldEnvironment" parent="."]
@@ -475,17 +594,18 @@ light_color = Color(0.55, 0.62, 0.85, 1)
 light_energy = 0.18
 """);
 
-// The terrain: the RealmTerrain tool node carrying the whole heightfield. It
-// builds its mesh on ready (editor and game); "no_fade" keeps the occlusion
-// fader off the land; "realm_terrain" is what the export tool looks for.
-scene.AppendLine("""[node name="Terrain" type="Node3D" parent="." groups=["no_fade", "realm_terrain"]]""");
-scene.AppendLine("script = ExtResource(\"1_terrain\")");
-scene.AppendLine("OriginX = 0.0");
-scene.AppendLine("OriginZ = 0.0");
-scene.AppendLine($"CellSize = {F(Cell)}");
-scene.AppendLine($"TerrainWidth = {W}");
-scene.AppendLine($"TerrainDepth = {D}");
-scene.AppendLine($"Heights = PackedFloat32Array({string.Join(", ", heights.Select(F))})");
+// The terrain visual: the shader-displaced plane, centred over the field. Its
+// bounding box must be told about the displacement (a GPU-displaced mesh keeps
+// its flat AABB and would be frustum-culled wrongly otherwise); "no_fade"
+// keeps the occlusion fader off the land. The node must stay translation-only
+// — the shader treats its model space as world-aligned.
+var lowest = heights.Min();
+var highest = heights.Max();
+scene.AppendLine("""[node name="Terrain" type="MeshInstance3D" parent="." groups=["no_fade"]]""");
+scene.AppendLine($"transform = {At((W - 1) * Cell / 2f, 0, (D - 1) * Cell / 2f)}");
+scene.AppendLine("mesh = SubResource(\"terrain_plane\")");
+scene.AppendLine($"custom_aabb = AABB({F(-(W - 1) * Cell / 2f)}, {F(lowest - 10f)}, {F(-(D - 1) * Cell / 2f)}, " +
+                 $"{F((W - 1) * Cell)}, {F(highest - lowest + 20f)}, {F((D - 1) * Cell)})");
 scene.AppendLine();
 
 // Solid visuals and their matching collision (the collision is the sim truth

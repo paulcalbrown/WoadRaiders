@@ -35,19 +35,27 @@ heightfield: originX/originZ/cellSize/width/depth + row-major `heights` — the
 base plane movement rides; see the verticality rules in `DungeonGeometry`) and
 `props` (cosmetic braziers).
 
-**Realms are authored as Godot .tscn scenes — the .tscn IS the map.** The
-shipping realm is ONE file: `dotnet run tools/GenerateRealm.cs` emits
-`WoadRaiders.Client/maps/Crag.tscn` (the hand-editable scene: a RealmTerrain
-node carrying the heightfield, braziers, sky, solid visuals + collision,
-markers), then parses it back through the same `Core.DungeonSceneFile` the
-server uses and validates THAT. Rerun it after editing the layout code; after
-hand-editing the .tscn instead, just re-run ValidateRealm on it.
+**Realms are authored as Godot .tscn scenes — the .tscn IS the map — and the
+generated scene is BUILT-IN NODES ONLY** (no scripts: it opens whole in any
+Godot editor with nothing built). `dotnet run tools/GenerateRealm.cs` emits
+`WoadRaiders.Client/maps/Crag.tscn`: terrain = subdivided PlaneMesh displaced
+and biome-shaded by a heightmap Image via ShaderMaterial (keep that node
+translation-only; its custom_aabb covers the displacement or culling clips
+it); the SIM heightfield = plain metadata on the scene root
+(`metadata/terrain_*` + `terrain_heights`); plus braziers, sky, solid
+visuals + collision, markers. The generator parses its output back through
+the same `Core.DungeonSceneFile` the server uses and validates THAT. Rerun
+it after editing the layout code; after hand-editing the .tscn instead, just
+re-run ValidateRealm on it.
 The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
-  1. Terrain: a `RealmTerrain` node (group `realm_terrain`) — served directly,
-     no bake step — or ANY meshes in group `terrain` (put big ground meshes in
-     `no_fade` too). Collision: axis-aligned `BoxShape3D` CollisionShape3Ds.
-     Markers: `PlayerSpawn` (required), `EnemySpawnN[_Rogue|_Mage]`,
-     `BossSpawn`; braziers = nodes in group `brazier`.
+  1. Terrain, any of: root metadata (`metadata/terrain_heights` +
+     `terrain_width`/`terrain_depth`; optional `terrain_origin_x`/`_z`,
+     `terrain_cell_size` default 40) — served directly, all built-in; a
+     `RealmTerrain` node (group `realm_terrain`) — served directly, needs the
+     client C# built to preview; or ANY meshes in group `terrain` (put big
+     ground meshes in `no_fade` too). Collision: axis-aligned `BoxShape3D`
+     CollisionShape3Ds. Markers: `PlayerSpawn` (required),
+     `EnemySpawnN[_Rogue|_Mage]`, `BossSpawn`; braziers = group `brazier`.
   2. Mesh-sampled terrain ONLY: bake it (the one engine-bound step —
      extracting triangles; the sampling math is unit-tested Core code):
      `dotnet build WoadRaiders.Client`, then `godot-mono --headless --path

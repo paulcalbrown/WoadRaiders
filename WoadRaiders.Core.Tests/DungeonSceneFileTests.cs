@@ -114,6 +114,40 @@ public class DungeonSceneFileTests
     }
 
     [Fact]
+    public void Metadata_terrain_on_the_root_is_the_pure_built_in_form()
+    {
+        // No scripts anywhere: the heightfield rides as root metadata (how the
+        // generated realms carry it) and beats any other terrain source.
+        var geometry = DungeonSceneFile.Parse("""
+            [gd_scene format=3]
+            [node name="R" type="Node3D"]
+            metadata/terrain_cell_size = 50.0
+            metadata/terrain_width = 3
+            metadata/terrain_depth = 2
+            metadata/terrain_heights = PackedFloat32Array(1, 2, 3, 4, 5, 6)
+            [node name="PlayerSpawn" type="Marker3D" parent="."]
+            """);
+        var terrain = Assert.IsType<HeightField>(geometry.Terrain);
+        Assert.Equal(50f, terrain.CellSize);
+        Assert.Equal(0f, terrain.OriginX); // omitted → the documented default
+        Assert.Equal(3, terrain.Width);
+        Assert.Equal(new[] { 1f, 2f, 3f, 4f, 5f, 6f }, terrain.Heights);
+    }
+
+    [Fact]
+    public void Inconsistent_metadata_terrain_is_refused()
+    {
+        Assert.Throws<InvalidDataException>(() => DungeonSceneFile.Parse("""
+            [gd_scene format=3]
+            [node name="R" type="Node3D"]
+            metadata/terrain_width = 3
+            metadata/terrain_depth = 3
+            metadata/terrain_heights = PackedFloat32Array(1, 2)
+            [node name="PlayerSpawn" type="Marker3D" parent="."]
+            """));
+    }
+
+    [Fact]
     public void RealmTerrain_is_recognized_by_script_alone()
     {
         // No groups on the node — only the script reference marks it.

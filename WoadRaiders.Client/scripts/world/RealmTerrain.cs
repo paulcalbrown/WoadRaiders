@@ -11,14 +11,12 @@ namespace WoadRaiders.Client;
 /// things) and in the game alike. The mesh lives on an owner-less child, so
 /// saving the scene never bakes megabytes of vertices into the file.
 ///
-/// This node is the bridge between the three places terrain exists:
-///   - a realm .tscn carries one (tools/GenerateRealm.cs writes it; hand-made
-///     realms may instead use arbitrary meshes in the "terrain" group, which
-///     the export tool samples);
-///   - tools/export_dungeon.gd reads its properties verbatim into the map JSON
-///     the server simulates;
-///   - the client's from-geometry fallback (no scene available) constructs one
-///     directly from the wire heightfield.
+/// Where it is used: the client's from-geometry fallback (a served map whose
+/// scene this build lacks) constructs one directly from the wire heightfield,
+/// and hand-made realm scenes MAY use one as their terrain (Core.
+/// DungeonSceneFile reads its stored properties). The GENERATED realm scenes
+/// no longer carry it — they are built-in-nodes-only: a shader-displaced
+/// PlaneMesh for the visual and root metadata for the simulation heights.
 /// The node and its mesh join the "no_fade" group — the land is what everything
 /// stands on; the occlusion fader must never dissolve it.
 /// </summary>

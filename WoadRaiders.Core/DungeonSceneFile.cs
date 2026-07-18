@@ -17,12 +17,17 @@ namespace WoadRaiders.Core;
 ///   - Enemy spawns: Marker3D nodes named "EnemySpawn*" — type from the name:
 ///                   contains "Rogue" → Rogue, "Mage" → Mage, else Minion.
 ///   - Boss:         a Marker3D named "BossSpawn" (optional).
-///   - Terrain:      a RealmTerrain node (group "realm_terrain" or the
-///                   RealmTerrain.cs script) — its stored heightfield is read
-///                   verbatim from the scene text. Scenes whose terrain is
-///                   arbitrary meshes in the "terrain" group need the in-Godot
-///                   bake tool instead (it samples the meshes and hands the
-///                   result in via <paramref name="sampledTerrain"/>).
+///   - Terrain, first match wins:
+///       1. metadata on any node (the generated realms' pure-built-in form —
+///          usually the scene root): metadata/terrain_heights (row-major
+///          PackedFloat32Array) + terrain_width/depth, with terrain_origin_x/z
+///          (default 0) and terrain_cell_size (default 40) — all world-space,
+///          independent of any node transform;
+///       2. a RealmTerrain node (group "realm_terrain" or the RealmTerrain.cs
+///          script) — its stored heightfield read verbatim;
+///       3. arbitrary meshes in the "terrain" group need the in-Godot bake
+///          tool instead (it samples the meshes and hands the result in via
+///          <paramref name="sampledTerrain"/>).
 ///   - Braziers:     nodes in the group "brazier" (or named "Brazier*") become
 ///                   cosmetic fire props.
 /// </summary>
@@ -40,6 +45,7 @@ public static class DungeonSceneFile
         var solids = new List<Aabb>();
         var enemySpawns = new List<EnemySpawnPoint>();
         var props = new List<DungeonProp>();
+        HeightField? metadataTerrain = null;
         HeightField? realmTerrain = null;
         var terrainMeshes = 0;
 
@@ -69,6 +75,12 @@ public static class DungeonSceneFile
 
             var groups = Groups(node);
             var type = node.AttributeString("type");
+
+            // Metadata terrain is orthogonal to what the node otherwise is
+            // (it usually rides on the scene root): world-space by definition,
+            // no transform coupling.
+            if (node.Properties.ContainsKey("metadata/terrain_heights"))
+                metadataTerrain ??= ReadMetadataTerrain(node, name);
 
             if (groups.Contains("realm_terrain") || HasRealmTerrainScript(doc, node))
             {
@@ -100,7 +112,7 @@ public static class DungeonSceneFile
             }
         }
 
-        var terrain = realmTerrain ?? sampledTerrain;
+        var terrain = metadataTerrain ?? realmTerrain ?? sampledTerrain;
         if (terrain is null && terrainMeshes > 0)
             throw new InvalidDataException(
                 $"the scene's terrain is {terrainMeshes} mesh(es) in the 'terrain' group — sample them with the " +
@@ -133,6 +145,28 @@ public static class DungeonSceneFile
             return false;
         var ext = doc.ExtResource(script.Items[0].AsString);
         return ext?.AttributeString("path")?.EndsWith("RealmTerrain.cs", StringComparison.Ordinal) == true;
+    }
+
+    /// <summary>Read the metadata heightfield convention — plain built-in node
+    /// metadata, as the generated realms carry (usually on the scene root).</summary>
+    private static HeightField ReadMetadataTerrain(TscnDocument.Section node, string name)
+    {
+        float Prop(string key, float fallback) =>
+            node.Properties.TryGetValue($"metadata/{key}", out var v) ? v.AsFloat : fallback;
+
+        var width = (int)Prop("terrain_width", 0);
+        var depth = (int)Prop("terrain_depth", 0);
+        var heights = node.Properties["metadata/terrain_heights"]
+            is { Kind: TscnValue.ValueKind.Call, CallName: "PackedFloat32Array" } packed
+            ? packed.Floats()
+            : Array.Empty<float>();
+        if (width < 2 || depth < 2 || heights.Length != width * depth)
+            throw new InvalidDataException(
+                $"node '{name}' carries {heights.Length} metadata terrain heights for a {width}x{depth} grid — " +
+                "set metadata/terrain_width, terrain_depth, and terrain_heights consistently");
+
+        return new HeightField(Prop("terrain_origin_x", 0f), Prop("terrain_origin_z", 0f),
+                               Prop("terrain_cell_size", 40f), width, depth, heights);
     }
 
     /// <summary>Read the RealmTerrain node's exported heightfield. Properties the
