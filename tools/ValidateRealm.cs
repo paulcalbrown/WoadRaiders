@@ -1,18 +1,20 @@
-// Checks a map JSON with the same rules every shipping realm passes — run it
-// after exporting a hand-made .tscn realm (see WoadRaiders.Client/tools/
-// export_dungeon.gd), before serving the map. A .NET 10 file-based app:
+// Checks a map — a Godot .tscn realm scene (parsed by the shared
+// Core.DungeonSceneFile pipeline, exactly as the server will) or a classic
+// geometry .json — with the same rules every shipping realm passes. Run it
+// after hand-editing or hand-making a realm, before serving the map.
+// A .NET 10 file-based app:
 //
-//   dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.json
+//   dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.tscn
 //
 // Realm maps (with terrain) get the full Core.RealmValidator treatment:
 // every camp and the boss comfortably reachable from the spawn, borders
 // sealed even against slope-inching, no stranding pits. Flat dungeon maps
 // pass trivially (their geometry has no terrain to leak or strand).
 //
-// It can also prove two exports carry the same simulation geometry — e.g.
-// that re-exporting Crag.tscn reproduces the generator's Crag.json:
+// It can also prove two maps carry the same simulation geometry (formats may
+// differ — e.g. a baked JSON against the scene it came from):
 //
-//   dotnet run tools/ValidateRealm.cs a.json --compare b.json
+//   dotnet run tools/ValidateRealm.cs a.tscn --compare b.json
 //
 // Exit code 0 = valid (and matching, when comparing).
 
@@ -24,11 +26,11 @@ using WoadRaiders.Core;
 
 if (args.Length is not (1 or 3) || (args.Length == 3 && args[1] != "--compare"))
 {
-    Console.Error.WriteLine("usage: dotnet run tools/ValidateRealm.cs <map.json> [--compare <other.json>]");
+    Console.Error.WriteLine("usage: dotnet run tools/ValidateRealm.cs <map.tscn|map.json> [--compare <other>]");
     return 2;
 }
 
-var map = DungeonGeometryFile.Load(args[0]);
+var map = MapLoader.Load(args[0]);
 Console.WriteLine($"[{Path.GetFileName(args[0])}] scene={map.ScenePath ?? "(none)"}, " +
                   $"{(map.Terrain is { } t ? $"terrain {t.Width}x{t.Depth} @ {t.CellSize}" : "no terrain")}, " +
                   $"{map.Solids.Count} solids, {map.EnemySpawns.Count} enemy spawns" +
@@ -50,7 +52,7 @@ else
 
 if (args.Length == 3)
 {
-    var other = DungeonGeometryFile.Load(args[2]);
+    var other = MapLoader.Load(args[2]);
     Console.WriteLine($"comparing against [{Path.GetFileName(args[2])}] ...");
     var same = true;
 

@@ -1,7 +1,7 @@
-// Generates The Crag — the first open realm — as a matched pair of files:
+// Generates The Crag — the first open realm — as ONE file, the authored-format
+// Godot scene:
 //
-//   WoadRaiders.Client/maps/Crag.tscn   the authored-format Godot scene: a
-//                                       RealmTerrain node carrying the whole
+//   WoadRaiders.Client/maps/Crag.tscn   a RealmTerrain node carrying the whole
 //                                       heightfield (it builds its mesh on
 //                                       ready, in the editor and in game),
 //                                       brazier props with flames and light,
@@ -9,19 +9,16 @@
 //                                       collision for every solid, and the
 //                                       spawn/enemy/boss markers — fully
 //                                       hand-editable in the Godot editor.
-//   WoadRaiders.Client/maps/Crag.json   the server's simulation geometry
-//                                       (heightfield + solids + spawns +
-//                                       props), pointing at the scene.
 //
 // A .NET 10 file-based app:
 //
 //   dotnet run tools/GenerateRealm.cs
 //
-// The .tscn is the visual truth and the .json the sim truth; both carry the
-// SAME rounded heightfield, so what you see is what you collide with. Editing
-// the scene by hand? Re-export the sim geometry from it afterwards with
-// WoadRaiders.Client/tools/export_dungeon.gd (terrain-aware), then check it
-// with tools/ValidateRealm.cs — the same pipeline hand-made realms use.
+// The .tscn IS the map: the server parses it directly through the shared
+// scene-to-geometry pipeline (Core.DungeonSceneFile — the same code this tool
+// validates its output with below), so there is no JSON to export or keep in
+// step. Hand-edit the scene freely; check it afterwards with
+// tools/ValidateRealm.cs — the same bar hand-made realms pass.
 //
 // The land is computed, not drawn: a "wild" highland of crags is the default,
 // and the playable realm is carved into it as a chain of smooth-blended plates
@@ -286,65 +283,6 @@ var bossSpawn = OnGround(4200, 4820);
     (4100, 4820), (4300, 4820),                // flanking the throne
 ];
 var props = brazierSpots.Select(b => new DungeonProp(PropType.Brazier, OnGround(b.x, b.z))).ToList();
-
-var geometry = new DungeonGeometry(
-    playerSpawn, solids,
-    enemies.Select(e => new EnemySpawnPoint(OnGround(e.x, e.z), e.type)).ToList(),
-    field)
-{
-    ScenePath = "res://maps/Crag.tscn", // the authored scene the client renders
-    BossSpawn = bossSpawn,
-    Props = props,
-};
-
-// ------------------------------------------------------------- validation
-
-// The shared realm checks (Core.RealmValidator): comfortable reachability of
-// every camp and the boss, sealed borders, no stranding pits.
-var issues = RealmValidator.Validate(geometry);
-if (issues.Count > 0)
-    throw new InvalidOperationException("the realm fails validation:\n  - " + string.Join("\n  - ", issues));
-
-// The route walk: a virtual raider walks the whole intended path with the REAL
-// Move rules at player speed. Stalls fail the build; the summit must be high.
-Vector2[] route =
-[
-    new(700, 700), new(1000, 700), new(1600, 800), new(2200, 900), new(2450, 1000),
-    new(2650, 1050), new(3000, 1100), new(3340, 1100), new(3620, 1100), new(3700, 1100),
-    new(4100, 1170), new(4600, 1250), new(4750, 1350), new(4300, 1500), new(3900, 1650),
-    new(3750, 1750), new(3800, 2000), new(3900, 2500), new(4300, 2700), new(4800, 2900),
-    new(4800, 3200), new(5300, 3700), new(5350, 3850), new(5000, 4100), new(4700, 4300),
-    new(4560, 4300), new(4460, 4340), new(4460, 4450), new(4200, 4750), new(4200, 4820),
-];
-{
-    var pos = playerSpawn;
-    var step = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
-    foreach (var target in route)
-    {
-        var stall = 0;
-        var guard = 0;
-        while (Vector2.Distance(new Vector2(pos.X, pos.Z), target) > 30f)
-        {
-            var dir = Vector2.Normalize(target - new Vector2(pos.X, pos.Z));
-            var next = geometry.Move(pos, new Vector3(dir.X, 0f, dir.Y) * step);
-            stall = Vector3.Distance(next, pos) < 0.5f ? stall + 1 : 0;
-            pos = next;
-            if (stall > 30)
-                throw new InvalidOperationException($"the route walker stalled heading to ({target.X},{target.Y}) from ({pos.X:0},{pos.Y:0},{pos.Z:0})");
-            if (++guard > 5000)
-                throw new InvalidOperationException($"the route walker wandered too long heading to ({target.X},{target.Y})");
-        }
-    }
-    if (pos.Y < 250f)
-        throw new InvalidOperationException($"the route walker ended at height {pos.Y:0} — the summit climb is broken");
-    Console.WriteLine($"Route walk OK — the raider stands at ({pos.X:0}, {pos.Y:0}, {pos.Z:0}) before the boss.");
-}
-
-// ------------------------------------------------------------- write JSON
-
-var json = DungeonGeometryFile.ToJson(geometry);
-DungeonGeometryFile.Parse(json); // must survive its own round trip
-File.WriteAllText(Path.Combine("WoadRaiders.Client", "maps", "Crag.json"), json);
 
 // ------------------------------------------------------------- write TSCN
 // The same data as an authored-format Godot scene. Sub-resource recipes
@@ -616,9 +554,65 @@ for (var i = 0; i < enemies.Length; i++)
 scene.AppendLine("""[node name="BossSpawn" type="Marker3D" parent="."]""");
 scene.AppendLine($"transform = {At(bossSpawn.X, bossSpawn.Y, bossSpawn.Z)}");
 
-File.WriteAllText(Path.Combine("WoadRaiders.Client", "maps", "Crag.tscn"), scene.ToString());
+var scenePath = Path.Combine("WoadRaiders.Client", "maps", "Crag.tscn");
+File.WriteAllText(scenePath, scene.ToString());
+
+// ------------------------------------------------------------- validation
+// Read the scene BACK through the shared scene-to-geometry pipeline — the
+// exact code the server uses to host it — and validate what actually parsed,
+// not what this tool intended to write.
+
+var geometry = DungeonSceneFile.Load(scenePath);
+if (geometry.Terrain is null || geometry.EnemySpawns.Count != enemies.Length
+    || geometry.Solids.Count != solids.Count || geometry.Props.Count != props.Count
+    || geometry.BossSpawn is null)
+    throw new InvalidOperationException(
+        $"the scene did not parse back whole: terrain={geometry.Terrain is not null}, " +
+        $"{geometry.EnemySpawns.Count}/{enemies.Length} camps, {geometry.Solids.Count}/{solids.Count} solids, " +
+        $"{geometry.Props.Count}/{props.Count} props, boss={geometry.BossSpawn is not null}");
+
+// The shared realm checks (Core.RealmValidator): comfortable reachability of
+// every camp and the boss, sealed borders, no stranding pits.
+var issues = RealmValidator.Validate(geometry);
+if (issues.Count > 0)
+    throw new InvalidOperationException("the realm fails validation:\n  - " + string.Join("\n  - ", issues));
+
+// The route walk: a virtual raider walks the whole intended path with the REAL
+// Move rules at player speed. Stalls fail the build; the summit must be high.
+Vector2[] route =
+[
+    new(700, 700), new(1000, 700), new(1600, 800), new(2200, 900), new(2450, 1000),
+    new(2650, 1050), new(3000, 1100), new(3340, 1100), new(3620, 1100), new(3700, 1100),
+    new(4100, 1170), new(4600, 1250), new(4750, 1350), new(4300, 1500), new(3900, 1650),
+    new(3750, 1750), new(3800, 2000), new(3900, 2500), new(4300, 2700), new(4800, 2900),
+    new(4800, 3200), new(5300, 3700), new(5350, 3850), new(5000, 4100), new(4700, 4300),
+    new(4560, 4300), new(4460, 4340), new(4460, 4450), new(4200, 4750), new(4200, 4820),
+];
+{
+    var pos = geometry.SpawnPoint;
+    var step = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
+    foreach (var target in route)
+    {
+        var stall = 0;
+        var guard = 0;
+        while (Vector2.Distance(new Vector2(pos.X, pos.Z), target) > 30f)
+        {
+            var dir = Vector2.Normalize(target - new Vector2(pos.X, pos.Z));
+            var next = geometry.Move(pos, new Vector3(dir.X, 0f, dir.Y) * step);
+            stall = Vector3.Distance(next, pos) < 0.5f ? stall + 1 : 0;
+            pos = next;
+            if (stall > 30)
+                throw new InvalidOperationException($"the route walker stalled heading to ({target.X},{target.Y}) from ({pos.X:0},{pos.Y:0},{pos.Z:0})");
+            if (++guard > 5000)
+                throw new InvalidOperationException($"the route walker wandered too long heading to ({target.X},{target.Y})");
+        }
+    }
+    if (pos.Y < 250f)
+        throw new InvalidOperationException($"the route walker ended at height {pos.Y:0} — the summit climb is broken");
+    Console.WriteLine($"Route walk OK — the raider stands at ({pos.X:0}, {pos.Y:0}, {pos.Z:0}) before the boss.");
+}
 
 var span = geometry.Bounds;
-Console.WriteLine($"Wrote Crag.json + Crag.tscn: {W}x{D} terrain samples over {(W - 1) * Cell:0}x{(D - 1) * Cell:0} units " +
-                  $"(heights {span.Min.Y:0}..{span.Max.Y:0}), {solids.Count} solids, {props.Count} braziers, " +
-                  $"{enemies.Length} enemy camps + the boss.");
+Console.WriteLine($"Wrote Crag.tscn (parsed back through DungeonSceneFile): {W}x{D} terrain samples over " +
+                  $"{(W - 1) * Cell:0}x{(D - 1) * Cell:0} units (heights {span.Min.Y:0}..{span.Max.Y:0}), " +
+                  $"{solids.Count} solids, {props.Count} braziers, {enemies.Length} enemy camps + the boss.");

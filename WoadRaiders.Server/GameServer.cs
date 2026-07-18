@@ -99,7 +99,7 @@ public sealed class GameServer
                 DungeonGeometry dungeon;
                 try
                 {
-                    dungeon = DungeonGeometryFile.Load(mapPath);
+                    dungeon = MapLoader.Load(mapPath); // .tscn scenes or .json geometry alike
                 }
                 catch (Exception e)
                 {

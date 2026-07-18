@@ -22,12 +22,13 @@
   </ItemGroup>
 
   <!--
-    Dungeon geometry. The canonical JSON lives in the client project (its title
-    screen renders map previews from the same files); copying it beside the
-    binary makes a built or published server self-contained.
+    Map files. The canonical maps live in the client project (its title screen
+    renders previews from the same files); copying them beside the binary makes
+    a built or published server self-contained. Realm .tscn scenes parse
+    through Core.DungeonSceneFile; classic .json through DungeonGeometryFile.
   -->
   <ItemGroup>
-    <Content Include="..\WoadRaiders.Client\maps\*.json"
+    <Content Include="..\WoadRaiders.Client\maps\*.json;..\WoadRaiders.Client\maps\*.tscn"
              Link="maps\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

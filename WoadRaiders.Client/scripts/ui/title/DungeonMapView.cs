@@ -1,3 +1,4 @@
+using System;
 using Godot;
 using WoadRaiders.Core;
 
@@ -21,12 +22,27 @@ public partial class DungeonMapView : Control
 
     private DungeonGeometry? _geometry;
 
-    /// <summary>Load and display the floorplan for a catalog dungeon.</summary>
+    /// <summary>Load and display the floorplan for a catalog realm.</summary>
     public void ShowDungeon(in DungeonInfo info)
     {
-        // res:// so it works from the editor tree and an exported pck alike.
-        var json = Godot.FileAccess.GetFileAsString($"res://maps/{info.MapFile}");
-        _geometry = string.IsNullOrEmpty(json) ? null : DungeonGeometryFile.Parse(json);
+        // res:// so it works from the editor tree and an exported pck alike
+        // (text-to-binary conversion is off in project settings so the .tscn
+        // stays readable text in exports). A card must never crash the menu
+        // over a map file — an unreadable map just draws blank.
+        try
+        {
+            var text = Godot.FileAccess.GetFileAsString($"res://maps/{info.MapFile}");
+            _geometry = string.IsNullOrEmpty(text)
+                ? null
+                : info.MapFile.EndsWith(".tscn", StringComparison.OrdinalIgnoreCase)
+                    ? DungeonSceneFile.Parse(text, info.ScenePath)
+                    : DungeonGeometryFile.Parse(text);
+        }
+        catch (Exception e)
+        {
+            GD.PushWarning($"map preview for '{info.MapFile}' failed to parse: {e.Message}");
+            _geometry = null;
+        }
         QueueRedraw();
     }
 
