@@ -15,8 +15,6 @@ public sealed class OcclusionFader
 {
     private const float FadeMinHeight = 35f; // meshes whose top is below this never fade (floors)
 
-    private static readonly SysVec3 CamDir = CameraRig.ToCamera.ToSim();
-
     // Authored-scene visuals: tall meshes that participate in the occlusion fade.
     private readonly List<(GeometryInstance3D Node, SysVec3 Min, SysVec3 Max)> _sceneMeshes = new();
 
@@ -66,21 +64,26 @@ public sealed class OcclusionFader
         }
     }
 
-    /// <summary>Score every tracked box against the player's body column and apply the fade.</summary>
-    public void Update(Vector3 playerBodyCentre)
+    /// <summary>Score every tracked box against the player's body column and apply the
+    /// fade. <paramref name="toCamera"/> is this frame's unit direction from the player
+    /// toward the camera — live now that the chase camera swings around the raider.</summary>
+    public void Update(Vector3 playerBodyCentre, Vector3 toCamera)
     {
         var player = playerBodyCentre.ToSim();
+        var camDir = toCamera.ToSim();
+        if (camDir.Y <= 0.05f)
+            return; // the fade math needs a climbing sight ray; a level camera skips a frame
 
         if (_wallMulti is not null)
         {
             for (var i = 0; i < _wallMins.Length; i++)
             {
-                var alpha = OcclusionFade.Alpha(player, CamDir, _wallMins[i], _wallMaxs[i]);
+                var alpha = OcclusionFade.Alpha(player, camDir, _wallMins[i], _wallMaxs[i]);
                 _wallMulti.SetInstanceColor(i, new Color(1f, 1f, 1f, alpha)); // white = full stone texture; alpha = fade
             }
         }
 
         foreach (var (node, min, max) in _sceneMeshes)
-            node.Transparency = 1f - OcclusionFade.Alpha(player, CamDir, min, max);
+            node.Transparency = 1f - OcclusionFade.Alpha(player, camDir, min, max);
     }
 }

@@ -86,6 +86,13 @@ public static class SimConstants
     /// <summary>Height above the feet that sight lines are traced at (aggro / attack LOS).</summary>
     public const float EyeHeight = 26f;
 
+    /// <summary>
+    /// The tallest ledge a character climbs in one tick's move. Anything rising
+    /// more than this per step is a wall (or an unclimbable cliff); drops of any
+    /// size are always allowed — you can leap off a crag you cannot climb back up.
+    /// </summary>
+    public const float StepHeight = 18f;
+
     // --- Enemy aggro behaviour ---
     /// <summary>An aggroed enemy gives up when its target exceeds AggroRange x this (the leash).</summary>
     public const float EnemyLeashFactor = 1.6f;

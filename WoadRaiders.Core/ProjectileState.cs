@@ -36,6 +36,14 @@ public sealed class ProjectileState
     /// <summary>Which side it hurts and how the client draws it.</summary>
     public ProjectileKind Kind;
 
+    /// <summary>
+    /// Level-fired bolts (players': aimed by a ground-plane cursor) hug the
+    /// terrain in flight — following gradual slopes, holding level over sharp
+    /// drops. Enemy bolts are aimed in full 3D at their target instead and fly
+    /// dead straight.
+    /// </summary>
+    public bool FollowsTerrain;
+
     /// <summary>Enemy-fired bolts strike players; player-fired ones strike enemies.</summary>
     public bool HostileToPlayers => Kind == ProjectileKind.EnemyBolt;
 

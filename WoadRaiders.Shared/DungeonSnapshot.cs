@@ -27,21 +27,46 @@ public static class DungeonSnapshot
             boxes[i * 6 + 5] = s.Max.Z;
         }
 
-        return new DungeonGeometryPacket
+        var props = new float[dungeon.Props.Count * 4];
+        for (var i = 0; i < dungeon.Props.Count; i++)
+        {
+            var p = dungeon.Props[i];
+            props[i * 4 + 0] = (float)p.Type;
+            props[i * 4 + 1] = p.Position.X;
+            props[i * 4 + 2] = p.Position.Y;
+            props[i * 4 + 3] = p.Position.Z;
+        }
+
+        var packet = new DungeonGeometryPacket
         {
             SpawnX = dungeon.SpawnPoint.X,
             SpawnY = dungeon.SpawnPoint.Y,
             SpawnZ = dungeon.SpawnPoint.Z,
             ScenePath = dungeon.ScenePath ?? "",
             Boxes = boxes,
+            Props = props,
         };
+
+        if (dungeon.Terrain is { } t)
+        {
+            packet.HasTerrain = true;
+            packet.TerrainOriginX = t.OriginX;
+            packet.TerrainOriginZ = t.OriginZ;
+            packet.TerrainCellSize = t.CellSize;
+            packet.TerrainWidth = t.Width;
+            packet.TerrainDepth = t.Depth;
+            packet.TerrainHeights = t.Heights.ToArray();
+        }
+
+        return packet;
     }
 
     /// <summary>
     /// Rebuilds a <see cref="DungeonGeometry"/> from the packet — the client-side
     /// inverse of <see cref="From"/>, so prediction collides against exactly what
-    /// the server does. Enemy spawns are server-only and never on the wire, so the
-    /// rebuilt geometry carries none.
+    /// the server does (the terrain floats cross the wire bit-exact). Enemy
+    /// spawns are server-only and never on the wire, so the rebuilt geometry
+    /// carries none.
     /// </summary>
     public static DungeonGeometry ToGeometry(DungeonGeometryPacket packet)
     {
@@ -51,11 +76,29 @@ public static class DungeonSnapshot
                 new Vector3(packet.Boxes[i], packet.Boxes[i + 1], packet.Boxes[i + 2]),
                 new Vector3(packet.Boxes[i + 3], packet.Boxes[i + 4], packet.Boxes[i + 5])));
 
+        var props = new List<DungeonProp>(packet.Props.Length / 4);
+        for (var i = 0; i + 3 < packet.Props.Length; i += 4)
+        {
+            // Tolerate an unknown prop type byte (version skew) by skipping it —
+            // props are cosmetics; never crash the receive path over them.
+            var raw = (int)packet.Props[i];
+            if (raw < 0 || raw > (int)PropType.Brazier)
+                continue;
+            props.Add(new DungeonProp((PropType)raw,
+                new Vector3(packet.Props[i + 1], packet.Props[i + 2], packet.Props[i + 3])));
+        }
+
+        var terrain = packet.HasTerrain
+            ? new HeightField(packet.TerrainOriginX, packet.TerrainOriginZ, packet.TerrainCellSize,
+                              packet.TerrainWidth, packet.TerrainDepth, packet.TerrainHeights)
+            : null;
+
         return new DungeonGeometry(
             new Vector3(packet.SpawnX, packet.SpawnY, packet.SpawnZ),
-            solids, Array.Empty<EnemySpawnPoint>())
+            solids, Array.Empty<EnemySpawnPoint>(), terrain)
         {
             ScenePath = string.IsNullOrEmpty(packet.ScenePath) ? null : packet.ScenePath,
+            Props = props,
         };
     }
 
@@ -74,6 +117,19 @@ public static class DungeonSnapshot
         hash.Add(packet.SpawnZ);
         hash.Add(packet.ScenePath);
         foreach (var f in packet.Boxes)
+            hash.Add(f);
+        hash.Add(packet.HasTerrain);
+        if (packet.HasTerrain)
+        {
+            hash.Add(packet.TerrainOriginX);
+            hash.Add(packet.TerrainOriginZ);
+            hash.Add(packet.TerrainCellSize);
+            hash.Add(packet.TerrainWidth);
+            hash.Add(packet.TerrainDepth);
+            foreach (var h in packet.TerrainHeights)
+                hash.Add(h);
+        }
+        foreach (var f in packet.Props)
             hash.Add(f);
         return hash.ToHashCode();
     }

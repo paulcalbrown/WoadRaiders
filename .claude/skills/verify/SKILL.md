@@ -16,22 +16,28 @@ dotnet test WoadRaiders.slnx --no-build
 
 ```powershell
 dotnet run --project WoadRaiders.Server -- [port] --map <map.json>
-# Without --map it loads EVERY catalog dungeon map (DungeonCatalog: Barrow,
-# Cairn). Players forge/join INSTANCES of them: a JoinRequest either creates a
-# fresh instance (Mode=Create, naming the dungeon) or enters a live one by id
+# Without --map it loads EVERY catalog realm map (DungeonCatalog: Crag).
+# Players forge/join INSTANCES of them: a JoinRequest either creates a
+# fresh instance (Mode=Create, naming the realm) or enters a live one by id
 # (Mode=Join); each instance is its own GameSession/world. With --map only that
 # map is loaded and every forged instance uses it. Empty instances are reaped
 # after a 60 s linger.
 # Listens on udp/9050 by default. Stop it via the process owning the port:
-#   (Get-NetUDPEndpoint -LocalPort 9050).OwningProcess | Stop-Process -Force
+#   Stop-Process -Id (Get-NetUDPEndpoint -LocalPort 9050).OwningProcess[0] -Force
 ```
 
 Custom maps are plain JSON (see `DungeonGeometryFile` docs): `spawn: [x,y,z]`,
 `enemySpawns: [[x,y,z],...]`, optional `enemySpawnTypes` (0 Minion, 1 Rogue,
-2 Mage — parallel array), optional `bossSpawn`. `SpawnDirector` clamps the live
-population to 40 regulars no matter how many markers the map has. An all-Mage
-map keeps projectiles in the snapshot, which is the cheapest way to inflate
-world size.
+2 Mage — parallel array), optional `bossSpawn`, optional `terrain` (a smooth
+heightfield: originX/originZ/cellSize/width/depth + row-major `heights` — the
+base plane movement rides; see the verticality rules in `DungeonGeometry`) and
+`props` (cosmetic braziers). The shipping realm, The Crag, is emitted by
+`dotnet run tools/GenerateRealm.cs`, which self-validates with the REAL sim
+rules (a route walk via `Move`, reachability/containment/no-stranding flood
+fills) — rerun it after editing the layout; never hand-edit Crag.json.
+`SpawnDirector` clamps the live population to 40 regulars no matter how many
+markers the map has. An all-Mage map keeps projectiles in the snapshot, which
+is the cheapest way to inflate world size.
 
 ## Drive the wire protocol without Godot
 
@@ -39,6 +45,11 @@ Working examples live in `tools/` (.NET 10 file-based apps — `dotnet run
 tools/<Probe>.cs` with the server up):
 - `ClassProbe.cs` forges an instance as a mage, walks to the nearest enemy,
   shoots it, and asserts class + projectile facts from the snapshot stream.
+- `TerrainProbe.cs` verifies the open-realm terrain: the heightfield + props
+  arrive on the wire, the spawn stands ON the ground, walking east RAISES the
+  authoritative Y (server-side verticality), and replaying the same inputs over
+  the client-rebuilt geometry lands where the server says (prediction-grade
+  determinism).
 - `InstanceProbe.cs` drives four clients through the instance flow: forge,
   browse the list, join by id, cross-instance isolation, and the
   JoinDenied path. Run it against a FRESH server.

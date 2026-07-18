@@ -4,14 +4,20 @@ using WoadRaiders.Core;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// A schematic floorplan of a dungeon, drawn from its real collision geometry:
-/// wall slabs as woad-line strokes, the player spawn as a green sigil, the boss
-/// as a violet one, enemy posts as ember dots. What the card shows is what the
+/// A schematic map of a realm, drawn from its real geometry: the terrain as a
+/// shaded relief (glens glow, gorges darken, the wild crags frame it), wall
+/// slabs as woad-line strokes, the player spawn as a green sigil, the boss as a
+/// violet one, enemy posts as ember dots. What the card shows is what the
 /// server simulates — the preview can never drift from the map.
 /// </summary>
 public partial class DungeonMapView : Control
 {
     private const float Pad = 14f; // breathing room inside the control
+
+    // Relief shading bands (world heights): below Deep is gorge-dark, above
+    // Wild is crag-rock; the playable band in between ramps dark → pale.
+    private const float DeepBand = -50f;
+    private const float WildBand = 320f;
 
     private DungeonGeometry? _geometry;
 
@@ -30,10 +36,10 @@ public partial class DungeonMapView : Control
 
     public override void _Draw()
     {
-        if (_geometry is not { } g || g.Solids.Count == 0)
+        if (_geometry is not { } g || (g.Solids.Count == 0 && g.Terrain is null))
             return;
 
-        // Fit the dungeon's bounds into this control, preserving aspect.
+        // Fit the realm's bounds into this control, preserving aspect.
         var bounds = g.Bounds;
         var size = bounds.Size;
         var scale = Mathf.Min((Size.X - 2 * Pad) / size.X, (Size.Y - 2 * Pad) / size.Z);
@@ -41,6 +47,31 @@ public partial class DungeonMapView : Control
             (Size.X - size.X * scale) / 2f - bounds.Min.X * scale,
             (Size.Y - size.Z * scale) / 2f - bounds.Min.Z * scale);
         Vector2 Map(float x, float z) => origin + new Vector2(x, z) * scale;
+
+        // The land itself, as shaded relief.
+        if (g.Terrain is { } terrain)
+        {
+            const int step = 2; // 2x2 samples per swatch keeps the draw cheap
+            var gorgeDark = new Color(0.03f, 0.05f, 0.10f);
+            var lowland = new Color(0.10f, 0.22f, 0.20f);
+            var upland = new Color(0.55f, 0.62f, 0.58f);
+            var crag = new Color(0.10f, 0.11f, 0.16f);
+            for (var j = 0; j < terrain.Depth - 1; j += step)
+            {
+                for (var i = 0; i < terrain.Width - 1; i += step)
+                {
+                    var h = terrain.At(i, j);
+                    var color = h < DeepBand ? gorgeDark
+                        : h > WildBand ? crag
+                        : lowland.Lerp(upland, (h - DeepBand) / (WildBand - DeepBand));
+                    var x = terrain.OriginX + i * terrain.CellSize;
+                    var z = terrain.OriginZ + j * terrain.CellSize;
+                    var a = Map(x, z);
+                    var b = Map(x + step * terrain.CellSize, z + step * terrain.CellSize);
+                    DrawRect(new Rect2(a, b - a), color);
+                }
+            }
+        }
 
         // The walls, as the mason left them.
         var wall = new Color(UiTheme.WoadDim, 0.85f);

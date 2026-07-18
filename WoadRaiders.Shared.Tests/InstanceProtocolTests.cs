@@ -51,8 +51,8 @@ public class InstanceProtocolTests
         {
             Instances =
             [
-                new InstanceEntry { Id = 1, Dungeon = (byte)DungeonId.Barrow, Name = "First light", Players = 3, MaxPlayers = 8 },
-                new InstanceEntry { Id = 9, Dungeon = (byte)DungeonId.Cairn, Name = "Stones", Players = 8, MaxPlayers = 8 },
+                new InstanceEntry { Id = 1, Dungeon = (byte)DungeonId.Crag, Name = "First light", Players = 3, MaxPlayers = 8 },
+                new InstanceEntry { Id = 9, Dungeon = (byte)DungeonId.Crag, Name = "Stones", Players = 8, MaxPlayers = 8 },
             ],
         });
 
@@ -60,7 +60,7 @@ public class InstanceProtocolTests
             e =>
             {
                 Assert.Equal(1, e.Id);
-                Assert.Equal((byte)DungeonId.Barrow, e.Dungeon);
+                Assert.Equal((byte)DungeonId.Crag, e.Dungeon);
                 Assert.Equal("First light", e.Name);
                 Assert.Equal(3, e.Players);
                 Assert.Equal(8, e.MaxPlayers);
@@ -68,7 +68,7 @@ public class InstanceProtocolTests
             e =>
             {
                 Assert.Equal(9, e.Id);
-                Assert.Equal((byte)DungeonId.Cairn, e.Dungeon);
+                Assert.Equal((byte)DungeonId.Crag, e.Dungeon);
                 Assert.Equal("Stones", e.Name);
                 Assert.Equal(8, e.Players);
             });

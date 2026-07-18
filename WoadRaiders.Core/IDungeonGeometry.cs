@@ -29,4 +29,11 @@ public interface IDungeonGeometry
     /// providers can keep the default: always visible.
     /// </summary>
     bool HasLineOfSight(Vector3 from, Vector3 to) => true;
+
+    /// <summary>
+    /// The height of the base ground plane (the terrain — no solids) at a world
+    /// XZ point. Player projectiles hug this so a shot follows a slope instead
+    /// of burying itself in the first rise. Flat providers keep the default: 0.
+    /// </summary>
+    float GroundHeight(float x, float z) => 0f;
 }

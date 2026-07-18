@@ -268,8 +268,11 @@ public sealed class GameWorld
             // (UpdateProjectiles), so a shot is dodgeable like the enemy mages' are.
             if (arch.ProjectileSpeed > 0f)
             {
+                // Player shots are cursor-aimed on the ground plane, so they fly
+                // level and hug the terrain in flight (see UpdateProjectiles).
                 SpawnProjectile(player.Position, player.Facing, arch.ProjectileSpeed, player.AttackDamage,
-                    player.Class == CharacterClass.Mage ? ProjectileKind.MagicBolt : ProjectileKind.Arrow);
+                    player.Class == CharacterClass.Mage ? ProjectileKind.MagicBolt : ProjectileKind.Arrow,
+                    followTerrain: true);
                 continue;
             }
 
@@ -347,8 +350,11 @@ public sealed class GameWorld
                     {
                         // Ranged: launch a bolt at where the target is now (dodgeable);
                         // damage is dealt on impact by UpdateProjectiles, not here.
-                        SpawnProjectile(enemy.Position, target.Position - enemy.Position,
-                            arch.ProjectileSpeed, arch.AttackDamage, ProjectileKind.EnemyBolt);
+                        // Aimed eye-to-eye in FULL 3D, so a mage on an overlook rains
+                        // bolts down the slope instead of zapping level over heads.
+                        var eye = new Vector3(0f, SimConstants.EyeHeight, 0f);
+                        SpawnProjectile(enemy.Position, (target.Position + eye) - (enemy.Position + eye),
+                            arch.ProjectileSpeed, arch.AttackDamage, ProjectileKind.EnemyBolt, followTerrain: false);
                     }
                     else
                     {
@@ -396,9 +402,11 @@ public sealed class GameWorld
     }
 
     /// <summary>Launch a bolt from <paramref name="from"/> (feet-space) along <paramref name="direction"/>.</summary>
-    private void SpawnProjectile(Vector3 from, Vector3 direction, float speed, float damage, ProjectileKind kind)
+    private void SpawnProjectile(Vector3 from, Vector3 direction, float speed, float damage, ProjectileKind kind,
+                                 bool followTerrain)
     {
-        direction.Y = 0f; // fly level across the ground plane
+        if (followTerrain)
+            direction.Y = 0f; // cursor-aimed: fly level and let the terrain-follow ride the slopes
         if (direction.LengthSquared() < 0.0001f)
             return;
         direction = Vector3.Normalize(direction);
@@ -410,6 +418,7 @@ public sealed class GameWorld
             Damage = damage,
             Life = SimConstants.ProjectileLifetime,
             Kind = kind,
+            FollowsTerrain = followTerrain,
         };
         _projectiles[proj.Id] = proj;
     }
@@ -424,6 +433,23 @@ public sealed class GameWorld
         foreach (var proj in _projectiles.Values)
         {
             var next = proj.Position + proj.Velocity * dt;
+
+            // Terrain-following (player) bolts hug the ground: on a gradual slope
+            // the flight height tracks ground + eye height exactly; over a sharp
+            // drop (a gorge, a ledge) they hold level and sail across, Gauntlet-
+            // style; a sharp rise is a wall and stops the bolt.
+            if (proj.FollowsTerrain && Geometry is not null)
+            {
+                var followY = Geometry.GroundHeight(next.X, next.Z) + SimConstants.EyeHeight;
+                var dy = followY - next.Y;
+                if (dy > SimConstants.StepHeight)
+                {
+                    (dead ??= new List<int>()).Add(proj.Id); // the ground leapt up — a cliff face
+                    continue;
+                }
+                if (dy >= -SimConstants.StepHeight)
+                    next.Y = followY; // walkable grade — follow it
+            }
 
             // A wall in the flight path this tick stops the bolt (no damage).
             if (Geometry is not null && !Geometry.HasLineOfSight(proj.Position, next))

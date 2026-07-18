@@ -31,10 +31,10 @@ internal sealed class GameSession
             if (_dungeon.BossSpawn is { } bossPos)
                 _world.OpenPortal(bossPos);
             Raise(SessionEventKind.BossFell,
-                $"The Barrow King has fallen! A portal tears open in his chamber — " +
+                $"The lord of this realm has fallen! A portal tears open where he stood — " +
                 $"he returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
         };
-        _director.BossRose += () => Raise(SessionEventKind.BossRose, "The Barrow King rises again.");
+        _director.BossRose += () => Raise(SessionEventKind.BossRose, "The lord of this realm rises again.");
     }
 
     /// <summary>
@@ -52,7 +52,7 @@ internal sealed class GameSession
     {
         var spawned = _director.SpawnInitial();
         if (_dungeon.BossSpawn is not null)
-            Raise(SessionEventKind.BossAwaits, "The Barrow King waits in his chamber.");
+            Raise(SessionEventKind.BossAwaits, "The lord of this realm waits at its heart.");
         return spawned;
     }
 

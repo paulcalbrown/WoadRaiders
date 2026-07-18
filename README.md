@@ -1,11 +1,13 @@
 # WoadRaiders
 
-A public co-op, **server-authoritative** ARPG dungeon crawler (Celtic/Pictish woad-raider
-theme), rendered in **3D isometric**. Real-time action, loot, hand-crafted dungeons — built so that
-online multiplayer with matchmaking is a first-class concern from day one, not a bolt-on.
+A public co-op, **server-authoritative** ARPG (Celtic/Pictish woad-raider theme) played across
+**open 3D realms** — sprawling, fully vertical highlands in the spirit of **Gauntlet Legends /
+Dark Legacy**, seen through a perspective **chase camera** that swings behind your direction of
+travel. Real-time action, loot, generated-offline realms — built so that online multiplayer with
+matchmaking is a first-class concern from day one, not a bolt-on.
 
 What started as an architecture scaffold is now a playable slice: pick one of **four classes**,
-choose a dungeon, **forge or join a raid instance** with up to 8 players, fight through to the
+**forge or join a raid instance** with up to 8 players, climb the realm to its
 boss, and step out through the portal to a run summary.
 
 ---
@@ -26,7 +28,7 @@ WoadRaiders.Shared    The wire protocol: message types + (de)serialization
         │   └────────────────────────┐
         │                            │
 WoadRaiders.Server            WoadRaiders.Client
-Headless dedicated server.    Godot 4 (.NET) 3D-isometric client.
+Headless dedicated server.    Godot 4 (.NET) chase-camera client.
 Plain console app, no         Predicts movement, renders meshes,
 engine → containerizes        sends input. Open in Godot to run.
 cheaply, allocated per
@@ -59,7 +61,7 @@ target from `Core`/`Shared`.
   loot piles up) — so every snapshot is framed as one or more tick-stamped chunks (most fit in
   one), and the client's `SnapshotAssembler` reassembles them with a tick guard that restores
   the never-deliver-stale property the old Sequenced channel provided.
-- The **connection key** (`WoadRaiders.v13`) is bumped whenever the wire format changes — the
+- The **connection key** (`WoadRaiders.v14`) is bumped whenever the wire format changes — the
   only build-compatibility gate at connect time. A refused connect is answered with a
   `ConnectDenied` payload (frozen format, readable across version gates) saying why — outdated
   build (with the download URL) or full server — so the client can tell the player instead of
@@ -75,10 +77,10 @@ target from `Core`/`Shared`.
 ### 1. The dedicated server (works today, no engine needed)
 ```bash
 dotnet run --project WoadRaiders.Server
-# → WoadRaiders dedicated server listening on udp/9050 (2 maps, up to 16 instances
+# → WoadRaiders dedicated server listening on udp/9050 (1 maps, up to 16 instances
 #   of 8 raiders; sim 30Hz, snapshots 20Hz). Ctrl+C to stop.
 ```
-Without arguments it loads **every catalog dungeon** (The Barrow, The Cairn) from the `maps/`
+Without arguments it loads **every catalog realm** (The Crag) from the `maps/`
 directory beside its binary (the build copies the canonical JSON there from
 `WoadRaiders.Client/maps/`, so a published server is self-contained) and lets players
 forge/join instances of them. Options: a bare number sets the
@@ -94,21 +96,22 @@ two in lockstep if you upgrade Godot.
 2. The flow: a Celtic/gothic **title screen** (your name + server endpoint — exported builds
    default to the public dev server `woadraiders.eastus.azurecontainer.io`; editor runs default
    to `127.0.0.1:9050`) → **character select** (Knight, Rogue, Mage, or Ranger — per-class stats
-   live in `Core.ClassArchetypes`; Mage and Ranger fire real projectiles) → **dungeon select**
-   (The Barrow or The Cairn) → the **raid browser**, where you forge a fresh instance or join a
+   live in `Core.ClassArchetypes`; Mage and Ranger fire real projectiles) → **realm select**
+   (The Crag) → the **raid browser**, where you forge a fresh instance or join a
    live one → the run itself. You arrive through a blue entrance portal; fellow raiders wear
-   overhead nameplates with woad-blue health bars. Kill the **Barrow King** and a green exit
+   overhead nameplates with woad-blue health bars. Kill the **realm's lord** and a green exit
    portal opens — step through it to end the run on a **summary screen** (time, gold, relics,
    the warband's kill tally). Generated chiptune themes play throughout; a music autoload
    carries the menu theme seamlessly across screens.
-3. Controls: **WASD/arrows** move, **right-click** (hold) paths toward the cursor,
-   **left-click** attacks aimed at the cursor, **Space** attacks in your current facing,
-   **I** opens the inventory (**1-9** to equip), **Esc** backs out. Skeleton **minions** chase
-   you down, **rogues** dart in fast, **mages** zap you from range, and the Barrow King —
-   a hulking armored skeleton — waits in his throne room. All animated KayKit characters that
-   face their movement and play idle/run/attack clips (enemies carry billboard health bars;
-   your health bar sits at the top of the screen with a "recently lost" damage-chip trail).
-   Loot spins and glows by rarity. Walls between you and the camera fade out.
+3. Controls: **WASD/arrows** move (camera-relative — up is into the screen), **right-click**
+   (hold) paths toward the cursor, **left-click** attacks aimed at the cursor, **Space** attacks
+   in your current facing, **I** opens the inventory (**1-9** to equip), **Esc** backs out.
+   Skeleton **minions** chase you down, **rogues** dart in fast, **mages** rain bolts from the
+   overlooks, and the realm's lord — a hulking armored skeleton — holds the walled summit court.
+   All animated KayKit characters that face their movement and play idle/run/attack clips
+   (enemies carry billboard health bars; your health bar sits at the top of the screen with a
+   "recently lost" damage-chip trail). Loot spins and glows by rarity. Solids between you and
+   the camera fade out; the chase camera keeps itself clear of the terrain.
    (Dev flags: `--play` skips straight into the game, `--select` to the class picker,
    `--screenshot` saves title stills and exits.)
 
@@ -201,6 +204,25 @@ core loop earns it.
       **Y-up**, matching Godot and glTF conventions, so the client maps sim positions 1:1). Dungeon
       shape sits behind the `IDungeonGeometry` seam. Movement input stays 2D ground-plane intent
       (`MoveX`/`MoveZ`); the geometry decides height.
+- [x] **Open realms with real verticality (the Gauntlet rework)** — the game left its
+      fixed-isometric dungeon roots for **Gauntlet Legends / Dark Legacy**-style realms.
+      `DungeonGeometry` gained a smooth **heightfield terrain** base plane (bilinear
+      `HeightField`, shipped bit-exact over the wire so prediction walks the same ground) under
+      the solid boxes; movement now **rides the ground** — each step lands on the surface at its
+      destination, a rise beyond `SimConstants.StepHeight` (18) is a wall or cliff, drops are
+      unlimited (one-way jump-downs are level design). Sight lines respect terrain crests;
+      player bolts **hug the slopes** and sail level over gorges, enemy bolts aim in full 3D so
+      overlook mages rain fire downhill. The client renders the whole realm from the geometry
+      itself (one smooth vertex-coloured terrain mesh, dusk sky, braziers) — no scene file — and
+      the camera became a perspective **chase rig** that swings behind your travel and keeps
+      clear of the land (movement keys are camera-relative). The first realm, **The Crag**
+      (glen → gorge bridge → switchback climbs → rolling moor with a standing-stone circle →
+      walled summit court, ~260 units of climb), is computed by `tools/GenerateRealm.cs`, which
+      validates itself with the real sim rules: a virtual raider walks the whole route with
+      `Move`, flood fills prove every camp reachable / borders sealed / no stranding pits.
+      The Barrow and Cairn dungeons were removed with the old camera. Wire `v14`; probes:
+      `tools/TerrainProbe.cs` (terrain on the wire, spawn on the ground, the authoritative Y
+      climbing as you walk, replay determinism) + the existing class/instance/portal probes.
 - [x] **Fully 3D dungeon geometry (`DungeonGeometry`)** — dungeons are sets of **world-space solid
       boxes** + spawn markers, exactly what a Godot-editor scene reduces to. Collision is a vertical
       **cylinder-vs-box** test that is 3D-aware (walls block; beams above head height don't), sliding
@@ -220,8 +242,10 @@ core loop earns it.
       occlusion fade works on authored meshes too (tall meshes only, via `GeometryInstance3D`
       transparency; opt out with a `no_fade` group). `TestArena.tscn` demos it with its own
       materials and torch-lit braziers.
-- [x] **Real map with a glTF kit** — the **KayKit Dungeon Remastered** kit (CC0, 203 glTF models)
-      is installed at `addons/kaykit_dungeon_remastered`, and `maps/Barrow.tscn` ("The Barrow") is
+- [x] **Real map with a glTF kit** *(retired in the open-realms rework — kept here as history;
+      the KayKit dungeon kit remains installed for future interiors)* — the **KayKit Dungeon
+      Remastered** kit (CC0, 203 glTF models)
+      is installed at `addons/kaykit_dungeon_remastered`, and `maps/Barrow.tscn` ("The Barrow") was
       a sprawling dungeon built from it: entry hall, twin pillared halls, a north wing (shrine,
       storeroom, mage reliquary), a south wing (columned crypt, rogue ossuary), and a grand
       processional east to the antechamber and the **Barrow King's throne room** — all joined by
@@ -230,13 +254,11 @@ core loop earns it.
       per typed `EnemySpawn` marker (clamped 4–40), replenished one every 6 s. Kit pieces are on a
       4-unit grid, placed under a ×20-scaled `Visuals` node (1 kit tile = 80 world units);
       collision boxes and markers are authored in world units as usual.
-- [x] **A second dungeon, generated offline** — `maps/Cairn.tscn` ("The Cairn"), a ring-tomb of
-      standing stones: a central boss rotunda, four radial arms out to a wide ring corridor,
-      stair-stepped passages to four burial chambers, and a western entrance hall. It is
-      *computed* by `tools/GenerateDungeon.cs` (a .NET 10 file-based app:
-      `dotnet run tools/GenerateDungeon.cs`) into the same authored-quality scene + JSON pair
-      the Barrow uses, following its conventions verbatim — and the tool validates its own
-      output (JSON round-trip + a flood fill proving the boss and every spawn are reachable).
+- [x] **A second dungeon, generated offline** *(retired with the Barrow; its
+      generate-and-validate approach lives on, grown up, in `tools/GenerateRealm.cs`)* —
+      `maps/Cairn.tscn` ("The Cairn") was a ring-tomb of standing stones computed by a
+      file-based generator into an authored-quality scene + JSON pair, validating its own
+      output (JSON round-trip + a flood fill proving the boss and every spawn reachable).
 - [x] **Dungeon instances** — the server hosts player-forged **instances**: a join request
       either forges a fresh instance (its own `GameSession`, world, and enemy population) or
       enters a live one by id, so separate warbands never share a world. The client's raid
@@ -266,8 +288,9 @@ core loop earns it.
       flag on the snapshot (set when an attack lands, ticked down, broadcast).
 - [ ] **Dungeon content & depth** — more maps and kit variety; BepuPhysics for non-box collision
       and DotRecast navmesh for smarter AI pathing, all behind `IDungeonGeometry`.
-- [ ] **Gauntlet-style dungeons** — enemy generators (destroy to stop the horde), an exit/portal to
-      descend to the next level, health-drain + food pickups, keys/doors/gates, themed realms.
+- [ ] **Gauntlet-style systems** — enemy generators (destroy to stop the horde), an exit/portal to
+      descend to the next realm, health-drain + food pickups, keys/doors/gates, more themed
+      realms (the realm FORM itself shipped in the open-realms rework above).
 - [x] **Loot** — slain enemies drop **gold piles** (75%, added to your purse), **health potions**
       (50%, consumed on pickup), and **equipment** (50% from common enemies; the boss always pays
       out): rarity-weighted items with woad-raider names ("Chieftain's Battleaxe", "Morrígan's
@@ -303,8 +326,9 @@ core loop earns it.
 | `WoadRaiders.Shared.Tests` | Wire-protocol mapper tests | Shared |
 | `WoadRaiders.Server.Tests` | Server-internals tests | Server |
 
-`tools/` holds .NET 10 file-based apps (`dotnet run tools/<Name>.cs`): the Cairn dungeon
-generator, the two music generators, and scripted LiteNetLib **probes** (`ClassProbe`,
-`InstanceProbe`, `PortalProbe`) that verify class stats, instance isolation, and the portal
-flow end-to-end against a running server — no Godot needed. The Godot-side editor tools
+`tools/` holds .NET 10 file-based apps (`dotnet run tools/<Name>.cs`): the realm generator
+(`GenerateRealm.cs` — computes and self-validates The Crag), the two music generators, and
+scripted LiteNetLib **probes** (`ClassProbe`, `InstanceProbe`, `PortalProbe`, `TerrainProbe`)
+that verify class stats, instance isolation, the portal flow, and the terrain/verticality
+end-to-end against a running server — no Godot needed. The Godot-side editor tools
 (map export, scene measurement) live in `WoadRaiders.Client/tools/`.

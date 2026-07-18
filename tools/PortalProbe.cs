@@ -46,7 +46,7 @@ listener.PeerConnectedEvent += peer =>
             Name = "PortalProbe",
             Class = (byte)CharacterClass.Knight,
             Mode = (byte)JoinMode.Create,
-            Dungeon = (byte)DungeonId.Barrow, // --map hosts one map; every forge uses it
+            Dungeon = (byte)DungeonId.Crag, // --map hosts one map; every forge uses it
             InstanceName = "Portal run",
         }),
         0, DeliveryMethod.ReliableOrdered);

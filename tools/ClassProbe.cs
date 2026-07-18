@@ -28,7 +28,7 @@ const float ShootWithin = 380f; // stand and cast once this close
 
 var dungeon = args.Length > 0 && Enum.TryParse<DungeonId>(args[0], ignoreCase: true, out var parsed)
     ? parsed
-    : DungeonId.Barrow;
+    : DungeonId.Crag;
 var expectedScene = DungeonCatalog.Of(dungeon).ScenePath;
 
 var listener = new EventBasedNetListener();

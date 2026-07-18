@@ -521,9 +521,11 @@ public sealed class EquipmentUpdatePacket : INetSerializable
 }
 
 /// <summary>
-/// Server → client. The dungeon's 3D collision geometry (solid boxes + spawn),
-/// sent once on join. The client rebuilds a <c>DungeonGeometry</c> from it so
-/// prediction collides against exactly what the server does.
+/// Server → client. The realm's 3D geometry — spawn, solid boxes, an optional
+/// smooth heightfield terrain, and cosmetic props — sent once on join (reliable,
+/// so LiteNetLib fragments the terrain freely). The client rebuilds a
+/// <c>DungeonGeometry</c> from it so prediction collides against exactly what
+/// the server does, and renders the realm from the same data.
 /// </summary>
 public sealed class DungeonGeometryPacket : INetSerializable
 {
@@ -531,11 +533,25 @@ public sealed class DungeonGeometryPacket : INetSerializable
     public float SpawnY;
     public float SpawnZ;
 
-    /// <summary>res:// scene to render for this map ("" = none; client uses placeholder boxes).</summary>
+    /// <summary>Visual identity of the map ("" = none; terrain realms render from the geometry).</summary>
     public string ScenePath = "";
 
     /// <summary>Flattened boxes: 6 floats each (minX minY minZ maxX maxY maxZ).</summary>
     public float[] Boxes = System.Array.Empty<float>();
+
+    /// <summary>True when the terrain fields below carry a heightfield.</summary>
+    public bool HasTerrain;
+    public float TerrainOriginX;
+    public float TerrainOriginZ;
+    public float TerrainCellSize;
+    public int TerrainWidth;
+    public int TerrainDepth;
+
+    /// <summary>Row-major height samples ([z * width + x]); empty without terrain.</summary>
+    public float[] TerrainHeights = System.Array.Empty<float>();
+
+    /// <summary>Flattened cosmetic props: 4 floats each (type, x, y, z).</summary>
+    public float[] Props = System.Array.Empty<float>();
 
     public void Serialize(NetDataWriter w)
     {
@@ -545,6 +561,22 @@ public sealed class DungeonGeometryPacket : INetSerializable
         w.Put(ScenePath);
         w.Put((ushort)(Boxes.Length / 6));
         foreach (var f in Boxes)
+            w.Put(f);
+
+        w.Put(HasTerrain);
+        if (HasTerrain)
+        {
+            w.Put(TerrainOriginX);
+            w.Put(TerrainOriginZ);
+            w.Put(TerrainCellSize);
+            w.Put(TerrainWidth);
+            w.Put(TerrainDepth);
+            foreach (var h in TerrainHeights)
+                w.Put(h);
+        }
+
+        w.Put((ushort)(Props.Length / 4));
+        foreach (var f in Props)
             w.Put(f);
     }
 
@@ -558,6 +590,33 @@ public sealed class DungeonGeometryPacket : INetSerializable
         Boxes = new float[count * 6];
         for (var i = 0; i < Boxes.Length; i++)
             Boxes[i] = r.GetFloat();
+
+        HasTerrain = r.GetBool();
+        if (HasTerrain)
+        {
+            TerrainOriginX = r.GetFloat();
+            TerrainOriginZ = r.GetFloat();
+            TerrainCellSize = r.GetFloat();
+            TerrainWidth = r.GetInt();
+            TerrainDepth = r.GetInt();
+            // The dimensions come off a hostile wire: bound the allocation before
+            // trusting the product (the server's handler disconnects on a throw).
+            long samples = (long)TerrainWidth * TerrainDepth;
+            if (TerrainWidth < 2 || TerrainDepth < 2 || samples > 4_000_000)
+                throw new System.IO.InvalidDataException($"unreasonable terrain dimensions {TerrainWidth}x{TerrainDepth}");
+            TerrainHeights = new float[samples];
+            for (var i = 0; i < TerrainHeights.Length; i++)
+                TerrainHeights[i] = r.GetFloat();
+        }
+        else
+        {
+            TerrainHeights = System.Array.Empty<float>();
+        }
+
+        int propCount = r.GetUShort();
+        Props = new float[propCount * 4];
+        for (var i = 0; i < Props.Length; i++)
+            Props[i] = r.GetFloat();
     }
 }
 

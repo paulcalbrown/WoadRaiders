@@ -19,11 +19,12 @@ public sealed class LocalPlayer
     private const float MaxSnapError = 120f;  // above this, snap (respawn/teleport) not smooth
     private const int MaxCatchUpTicks = 5;    // per frame; a longer stall drops the lost time
     private const float ArriveRadius = 10f;   // click-to-move stops once this close to the target
-    private const float SpawnWalkDistance = 105f; // render starts this far behind the spawn (behind the set-back portal)
+    private const float SpawnWalkDistance = 205f; // render starts this far behind the spawn (behind the set-back portal)
     private const float SpawnWalkSeconds = 1.1f; // how long the cosmetic walk-out of the portal takes
 
     private readonly ClientConnection _connection;
     private readonly CameraRig _camera;
+    private DungeonGeometry? _geometry; // cursor rays land on this terrain
     private ClientPrediction? _prediction;
     private AttackPrediction _attack;
     private uint _inputSequence; // monotonic across reconnects — the server buffer only needs increasing
@@ -65,9 +66,10 @@ public sealed class LocalPlayer
     public Vector3 AttackFacing => _attackFacing;
 
     /// <summary>Start (or on reconnect, restart) predicting as the given player and class.</summary>
-    public void BeginSession(int playerId, SysVec3 spawn, IDungeonGeometry? geometry, CharacterClass cls)
+    public void BeginSession(int playerId, SysVec3 spawn, DungeonGeometry? geometry, CharacterClass cls)
     {
         PlayerId = playerId;
+        _geometry = geometry;
         // The class shapes prediction itself: move speed and the attack root in the
         // predicted world, and the swing cadence — all must mirror the server's.
         _prediction = new ClientPrediction(playerId, spawn, geometry, cls);
@@ -81,10 +83,10 @@ public sealed class LocalPlayer
         // Cosmetic spawn intro: pull the RENDER position back behind the entrance
         // portal and ease it forward to the spawn, so the character walks out of the
         // portal. Prediction and reconciliation are untouched — only what's drawn
-        // shifts. "Out of the portal" is the iso camera's ground heading (toward the
-        // viewer), matching the portal's camera-facing angle.
-        var camGround = new SysVec3(CameraRig.Offset.X, 0f, CameraRig.Offset.Z);
-        _spawnWalkDir = camGround.LengthSquared() > 0.0001f ? SysVec3.Normalize(camGround) : SysVec3.UnitX;
+        // shifts. The portal sits between spawn and the chase camera, so "out of
+        // the portal" is the camera's ground forward — the raider strides away
+        // from the viewer into the realm.
+        _spawnWalkDir = _camera.GroundForward.ToSim();
         _spawnWalkRemaining = SpawnWalkSeconds;
     }
 
@@ -209,14 +211,17 @@ public sealed class LocalPlayer
     }
 
     // Keyboard steering wins and cancels any click-to-move; otherwise head toward
-    // the move target (full speed) until we arrive within ArriveRadius.
+    // the move target (full speed) until we arrive within ArriveRadius. Keys are
+    // CAMERA-relative — up is "into the screen" — because the chase camera swings
+    // around behind the raider; forward must always mean where you're looking.
     private Vector2 MovementIntent()
     {
         var keys = Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down");
         if (keys != Vector2.Zero)
         {
             _moveTarget = null;
-            return keys;
+            var world = _camera.GroundForward * -keys.Y + _camera.GroundRight * keys.X;
+            return new Vector2(world.X, world.Z);
         }
 
         if (_moveTarget is { } target)
@@ -233,40 +238,58 @@ public sealed class LocalPlayer
         return Vector2.Zero;
     }
 
-    // Unit direction from the player toward the cursor. The cursor is projected
-    // onto the plane at the projectile's FLIGHT height (feet + eye height), not
-    // the floor: a bolt leaves the caster at eye height and flies level, so
-    // aiming at the floor point under the cursor would launch it out raised-but-
-    // parallel and — under the angled iso camera — it would visibly track a line
-    // above where you clicked. Aiming at the flight plane makes the shot pass
-    // through the cursor. Melee shares the aim; its wide arc shrugs off the few-
-    // degrees difference. Keeps the last aim if the cursor sits on the player or
-    // the ray runs parallel to the plane.
+    // Unit ground-plane direction from the player toward whatever the cursor
+    // rests on. The cursor ray lands on the real terrain (a click on a rise up
+    // the slope aims up that slope's path), falling back to the plane at the
+    // player's eye height when there is no terrain under the cursor. Keeps the
+    // last aim if the cursor sits on the player.
     private Vector3 ComputeAim()
     {
         var playerPos = _prediction!.Position.ToGodot();
-        if (!TryProjectMouseToPlane(playerPos.Y + SimConstants.EyeHeight, out var hit))
+        if (!TryProjectMouseToGround(out var hit) &&
+            !TryProjectMouseToPlane(playerPos.Y + SimConstants.EyeHeight, out hit))
             return _aim;
         var flat = new Vector3(hit.X - playerPos.X, 0f, hit.Z - playerPos.Z);
         return flat.LengthSquared() > 0.01f ? flat.Normalized() : _aim;
     }
 
-    // Intersect the cursor ray with the ground plane at the player's feet height
-    // (where a click-to-move order lands).
-    private bool TryProjectMouseToGround(out Vector3 point) =>
-        TryProjectMouseToPlane(_prediction!.Position.Y, out point);
-
-    // Intersect the cursor ray with the horizontal plane at world height planeY.
-    private bool TryProjectMouseToPlane(float planeY, out Vector3 point)
+    // Land the cursor ray on the walkable world — the terrain, or a bridge deck
+    // above it — so a click-to-move order (and its marker) sits where the player
+    // actually clicked, however high or low that spot is. Falls back to the
+    // plane at the player's feet with no geometry (open test arenas).
+    private bool TryProjectMouseToGround(out Vector3 point)
     {
         point = default;
         var mouse = _camera.GetViewport().GetMousePosition();
         var from = _camera.ProjectRayOrigin(mouse);
         var dir = _camera.ProjectRayNormal(mouse);
+
+        if (_geometry is { } geometry &&
+            geometry.RaycastGround(from.ToSim(), dir.ToSim(), 9000f, out var hit))
+        {
+            point = hit.ToGodot();
+            return true;
+        }
+        return TryProjectMouseToPlaneFrom(from, dir, _prediction!.Position.Y, out point);
+    }
+
+    // Intersect the cursor ray with the horizontal plane at world height planeY.
+    private bool TryProjectMouseToPlane(float planeY, out Vector3 point)
+    {
+        var mouse = _camera.GetViewport().GetMousePosition();
+        return TryProjectMouseToPlaneFrom(_camera.ProjectRayOrigin(mouse), _camera.ProjectRayNormal(mouse),
+                                          planeY, out point);
+    }
+
+    private static bool TryProjectMouseToPlaneFrom(Vector3 from, Vector3 dir, float planeY, out Vector3 point)
+    {
+        point = default;
         if (Mathf.Abs(dir.Y) < 1e-5f)
             return false;
 
         var t = (planeY - from.Y) / dir.Y;
+        if (t < 0f)
+            return false; // the plane is behind the camera
         point = from + dir * t;
         return true;
     }

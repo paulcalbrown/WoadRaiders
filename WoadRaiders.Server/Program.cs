@@ -23,7 +23,7 @@ for (var i = 0; i < args.Length; i++)
 var maps = new Dictionary<DungeonId, string>();
 if (mapPath is not null)
 {
-    maps[DungeonId.Barrow] = mapPath; // single custom map: every forged instance uses it
+    maps[DungeonCatalog.All[0].Id] = mapPath; // single custom map: every forged instance uses it
 }
 else
 {
