@@ -40,8 +40,8 @@ public static class ClientConfig
     /// <summary>The class to raid as; the character-select screen sets it.</summary>
     public static CharacterClass PlayerClass { get; set; } = CharacterClass.Knight;
 
-    /// <summary>The dungeon to raid; the dungeon-select screen sets it.</summary>
-    public static DungeonId Dungeon { get; set; } = DungeonId.Barrow;
+    /// <summary>The realm to raid; the realm-select screen sets it.</summary>
+    public static DungeonId Dungeon { get; set; } = DungeonId.Crag;
 
     /// <summary>How to enter the dungeon: forge a fresh instance (default) or join a
     /// live one. The raid-select screen sets it; a Welcome pins it to Join so a
@@ -119,7 +119,7 @@ public static class ClientConfig
     private static CharacterClass ParseClass(string text) =>
         Enum.TryParse<CharacterClass>(text, ignoreCase: true, out var cls) ? cls : CharacterClass.Knight;
 
-    /// <summary>Parse a dungeon name, case-insensitive; anything unrecognized is the Barrow.</summary>
+    /// <summary>Parse a realm name, case-insensitive; anything unrecognized is the Crag.</summary>
     private static DungeonId ParseDungeon(string text) =>
-        Enum.TryParse<DungeonId>(text, ignoreCase: true, out var id) ? id : DungeonId.Barrow;
+        Enum.TryParse<DungeonId>(text, ignoreCase: true, out var id) ? id : DungeonId.Crag;
 }

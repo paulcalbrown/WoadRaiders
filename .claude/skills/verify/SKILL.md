@@ -16,22 +16,63 @@ dotnet test WoadRaiders.slnx --no-build
 
 ```powershell
 dotnet run --project WoadRaiders.Server -- [port] --map <map.json>
-# Without --map it loads EVERY catalog dungeon map (DungeonCatalog: Barrow,
-# Cairn). Players forge/join INSTANCES of them: a JoinRequest either creates a
-# fresh instance (Mode=Create, naming the dungeon) or enters a live one by id
+# Without --map it loads EVERY catalog realm map (DungeonCatalog: Crag.json).
+# The server hosts geometry JSON only; .tscn scenes are the AUTHORING format,
+# baked to JSON by the tools below.
+# Players forge/join INSTANCES of them: a JoinRequest either creates a
+# fresh instance (Mode=Create, naming the realm) or enters a live one by id
 # (Mode=Join); each instance is its own GameSession/world. With --map only that
 # map is loaded and every forged instance uses it. Empty instances are reaped
 # after a 60 s linger.
 # Listens on udp/9050 by default. Stop it via the process owning the port:
-#   (Get-NetUDPEndpoint -LocalPort 9050).OwningProcess | Stop-Process -Force
+#   Stop-Process -Id (Get-NetUDPEndpoint -LocalPort 9050).OwningProcess[0] -Force
 ```
 
 Custom maps are plain JSON (see `DungeonGeometryFile` docs): `spawn: [x,y,z]`,
 `enemySpawns: [[x,y,z],...]`, optional `enemySpawnTypes` (0 Minion, 1 Rogue,
-2 Mage — parallel array), optional `bossSpawn`. `SpawnDirector` clamps the live
-population to 40 regulars no matter how many markers the map has. An all-Mage
-map keeps projectiles in the snapshot, which is the cheapest way to inflate
-world size.
+2 Mage — parallel array), optional `bossSpawn`, optional `terrain` (a smooth
+heightfield: originX/originZ/cellSize/width/depth + row-major `heights` — the
+base plane movement rides; see the verticality rules in `DungeonGeometry`) and
+`props` (cosmetic braziers).
+
+**Realms are authored as Godot .tscn scenes and PLAYED from baked JSON —
+and the SCENE COMES FIRST, for generated and hand-made realms alike.**
+The generated scene is a NATURAL Godot file — saved by Godot's own
+ResourceSaver, built-in nodes and resources only, a REAL displaced terrain
+ArrayMesh plus free-form scenery (boulder fields today), no scripts, no
+metadata; it opens whole in any Godot editor. The design lives CLIENT-SIDE
+(`WoadRaiders.Client/scripts/tools/CragDesign.cs` — layout math — consumed by
+`RealmSceneBuilder`), so it can place ANYTHING Godot can express; nothing is
+ever generated from the geometry JSON. `dotnet run tools/GenerateRealm.cs`
+does the whole chain: builds the client → drives godot-mono to build
+`Crag.tscn` from the design (tools/build_realm_scene.gd) → normalizes the
+serializer's random ids (deterministic regeneration) → bakes `Crag.json`
+FROM the scene via the standard hand-made pipeline (bake_realm.gd) →
+validates the BAKED geometry (RealmValidator + the route walk). Reshape the
+realm by editing CragDesign.cs and rerunning; hand-edits to Crag.tscn are
+equally fine — re-bake + ValidateRealm afterwards (steps 2–3 below).
+The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
+  1. Terrain: ANY meshes in group `terrain` (the natural way — sculpt in
+     Blender, CSG, or edit the generated Terrain mesh; put big ground meshes
+     in `no_fade` too). A `RealmTerrain` node or `metadata/terrain_*` on the
+     root also work (bake reads them without sampling). Collision:
+     axis-aligned `BoxShape3D` CollisionShape3Ds. Markers: `PlayerSpawn`
+     (required), `EnemySpawnN[_Rogue|_Mage]`, `BossSpawn`; braziers = nodes
+     in group `brazier`.
+  2. Bake to server geometry: `dotnet build WoadRaiders.Client`, then
+     `godot-mono --headless --path WoadRaiders.Client -s
+     res://tools/bake_realm.gd -- res://maps/MyRealm.tscn
+     res://maps/MyRealm.json` (sampling cell 40; root metadata
+     `terrain_cell_size` overrides; the sampling math is unit-tested
+     Core.TerrainSampler).
+  3. `dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.json`
+     — Core.RealmValidator proves camps reachable, borders sealed, no
+     stranding pits. `--compare` proves two maps carry identical sim geometry.
+  4. Serve the JSON with `--map`; clients that have the scene render it as
+     authored, clients that don't rebuild the realm from the wire geometry.
+`SpawnDirector` clamps the live population to 40 regulars no matter how many
+markers the map has. An all-Mage map keeps projectiles in the snapshot, which
+is the cheapest way to inflate world size.
 
 ## Drive the wire protocol without Godot
 
@@ -39,6 +80,11 @@ Working examples live in `tools/` (.NET 10 file-based apps — `dotnet run
 tools/<Probe>.cs` with the server up):
 - `ClassProbe.cs` forges an instance as a mage, walks to the nearest enemy,
   shoots it, and asserts class + projectile facts from the snapshot stream.
+- `TerrainProbe.cs` verifies the open-realm terrain: the heightfield + props
+  arrive on the wire, the spawn stands ON the ground, walking east RAISES the
+  authoritative Y (server-side verticality), and replaying the same inputs over
+  the client-rebuilt geometry lands where the server says (prediction-grade
+  determinism).
 - `InstanceProbe.cs` drives four clients through the instance flow: forge,
   browse the list, join by id, cross-instance isolation, and the
   JoinDenied path. Run it against a FRESH server.

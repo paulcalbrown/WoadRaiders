@@ -65,7 +65,7 @@ public class PortalProtocolTests
     {
         var back = RoundTrip(new RunCompletePacket
         {
-            Dungeon = (byte)DungeonId.Cairn,
+            Dungeon = (byte)DungeonId.Crag,
             RaidName = "Boudica's revenge",
             DurationSeconds = 272,
             Gold = 154,
@@ -73,7 +73,7 @@ public class PortalProtocolTests
             FoesSlain = 27,
         });
 
-        Assert.Equal((byte)DungeonId.Cairn, back.Dungeon);
+        Assert.Equal((byte)DungeonId.Crag, back.Dungeon);
         Assert.Equal("Boudica's revenge", back.RaidName);
         Assert.Equal(272, back.DurationSeconds);
         Assert.Equal(154, back.Gold);

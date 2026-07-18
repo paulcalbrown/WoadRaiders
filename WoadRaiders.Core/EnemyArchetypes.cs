@@ -9,7 +9,7 @@ public enum EnemyType : byte
     Minion = 0, // basic melee chaser
     Rogue = 1,  // fast, fragile, quick strikes
     Mage = 2,   // slow, zaps from range
-    Boss = 3,   // the Barrow King: huge, heavy hits, guaranteed loot
+    Boss = 3,   // the realm's lord: huge, heavy hits, guaranteed loot
 }
 
 /// <summary>Per-type combat stats. Presentation (model, scale) lives client-side.</summary>

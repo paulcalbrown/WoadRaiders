@@ -102,13 +102,13 @@ public partial class DungeonSelectScreen : Control
     }
 
     /// <summary>Dev helper behind --dungeon-select --screenshot: save a still on the
-    /// default focus, another courting the Cairn, and exit.</summary>
+    /// default focus, another courting the last realm, and exit.</summary>
     private void CaptureScreenshots(string path)
     {
         GetTree().CreateTimer(1.4).Timeout += () =>
         {
             SaveStill(path);
-            _cards[DungeonId.Cairn].GrabFocus();
+            _cards[DungeonCatalog.All[^1].Id].GrabFocus();
             GetTree().CreateTimer(1.2).Timeout += () =>
             {
                 SaveStill(System.IO.Path.ChangeExtension(path, null) + "-2.png");

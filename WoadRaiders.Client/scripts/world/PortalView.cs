@@ -21,13 +21,15 @@ public partial class PortalView : Node3D
     private const float CenterHeight = 58f; // ring centre above the floor
     private const float ScaleInSeconds = 0.7f;
 
-    // The portal faces the fixed isometric camera (offset 600,700,600 → 45° on
-    // the ground plane), so the mouth always reads as a mouth, never edge-on.
-    private const float FaceCameraYawDegrees = 45f;
-
     /// <summary>The portal's colour. Green (default) = the boss exit; woad blue =
     /// the entrance. Set in the object initializer, before the node enters the tree.</summary>
     public Color Tint { get; init; } = UiTheme.OozeGreen;
+
+    /// <summary>Ground-plane yaw of the mouth's normal, so the gate reads as a
+    /// mouth (never edge-on) from wherever the scene expects you to see it: the
+    /// entrance faces the chase camera's opening heading, the exit faces the
+    /// court gate its challengers walk in through.</summary>
+    public float FacingYawDegrees { get; init; } = 45f;
 
     private OmniLight3D _light = null!;
     private Node3D _rotorA = null!; // tilted inner rings; precessing them around
@@ -36,7 +38,7 @@ public partial class PortalView : Node3D
 
     public override void _Ready()
     {
-        RotationDegrees = new Vector3(0, FaceCameraYawDegrees, 0);
+        RotationDegrees = new Vector3(0, FacingYawDegrees, 0);
 
         // The ring: a vertical torus, unshaded and emissive so it burns through
         // the dungeon gloom.

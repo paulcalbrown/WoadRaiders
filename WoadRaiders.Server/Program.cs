@@ -3,12 +3,13 @@ using WoadRaiders.Server;
 using WoadRaiders.Shared;
 
 // Usage: WoadRaiders.Server [port] [--map path/to/map.json]
-// Without --map, every catalog dungeon found in the maps directory beside the
+// Without --map, every catalog realm found in the maps directory beside the
 // binary (the build copies it there; see GameServer.MapsDirectory) is loaded
 // and players forge/join instances of them. With --map, only that map is
 // loaded and every forged instance uses it (dev convenience for map work).
-// Maps are authored in the Godot editor (tools/export_dungeon.gd) or generated
-// (tools/GenerateDungeon.cs).
+// Maps are geometry JSON, baked from Godot .tscn scenes: generated realms by
+// tools/GenerateRealm.cs (which also emits the natural, script-free scene),
+// hand-made scenes by WoadRaiders.Client/tools/bake_realm.gd.
 int port = NetConfig.DefaultPort;
 string? mapPath = null;
 
@@ -23,7 +24,7 @@ for (var i = 0; i < args.Length; i++)
 var maps = new Dictionary<DungeonId, string>();
 if (mapPath is not null)
 {
-    maps[DungeonId.Barrow] = mapPath; // single custom map: every forged instance uses it
+    maps[DungeonCatalog.All[0].Id] = mapPath; // single custom map: every forged instance uses it
 }
 else
 {

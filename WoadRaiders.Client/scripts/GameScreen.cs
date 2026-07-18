@@ -112,8 +112,10 @@ public partial class GameScreen : Node3D
         if (_localPlayer.Active)
         {
             var bodyCentre = _localPlayer.RenderPosition + Vector3.Up * BodyHeight;
-            _fader.Update(bodyCentre);
             _camera.Follow(bodyCentre, delta);
+            // The chase camera swings around the raider, so the fade direction is
+            // live — this frame's body-to-camera sight line.
+            _fader.Update(bodyCentre, (_camera.GlobalPosition - bodyCentre).Normalized());
         }
         else
         {
@@ -189,6 +191,7 @@ public partial class GameScreen : Node3D
     private void OnGeometry(DungeonGeometryPacket packet)
     {
         _geometry = DungeonSnapshot.ToGeometry(packet);
+        _camera.Geometry = _geometry; // the boom keeps clear of this terrain
 
         // A reconnect to the same match re-sends the same map — leave the standing
         // visuals alone. But a client that outlives a server swap can land on a

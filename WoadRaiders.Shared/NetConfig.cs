@@ -62,9 +62,11 @@ public static class NetConfig
     /// v11 = the boss portal (WorldSnapshotPacket portal fields, RunComplete),
     /// v12 = PlayerSnapshot.Name (fellow raiders' overhead nameplates),
     /// v13 = connect rejects carry a <see cref="ConnectDeniedPacket"/> payload
-    ///       (server key + reason), so an outdated client learns why.
+    ///       (server key + reason), so an outdated client learns why,
+    /// v14 = open realms (DungeonGeometryPacket heightfield terrain + props;
+    ///       the Gauntlet-style realm rework).
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v13";
+    public const string ConnectionKey = "WoadRaiders.v14";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";

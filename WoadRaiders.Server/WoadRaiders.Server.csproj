@@ -22,9 +22,10 @@
   </ItemGroup>
 
   <!--
-    Dungeon geometry. The canonical JSON lives in the client project (its title
+    Map geometry. The canonical JSON lives in the client project (its title
     screen renders map previews from the same files); copying it beside the
-    binary makes a built or published server self-contained.
+    binary makes a built or published server self-contained. The matching
+    .tscn scenes are client-side visuals only — the server hosts the JSON.
   -->
   <ItemGroup>
     <Content Include="..\WoadRaiders.Client\maps\*.json"

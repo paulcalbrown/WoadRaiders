@@ -1,39 +1,89 @@
+using System;
+using System.Linq;
 using Godot;
 using WoadRaiders.Core;
 
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// Builds the dungeon's visuals once the geometry arrives. Hand-crafted maps
-/// render their authored scene; a missing scene falls back to placeholder boxes
-/// built from the collision solids. Either way, the fade-eligible meshes are
-/// registered with the <see cref="OcclusionFader"/>, and a blue entrance portal
-/// is stood at the spawn — the mirror of the boss's green exit.
+/// Builds the map's visuals once the geometry arrives. The authored .tscn is
+/// the visual truth: when the map names a scene this client has (generated
+/// realms like Crag.tscn, or hand-made ones), it is instantiated and renders
+/// itself — terrain via its <see cref="RealmTerrain"/> node, braziers, lights,
+/// and sky all as authored. Without the scene, a terrain-bearing realm is
+/// rebuilt from the geometry the server sent (heightfield mesh, stone solids,
+/// braziers, dusk sky — playable even when a custom map's scene isn't in this
+/// build), and a flat map falls back to placeholder boxes. Either way, the
+/// fade-eligible meshes are registered with the <see cref="OcclusionFader"/>,
+/// and a blue entrance portal is stood at the spawn — the mirror of the boss's
+/// green exit.
 /// </summary>
 public static class DungeonVisualBuilder
 {
-    /// <summary>How far behind the spawn (away from the camera) the entrance portal
-    /// stands, so raiders come to rest clearly in front of it rather than in its mouth.</summary>
-    private const float PortalSetback = 80f;
+    /// <summary>How far behind the spawn (toward the camera) the entrance portal
+    /// stands. Far enough that the chase camera's sight line to the raider passes
+    /// OVER the gate — the mouth must never eclipse the character it delivered.</summary>
+    private const float PortalSetback = 180f;
 
     public static void Build(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
     {
         if (!TryLoadAuthoredScene(parent, geometry, fader))
-            BuildPlaceholderMeshes(parent, geometry, fader);
+        {
+            if (geometry.Terrain is { } terrain)
+                BuildRealm(parent, geometry, terrain, fader);
+            else
+                BuildPlaceholderMeshes(parent, geometry, fader);
+        }
 
-        // The entrance portal stands at the dungeon mouth, set back BEHIND the spawn
-        // (away from the iso camera) so raiders come to rest in front of it — a blue
-        // twin of the boss's green exit, so they arrive through a gate and leave
+        // The entrance portal stands at the realm's mouth, set back BEHIND the spawn
+        // (between spawn and the chase camera) so raiders walk forward out of it — a
+        // blue twin of the boss's green exit, so they arrive through a gate and leave
         // through one. The spawn walk-out (LocalPlayer) starts the character further
         // back still, so they emerge through the gate and stop ahead of it. Purely a
         // landmark — no sim meaning — so it lives with the map visuals, rebuilt and
         // torn down with them.
-        var toCamera = new Vector3(CameraRig.Offset.X, 0f, CameraRig.Offset.Z).Normalized();
+        var forward = CameraRig.LiveGroundForward;
+        var mouth = geometry.SpawnPoint.ToGodot() - forward * PortalSetback;
+        mouth.Y = geometry.GroundHeight(mouth.X, mouth.Z); // seat the gate on the land
         parent.AddChild(new PortalView
         {
             Tint = UiTheme.WoadBlue,
-            Position = geometry.SpawnPoint.ToGodot() - toCamera * PortalSetback,
+            Position = mouth,
+            FacingYawDegrees = Mathf.RadToDeg(Mathf.Atan2(forward.X, forward.Z)),
         });
+    }
+
+    // ------------------------------------------------------------- open realms
+
+    /// <summary>Stand up a terrain realm straight from the wire geometry (the
+    /// fallback when the map's authored scene isn't in this build): the
+    /// heightfield as a <see cref="RealmTerrain"/> node, solids as stone,
+    /// braziers as fire and light, all under an open dusk sky.</summary>
+    private static void BuildRealm(Node3D parent, DungeonGeometry geometry, HeightField terrain, OcclusionFader fader)
+    {
+        parent.AddChild(new RealmTerrain
+        {
+            OriginX = terrain.OriginX,
+            OriginZ = terrain.OriginZ,
+            CellSize = terrain.CellSize,
+            TerrainWidth = terrain.Width,
+            TerrainDepth = terrain.Depth,
+            Heights = terrain.Heights.ToArray(),
+        });
+
+        BuildSolids(parent, geometry, fader);
+
+        foreach (var prop in geometry.Props)
+            if (prop.Type == PropType.Brazier)
+                parent.AddChild(RealmDressing.MakeBrazier(prop.Position.ToGodot()));
+
+        // The open dusk: sky environment, the low warm sun, the cold counter-glow.
+        parent.AddChild(new WorldEnvironment { Environment = RealmDressing.RealmEnvironment() });
+        parent.AddChild(RealmDressing.MakeSun());
+        parent.AddChild(RealmDressing.MakeFill());
+
+        GD.Print($"Rendering open realm '{geometry.ScenePath}' from geometry " +
+                 $"({terrain.Width}x{terrain.Depth} terrain, {geometry.Solids.Count} solids, {geometry.Props.Count} props)");
     }
 
     private static bool TryLoadAuthoredScene(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)

@@ -17,7 +17,7 @@ public class ClassProtocolTests
             Name = "Boudica",
             Class = (byte)CharacterClass.Ranger,
             Mode = (byte)JoinMode.Create,
-            Dungeon = (byte)DungeonId.Cairn,
+            Dungeon = (byte)DungeonId.Crag,
             InstanceName = "Boudica's revenge",
         };
 
@@ -31,7 +31,7 @@ public class ClassProtocolTests
         Assert.Equal("Boudica", back.Name);
         Assert.Equal((byte)CharacterClass.Ranger, back.Class);
         Assert.Equal((byte)JoinMode.Create, back.Mode);
-        Assert.Equal((byte)DungeonId.Cairn, back.Dungeon);
+        Assert.Equal((byte)DungeonId.Crag, back.Dungeon);
         Assert.Equal("Boudica's revenge", back.InstanceName);
     }
 
@@ -42,8 +42,8 @@ public class ClassProtocolTests
         for (var i = 0; i < DungeonCatalog.All.Length; i++)
             Assert.Equal((DungeonId)i, DungeonCatalog.All[i].Id);
 
-        Assert.Equal(DungeonId.Cairn, DungeonCatalog.Sanitize((byte)DungeonId.Cairn));
-        Assert.Equal(DungeonId.Barrow, DungeonCatalog.Sanitize(200)); // junk byte falls home
+        Assert.Equal(DungeonId.Crag, DungeonCatalog.Sanitize((byte)DungeonId.Crag));
+        Assert.Equal(DungeonId.Crag, DungeonCatalog.Sanitize(200)); // junk byte falls home
 
         foreach (var info in DungeonCatalog.All)
             Assert.Equal(info, DungeonCatalog.ForScene(info.ScenePath));

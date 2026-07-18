@@ -56,7 +56,7 @@ Console.WriteLine("[probe] dialing 127.0.0.1:9050 ...");
 // A forges a raid and is welcomed into it.
 a.Start();
 PumpUntil(() => a.ConnectedToServer);
-a.Forge("Probe Alpha", DungeonId.Barrow);
+a.Forge("Probe Alpha", DungeonId.Crag);
 PumpUntil(() => a.Welcomed);
 Check("A forge welcomed with an instance id", a.Welcomed && a.InstanceId > 0);
 
@@ -66,9 +66,9 @@ PumpUntil(() => b.ConnectedToServer);
 b.RequestList();
 PumpUntil(() => b.LastList is not null);
 var listed = b.LastList?.Instances.Where(e => e.Id == a.InstanceId).Cast<InstanceEntry?>().FirstOrDefault();
-Check("B's list shows A's raid as 1/8 in the Barrow",
+Check("B's list shows A's raid as 1/8 in the Crag",
     listed is { } entry && entry.Name == "Probe Alpha" && entry.Players == 1
-    && entry.MaxPlayers == NetConfig.MaxPlayersPerInstance && entry.Dungeon == (byte)DungeonId.Barrow);
+    && entry.MaxPlayers == NetConfig.MaxPlayersPerInstance && entry.Dungeon == (byte)DungeonId.Crag);
 
 // B joins that raid by id and both raiders share one world.
 b.Join(a.InstanceId);
@@ -84,7 +84,7 @@ Check("B's snapshots carry raider names (for nameplates)",
 // C forges its own raid — a different instance holding only C.
 c.Start();
 PumpUntil(() => c.ConnectedToServer);
-c.Forge("Probe Gamma", DungeonId.Barrow);
+c.Forge("Probe Gamma", DungeonId.Crag);
 PumpUntil(() => c.Welcomed);
 Check("C forged a separate instance", c.Welcomed && c.InstanceId > 0 && c.InstanceId != a.InstanceId);
 PumpUntil(() => c.SnapshotsSeen >= 5);

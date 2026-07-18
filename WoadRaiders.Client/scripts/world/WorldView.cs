@@ -257,7 +257,11 @@ public sealed class WorldView
         // landing in a fresh instance whose boss still stands).
         if (snapshot.PortalOpen && _portal is null)
         {
-            _portal = new PortalView { Position = new Vector3(snapshot.PortalX, snapshot.PortalY, snapshot.PortalZ) };
+            _portal = new PortalView
+            {
+                Position = new Vector3(snapshot.PortalX, snapshot.PortalY, snapshot.PortalZ),
+                FacingYawDegrees = 180f, // mouth toward the court gate its challengers walk in through
+            };
             _parent.AddChild(_portal);
         }
         else if (!snapshot.PortalOpen && _portal is not null)
