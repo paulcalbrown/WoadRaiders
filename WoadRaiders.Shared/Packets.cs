@@ -550,9 +550,6 @@ public sealed class DungeonGeometryPacket : INetSerializable
     /// <summary>Row-major height samples ([z * width + x]); empty without terrain.</summary>
     public float[] TerrainHeights = System.Array.Empty<float>();
 
-    /// <summary>Flattened cosmetic props: 4 floats each (type, x, y, z).</summary>
-    public float[] Props = System.Array.Empty<float>();
-
     public void Serialize(NetDataWriter w)
     {
         w.Put(SpawnX);
@@ -574,10 +571,6 @@ public sealed class DungeonGeometryPacket : INetSerializable
             foreach (var h in TerrainHeights)
                 w.Put(h);
         }
-
-        w.Put((ushort)(Props.Length / 4));
-        foreach (var f in Props)
-            w.Put(f);
     }
 
     public void Deserialize(NetDataReader r)
@@ -612,11 +605,6 @@ public sealed class DungeonGeometryPacket : INetSerializable
         {
             TerrainHeights = System.Array.Empty<float>();
         }
-
-        int propCount = r.GetUShort();
-        Props = new float[propCount * 4];
-        for (var i = 0; i < Props.Length; i++)
-            Props[i] = r.GetFloat();
     }
 }
 

@@ -188,6 +188,18 @@ public sealed class ClientConnection
 
     public void Stop() => _net.Stop();
 
+    /// <summary>Refuse the session from THIS side: the server is healthy, but this
+    /// build cannot play what it is hosting (a realm whose scene we don't ship).
+    /// Terminal, exactly like a version refusal — retrying cannot conjure a map
+    /// that isn't in the build — so it parks in Incompatible and the UI shows
+    /// <paramref name="why"/> verbatim.</summary>
+    public void RefuseLocally(string why)
+    {
+        RefusalMessage = why;
+        State = ConnectionState.Incompatible;
+        Stop();
+    }
+
     /// <summary>Frame and send a packet. Silently dropped while not connected.</summary>
     public void Send(MessageType type, INetSerializable packet, DeliveryMethod delivery) =>
         _server?.Send(NetProtocol.Frame(type, packet), Channel, delivery);

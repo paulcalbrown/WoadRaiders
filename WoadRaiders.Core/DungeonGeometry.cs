@@ -32,8 +32,6 @@ public sealed class DungeonGeometry : IDungeonGeometry
     /// <summary>The smooth terrain base plane. Null → the implicit flat plane y=0.</summary>
     public HeightField? Terrain { get; init; }
 
-    /// <summary>Cosmetic props (braziers etc.) the client dresses the realm with.</summary>
-    public IReadOnlyList<DungeonProp> Props { get; init; } = Array.Empty<DungeonProp>();
 
     /// <summary>Regular enemy spawn markers — where each one is and what type it produces.</summary>
     public IReadOnlyList<EnemySpawnPoint> EnemySpawns { get; }

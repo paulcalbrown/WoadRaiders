@@ -209,7 +209,22 @@ public partial class GameScreen : Node3D
         _mapRoot?.QueueFree();
         _mapRoot = new Node3D { Name = "Map" };
         AddChild(_mapRoot);
-        DungeonVisualBuilder.Build(_mapRoot, _geometry, _fader);
+        if (!DungeonVisualBuilder.Build(_mapRoot, _geometry, _fader))
+        {
+            // The server is hosting a realm whose scene this build doesn't ship.
+            // There is no honest way to draw it, and playing on collision we
+            // cannot see would be worse than stopping — so refuse and say where
+            // a build that CAN draw it lives.
+            var realm = System.IO.Path.GetFileNameWithoutExtension(_geometry.ScenePath ?? "");
+            GD.PrintErr($"No scene in this build for '{_geometry.ScenePath}' — refusing the raid.");
+            _connection.RefuseLocally(
+                $"This build has no map for {(realm.Length > 0 ? realm : "that realm")}. " +
+                $"Get the latest at {NetConfig.DownloadUrl}");
+            _mapRoot.QueueFree();
+            _mapRoot = null;
+            _builtMapFingerprint = null; // a later, playable map must still build
+            return;
+        }
         StartMapMusic(_geometry.ScenePath);
 
         // Announce the arrival — and if we asked to FORGE one dungeon but the

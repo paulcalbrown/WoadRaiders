@@ -16,8 +16,8 @@ public readonly record struct DungeonInfo(
     string Tagline,
     string MapFile,   // geometry JSON in the maps directory (canonical copy: WoadRaiders.Client/maps),
                       // baked from the realm's .tscn scene
-    string ScenePath, // the authored res:// scene the client renders (terrain realms fall back
-                      // to rendering from the geometry when a client lacks the scene)
+    string ScenePath, // the authored res:// scene the client renders — required, and the ONLY
+                      // visual source: a client without it refuses the raid rather than approximate
     string MusicKey); // assets/audio/<key>_theme.wav
 
 /// <summary>

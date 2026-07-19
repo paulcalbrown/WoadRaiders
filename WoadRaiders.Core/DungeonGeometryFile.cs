@@ -18,7 +18,6 @@ namespace WoadRaiders.Core;
 ///     "heights": [w*d floats, row-major]
 ///   },
 ///   "solids": [ { "min": [x,y,z], "max": [x,y,z] }, ... ],
-///   "props": [ { "type": 0, "position": [x,y,z] }, ... ],   (optional — cosmetic set dressing)
 ///   "enemySpawns": [ [x,y,z], ... ],
 ///   "enemySpawnTypes": [ 0, 1, 2, ... ],         (optional — parallel to enemySpawns;
 ///                                                 EnemyType values, missing → all Minion)
@@ -65,21 +64,10 @@ public static class DungeonGeometryFile
             spawns.Add(new EnemySpawnPoint(ToVec(positions[i], "enemySpawn"), (EnemyType)raw));
         }
 
-        var props = new List<DungeonProp>();
-        foreach (var p in doc.Props ?? Array.Empty<PropDoc>())
-        {
-            // Unknown prop types are rejected at the source (a generator bug), not
-            // silently rendered as something else downstream.
-            if (p.Type < 0 || p.Type > (int)PropType.Brazier)
-                throw new InvalidDataException($"'props[].type' = {p.Type} is not a known PropType");
-            props.Add(new DungeonProp((PropType)p.Type, ToVec(p.Position, "prop.position")));
-        }
-
         return new DungeonGeometry(ToVec(doc.Spawn, "spawn"), solids, spawns, ParseTerrain(doc.Terrain))
         {
             ScenePath = string.IsNullOrWhiteSpace(doc.Scene) ? null : doc.Scene,
             BossSpawn = doc.BossSpawn is null ? null : ToVec(doc.BossSpawn, "bossSpawn"),
-            Props = props,
         };
     }
 
@@ -111,13 +99,6 @@ public static class DungeonGeometryFile
                 Min = new[] { s.Min.X, s.Min.Y, s.Min.Z },
                 Max = new[] { s.Max.X, s.Max.Y, s.Max.Z },
             }).ToArray(),
-            Props = g.Props.Count > 0
-                ? g.Props.Select(p => new PropDoc
-                {
-                    Type = (int)p.Type,
-                    Position = new[] { p.Position.X, p.Position.Y, p.Position.Z },
-                }).ToArray()
-                : null,
             EnemySpawns = g.EnemySpawns.Select(s => new[] { s.Position.X, s.Position.Y, s.Position.Z }).ToArray(),
             EnemySpawnTypes = g.EnemySpawns.Select(s => (int)s.Type).ToArray(),
             BossSpawn = g.BossSpawn is { } b ? new[] { b.X, b.Y, b.Z } : null,
@@ -136,7 +117,6 @@ public static class DungeonGeometryFile
         public float[]? Spawn { get; set; }
         public TerrainDoc? Terrain { get; set; }
         public BoxDoc[]? Solids { get; set; }
-        public PropDoc[]? Props { get; set; }
         public float[][]? EnemySpawns { get; set; }
         public int[]? EnemySpawnTypes { get; set; }
         public float[]? BossSpawn { get; set; }
@@ -156,11 +136,5 @@ public static class DungeonGeometryFile
     {
         public float[]? Min { get; set; }
         public float[]? Max { get; set; }
-    }
-
-    private sealed class PropDoc
-    {
-        public int Type { get; set; }
-        public float[]? Position { get; set; }
     }
 }

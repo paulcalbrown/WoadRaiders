@@ -63,7 +63,7 @@ listener.NetworkReceiveEvent += (peer, reader, channel, delivery) =>
             geometry = DungeonSnapshot.ToGeometry(geometryPacket);
             Console.WriteLine($"[probe] geometry: terrain={geometryPacket.HasTerrain} " +
                               $"({geometryPacket.TerrainWidth}x{geometryPacket.TerrainDepth}), " +
-                              $"{geometryPacket.Boxes.Length / 6} solids, {geometryPacket.Props.Length / 4} props");
+                              $"{geometryPacket.Boxes.Length / 6} solids");
             break;
 
         case MessageType.Welcome:
@@ -109,7 +109,7 @@ while (clock.Elapsed < TimeSpan.FromSeconds(12))
 }
 net.Stop();
 
-var terrainOk = geometryPacket is { HasTerrain: true } g && g.Props.Length >= 4 && geometry?.Terrain is not null;
+var terrainOk = geometryPacket is { HasTerrain: true } && geometry?.Terrain is not null;
 var spawnGroundY = geometry is not null && latestPos is not null
     ? geometry.Terrain!.Sample(geometry.SpawnPoint.X, geometry.SpawnPoint.Z)
     : float.NaN;
@@ -134,8 +134,8 @@ if (geometry is not null && latestPos is { } serverPos && spawnY is not null)
                       $"replay pos ({pos.X:0.0}, {pos.Y:0.0}, {pos.Z:0.0})");
 }
 
-Console.WriteLine($"A welcomed (v14 works):        {(welcomed ? "PASS" : "FAIL")}");
-Console.WriteLine($"B terrain + props on wire:     {(terrainOk ? "PASS" : "FAIL")}");
+Console.WriteLine($"A welcomed ({NetConfig.ConnectionKey}):  {(welcomed ? "PASS" : "FAIL")}");
+Console.WriteLine($"B terrain on the wire:         {(terrainOk ? "PASS" : "FAIL")}");
 Console.WriteLine($"C spawn stands on the ground:  {(spawnOk ? "PASS" : $"FAIL (Y={spawnY}, ground={spawnGroundY})")}");
 Console.WriteLine($"D the walk climbed the realm:  {(climbed ? "PASS" : $"FAIL (spawn Y={spawnY}, peak Y={peakY})")}");
 Console.WriteLine($"E client replay agrees:        {(replayOk ? "PASS" : "FAIL")}");

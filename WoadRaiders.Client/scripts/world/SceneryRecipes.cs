@@ -3,89 +3,17 @@ using Godot;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The realm's shared dressing recipes — the dusk sky and light rig, the
-/// burning brazier, weathered stone — used by BOTH the client's from-geometry
-/// fallback renderer (<see cref="DungeonVisualBuilder"/>) and the offline
-/// scene builder (<see cref="RealmSceneBuilder"/>) that bakes generated realms
-/// into natural, script-free .tscn files. One set of values, one look,
-/// wherever the realm is stood up.
+/// A LIBRARY of ready-made scenery, offered to any realm that wants it. Nothing
+/// obliges a realm to use these, and nothing but the realm's own .tscn ever
+/// renders them: a design builds them here, hangs them off the scene, and the
+/// nodes are serialized into the map file. Two realms may look nothing alike.
+///
+/// Scenery is invisible to the simulation. It carries no group, no collision,
+/// no marker name, so the bake walks straight past it — which is why a design
+/// may place as much of it as it likes without touching the served geometry.
 /// </summary>
-public static class RealmDressing
+public static class SceneryRecipes
 {
-    /// <summary>An open dusk over the highland: procedural sky, sky ambient,
-    /// and distance fog to sink the far crags into.</summary>
-    public static Godot.Environment RealmEnvironment() => new()
-    {
-        BackgroundMode = Godot.Environment.BGMode.Sky,
-        Sky = new Sky
-        {
-            SkyMaterial = new ProceduralSkyMaterial
-            {
-                SkyTopColor = new Color(0.09f, 0.12f, 0.22f),
-                SkyHorizonColor = new Color(0.46f, 0.28f, 0.22f), // dusk ember at the rim
-                GroundBottomColor = new Color(0.05f, 0.05f, 0.07f),
-                GroundHorizonColor = new Color(0.30f, 0.20f, 0.17f),
-                SunAngleMax = 30f,
-                SunCurve = 0.6f,
-            },
-        },
-        AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-        AmbientLightEnergy = 0.55f,
-        // Gentle depth fog: sinks the far crags, leaves the brazier pools alone.
-        FogEnabled = true,
-        FogLightColor = new Color(0.23f, 0.20f, 0.24f),
-        FogDensity = 0.00016f,
-        FogSkyAffect = 0.25f,
-    };
-
-    /// <summary>The setting sun: low, warm, and the realm's only shadow-caster.</summary>
-    public static DirectionalLight3D MakeSun() => new()
-    {
-        RotationDegrees = new Vector3(-26f, -40f, 0f),
-        LightColor = new Color(1.0f, 0.80f, 0.58f),
-        LightEnergy = 1.05f,
-        ShadowEnabled = true,
-        DirectionalShadowMaxDistance = 2400f, // shadows near the action; the fog owns the distance
-    };
-
-    /// <summary>The cold woad counter-glow opposite the sun.</summary>
-    public static DirectionalLight3D MakeFill() => new()
-    {
-        RotationDegrees = new Vector3(-32f, 145f, 0f),
-        LightColor = new Color(0.55f, 0.62f, 0.85f),
-        LightEnergy = 0.18f,
-    };
-
-    /// <summary>Weathered stone for the realm's solids: seamless world-triplanar
-    /// noise, no vertex-colour tricks — safe for authored scenes and the
-    /// occlusion fader's transparency path alike.</summary>
-    public static StandardMaterial3D StoneMaterial()
-    {
-        var ramp = new Gradient();
-        ramp.SetColor(0, new Color(0.21f, 0.20f, 0.22f));
-        ramp.SetColor(1, new Color(0.38f, 0.37f, 0.41f));
-
-        var albedoNoise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, Frequency = 0.05f, Seed = 3 };
-        var albedo = new NoiseTexture2D { Noise = albedoNoise, Width = 256, Height = 256, Seamless = true, ColorRamp = ramp };
-
-        var normalNoise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, Frequency = 0.08f, Seed = 4 };
-        var normal = new NoiseTexture2D
-        {
-            Noise = normalNoise, Width = 256, Height = 256, Seamless = true, AsNormalMap = true, BumpStrength = 3f,
-        };
-
-        return new StandardMaterial3D
-        {
-            AlbedoTexture = albedo,
-            NormalEnabled = true,
-            NormalTexture = normal,
-            Roughness = 0.95f,
-            Uv1Triplanar = true,
-            Uv1WorldTriplanar = true,
-            Uv1Scale = new Vector3(0.012f, 0.012f, 0.012f),
-        };
-    }
-
     /// <summary>A burning waymarker: a dark iron bowl, a warm pool of light, and a
     /// billboarded flame — the realm's landmarks after dusk.</summary>
     public static Node3D MakeBrazier(Vector3 position)
@@ -117,7 +45,8 @@ public static class RealmDressing
     }
 
     /// <summary>The proven torch-flame recipe (tall tapering embers, billboarded,
-    /// preprocessed so it burns from the first frame), built in code.</summary>
+    /// preprocessed so it burns from the first frame), built in code. Public
+    /// because a design lighting its own scenery wants exactly this.</summary>
     public static GpuParticles3D MakeFlame(Vector3 position)
     {
         var colorRamp = new Gradient();

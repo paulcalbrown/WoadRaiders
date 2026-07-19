@@ -64,9 +64,12 @@ public static class NetConfig
     /// v13 = connect rejects carry a <see cref="ConnectDeniedPacket"/> payload
     ///       (server key + reason), so an outdated client learns why,
     /// v14 = open realms (DungeonGeometryPacket heightfield terrain + props;
-    ///       the Gauntlet-style realm rework).
+    ///       the Gauntlet-style realm rework),
+    /// v15 = props dropped from DungeonGeometryPacket. The authored .tscn is the
+    ///       only visual source, so nothing ever rendered from that record; a
+    ///       cosmetic landmark is now just a node in the scene.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v14";
+    public const string ConnectionKey = "WoadRaiders.v15";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";
