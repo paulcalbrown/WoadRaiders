@@ -1,13 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using WoadRaiders.Core;
 
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The Crag's DESIGN — the layout math that computes the realm: a "wild"
+/// The Crag's DESIGN — one <see cref="IRealmDesign"/> among however many: a
+/// "wild"
 /// highland of crags is the default, and the playable realm is carved into it
 /// as a chain of smooth-blended plates (discs and capsules with target
 /// heights) — glen → dale → gorge bridge → switchback climb → rolling moor
@@ -16,20 +14,49 @@ namespace WoadRaiders.Client;
 /// place (rogue ambush) with a scree ramp back out. Deterministic: same
 /// numbers, same realm, every run (hash noise, no framework RNG).
 ///
-/// This lives CLIENT-SIDE, next to the scene builder that consumes it, so the
+/// This lives CLIENT-SIDE, next to the scene builder that runs it, so the
 /// design can place ANYTHING Godot can express — the simulation-relevant parts
 /// (terrain, collision, markers, braziers) follow the bake conventions, and
 /// everything else (the boulder scatter, and whatever dressing comes later) is
 /// pure scenery the bake never needs to understand. The served geometry JSON
 /// is BAKED FROM the finished scene, never the other way around.
 /// </summary>
-public static class CragDesign
+public sealed partial class CragDesign : IRealmDesign
 {
-    public const float Cell = 40f;          // world units between height samples
-    public const int W = 151, D = 161;      // samples: the realm is 6000 x 6400 world units
-    private const int Seed = 77;
+    public string Name => "Crag";
 
-    public const string Name = "Crag";
+    /// <summary>Compose the realm: the look, then the land, then what stands on
+    /// it, then the cast, then pure scenery. The order here is the scene's node
+    /// order.</summary>
+    public RealmScene Build()
+    {
+        var scene = new RealmScene();
+
+        // This realm's own dusk, light rig, and stone (CragDesign.Scenery.cs).
+        DressWithDusk(scene);
+
+        var field = BuildHeightField();
+        // Highland colours baked into the mesh; the material reads them back.
+        scene.AddTerrain(field, HighlandColour, TerrainSurface.Material());
+        // The Crag's works are weathered stone — one material, shared by every box.
+        scene.AddSolids(Solids(field), Stone());
+
+        DressWithBraziers(scene);
+
+        scene.SetPlayerSpawn(scene.OnGround(PlayerSpawn.X, PlayerSpawn.Z));
+        foreach (var enemy in Enemies)
+            scene.AddEnemy(enemy.Type, scene.OnGround(enemy.X, enemy.Z));
+        scene.SetBossSpawn(scene.OnGround(BossSpawn.X, BossSpawn.Z));
+
+        // ---- pure scenery, past here: nothing the simulation ever sees. ----
+        DressWithBoulders(scene);
+
+        return scene;
+    }
+
+    private const float Cell = 40f;          // world units between height samples
+    private const int W = 151, D = 161;      // samples: the realm is 6000 x 6400 world units
+    private const int Seed = 77;
 
     // ------------------------------------------------------------- noise
 
@@ -132,7 +159,7 @@ public static class CragDesign
         return (h, 1f - s * s * (3f - 2f * s));
     }
 
-    public static float HeightAt(float x, float z)
+    private static float HeightAt(float x, float z)
     {
         var p = new Vector2(x, z);
 
@@ -172,10 +199,13 @@ public static class CragDesign
         return height;
     }
 
-    /// <summary>The heightfield the terrain mesh is built from (and the bake will
-    /// sample back). Heights rounded to 3 decimals so every stage carries the
+    /// <summary>Evaluate the layout math over the sample grid — the heightfield
+    /// this realm's terrain mesh is built from. (Deliberately NOT called a bake:
+    /// in this project "the bake" means the later step that samples the finished
+    /// .tscn into server geometry. This runs before any scene exists.) Heights
+    /// are rounded to 3 decimals so design, mesh, and bake all carry the
     /// identical value.</summary>
-    public static HeightField BakeField()
+    private static HeightField BuildHeightField()
     {
         var heights = new float[W * D];
         for (var j = 0; j < D; j++)
@@ -186,7 +216,7 @@ public static class CragDesign
 
     // ------------------------------------------------------------- solids
 
-    public static List<Aabb> Solids(HeightField field)
+    private static List<Aabb> Solids(HeightField field)
     {
         var solids = new List<Aabb>
         {
@@ -224,7 +254,7 @@ public static class CragDesign
 
     // ------------------------------------------------------------- the cast
 
-    public static readonly (EnemyType Type, float X, float Z)[] Enemies =
+    private static readonly (EnemyType Type, float X, float Z)[] Enemies =
     {
         // The glen and dale: minions guard the first walk.
         (EnemyType.Minion, 1500, 750), (EnemyType.Minion, 1900, 850), (EnemyType.Minion, 2350, 950),
@@ -249,7 +279,7 @@ public static class CragDesign
         (EnemyType.Rogue, 4100, 4900), (EnemyType.Rogue, 4300, 4900),
     };
 
-    public static readonly (float X, float Z)[] BrazierSpots =
+    private static readonly (float X, float Z)[] BrazierSpots =
     {
         (640, 640), (760, 640),                    // the spawn gate
         (900, 700), (1500, 780), (2100, 880), (2500, 1020), (2900, 1090),
@@ -265,8 +295,8 @@ public static class CragDesign
         (4100, 4820), (4300, 4820),                // flanking the throne
     };
 
-    public static readonly (float X, float Z) PlayerSpawn = (700, 700);
-    public static readonly (float X, float Z) BossSpawn = (4200, 4820);
+    private static readonly (float X, float Z) PlayerSpawn = (700, 700);
+    private static readonly (float X, float Z) BossSpawn = (4200, 4820);
 
     // ------------------------------------------------------------- scenery
     // Pure dressing — the whole point of building the scene FIRST: nothing
@@ -275,7 +305,7 @@ public static class CragDesign
     /// <summary>Deterministic boulder scatter for the crag faces: position,
     /// overall size, yaw, and which rock variant. Rocks favour steep, wild
     /// ground (the slopes nobody walks), never the gorge depths or the rim.</summary>
-    public static IEnumerable<(Vector3 Position, float Size, float Yaw, int Variant)> Boulders()
+    private static IEnumerable<(Vector3 Position, float Size, float Yaw, int Variant)> Boulders()
     {
         for (var gz = 200; gz < 6200; gz += 120)
         {

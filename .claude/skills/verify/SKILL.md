@@ -32,33 +32,41 @@ Custom maps are plain JSON (see `DungeonGeometryFile` docs): `spawn: [x,y,z]`,
 `enemySpawns: [[x,y,z],...]`, optional `enemySpawnTypes` (0 Minion, 1 Rogue,
 2 Mage — parallel array), optional `bossSpawn`, optional `terrain` (a smooth
 heightfield: originX/originZ/cellSize/width/depth + row-major `heights` — the
-base plane movement rides; see the verticality rules in `DungeonGeometry`) and
-`props` (cosmetic braziers).
+base plane movement rides; see the verticality rules in `DungeonGeometry`).
+The geometry carries SIM truth only — scenery lives in the .tscn and never
+reaches the wire.
 
 **Realms are authored as Godot .tscn scenes and PLAYED from baked JSON —
 and the SCENE COMES FIRST, for generated and hand-made realms alike.**
 The generated scene is a NATURAL Godot file — saved by Godot's own
 ResourceSaver, built-in nodes and resources only, a REAL displaced terrain
 ArrayMesh plus free-form scenery (boulder fields today), no scripts, no
-metadata; it opens whole in any Godot editor. The design lives CLIENT-SIDE
-(`WoadRaiders.Client/scripts/tools/CragDesign.cs` — layout math — consumed by
-`RealmSceneBuilder`), so it can place ANYTHING Godot can express; nothing is
-ever generated from the geometry JSON. `dotnet run tools/GenerateRealm.cs`
-does the whole chain: builds the client → drives godot-mono to build
-`Crag.tscn` from the design (tools/build_realm_scene.gd) → normalizes the
-serializer's random ids (deterministic regeneration) → bakes `Crag.json`
+metadata; it opens whole in any Godot editor. Designs live CLIENT-SIDE as
+`IRealmDesign`s (`WoadRaiders.Client/scripts/tools/CragDesign.cs` — layout
+math) that build a `RealmScene` (the facade holding the bake conventions) and
+hand it back, so a design can place ANYTHING Godot can express; a new scene
+starts EMPTY, so a design states its own sky, lights, and materials (a look
+belongs to its realm; `TerrainSurface` and `SceneryRecipes` offer shared
+pieces, but a realm states its own colours). The `RealmSceneBuilder` that runs them knows
+no realm — it names the root after the design and saves. Nothing is ever generated
+from the geometry JSON. `dotnet run tools/GenerateRealm.cs [realm]` (default
+`Crag`) does the whole chain: builds the client → drives godot-mono to build
+`<realm>.tscn` from its design (tools/build_realm_scene.gd) → normalizes the
+serializer's random ids (deterministic regeneration) → bakes `<realm>.json`
 FROM the scene via the standard hand-made pipeline (bake_realm.gd) →
-validates the BAKED geometry (RealmValidator + the route walk). Reshape the
-realm by editing CragDesign.cs and rerunning; hand-edits to Crag.tscn are
-equally fine — re-bake + ValidateRealm afterwards (steps 2–3 below).
+validates the BAKED geometry (RealmValidator + the route walk, where the
+realm has a route). Reshape a realm by editing its design and rerunning; add
+one with a design class + a line in `RealmDesigns`. Hand-edits to the .tscn
+are equally fine — re-bake + ValidateRealm afterwards (steps 2–3 below).
 The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
   1. Terrain: ANY meshes in group `terrain` (the natural way — sculpt in
      Blender, CSG, or edit the generated Terrain mesh; put big ground meshes
      in `no_fade` too). A `RealmTerrain` node or `metadata/terrain_*` on the
      root also work (bake reads them without sampling). Collision:
      axis-aligned `BoxShape3D` CollisionShape3Ds. Markers: `PlayerSpawn`
-     (required), `EnemySpawnN[_Rogue|_Mage]`, `BossSpawn`; braziers = nodes
-     in group `brazier`.
+     (required), `EnemySpawnN[_Rogue|_Mage]`, `BossSpawn`. Scenery (braziers,
+     banners, rocks) needs NO convention — the bake ignores what it doesn't
+     recognise, so place whatever you like.
   2. Bake to server geometry: `dotnet build WoadRaiders.Client`, then
      `godot-mono --headless --path WoadRaiders.Client -s
      res://tools/bake_realm.gd -- res://maps/MyRealm.tscn
@@ -68,8 +76,10 @@ The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
   3. `dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.json`
      — Core.RealmValidator proves camps reachable, borders sealed, no
      stranding pits. `--compare` proves two maps carry identical sim geometry.
-  4. Serve the JSON with `--map`; clients that have the scene render it as
-     authored, clients that don't rebuild the realm from the wire geometry.
+  4. Serve the JSON with `--map`; every client renders the scene as authored.
+     A client whose build lacks that .tscn REFUSES the raid (terminal
+     Incompatible + the download URL) — there is no from-geometry renderer,
+     so a map must ship in the build that plays it.
 `SpawnDirector` clamps the live population to 40 regulars no matter how many
 markers the map has. An all-Mage map keeps projectiles in the snapshot, which
 is the cheapest way to inflate world size.
@@ -80,8 +90,8 @@ Working examples live in `tools/` (.NET 10 file-based apps — `dotnet run
 tools/<Probe>.cs` with the server up):
 - `ClassProbe.cs` forges an instance as a mage, walks to the nearest enemy,
   shoots it, and asserts class + projectile facts from the snapshot stream.
-- `TerrainProbe.cs` verifies the open-realm terrain: the heightfield + props
-  arrive on the wire, the spawn stands ON the ground, walking east RAISES the
+- `TerrainProbe.cs` verifies the open-realm terrain: the heightfield
+  arrives on the wire, the spawn stands ON the ground, walking east RAISES the
   authoritative Y (server-side verticality), and replaying the same inputs over
   the client-rebuilt geometry lands where the server says (prediction-grade
   determinism).

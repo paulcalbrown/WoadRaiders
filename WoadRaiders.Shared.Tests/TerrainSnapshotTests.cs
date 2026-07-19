@@ -24,11 +24,6 @@ public class TerrainSnapshotTests
             new HeightField(-80f, -120f, 40f, 4, 3, heights))
         {
             ScenePath = "realm:crag",
-            Props = new[]
-            {
-                new DungeonProp(PropType.Brazier, new Vector3(1, 2, 3)),
-                new DungeonProp(PropType.Brazier, new Vector3(-4, 5.5f, 6)),
-            },
         };
     }
 
@@ -55,8 +50,6 @@ public class TerrainSnapshotTests
         Assert.Equal(3, terrain.Depth);
         Assert.Equal(Realm().Terrain!.Heights, terrain.Heights); // exact floats, sample for sample
 
-        Assert.Equal(2, geometry.Props.Count);
-        Assert.Equal(new Vector3(-4, 5.5f, 6), geometry.Props[1].Position);
         Assert.Equal("realm:crag", geometry.ScenePath);
 
         // The rebuilt geometry must SIMULATE identically: same ground, same walk.
@@ -78,7 +71,6 @@ public class TerrainSnapshotTests
         Assert.False(packet.HasTerrain);
         var geometry = DungeonSnapshot.ToGeometry(packet);
         Assert.Null(geometry.Terrain);
-        Assert.Empty(geometry.Props);
         Assert.Equal(0f, geometry.GroundHeight(123f, 456f)); // the implicit flat plane
     }
 

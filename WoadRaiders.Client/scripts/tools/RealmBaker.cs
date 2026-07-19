@@ -49,7 +49,9 @@ public partial class RealmBaker : RefCounted
         }
         var root = packed.Instantiate();
         var triangles = new List<SysVec3>();
-        CollectTerrainTriangles(root, Transform3D.Identity, triangles);
+        var footprints = new List<MeshBox>();
+        CollectTerrainTriangles(root, root.Name, Transform3D.Identity, triangles, footprints);
+        WarnAboutUngroupedGround(footprints);
         var cellSize = root.HasMeta("terrain_cell_size")
             ? (float)root.GetMeta("terrain_cell_size").AsDouble()
             : DefaultCellSize;
@@ -81,25 +83,89 @@ public partial class RealmBaker : RefCounted
 
         GD.Print($"baked {geometry.Solids.Count} solids, {geometry.EnemySpawns.Count} enemy spawns" +
                  $"{(geometry.BossSpawn is not null ? " + boss" : "")}, " +
-                 $"{(geometry.Terrain is { } t ? $"{t.Width}x{t.Depth} terrain" : "no terrain")}, " +
-                 $"{geometry.Props.Count} props -> {outPath}");
+                 $"{(geometry.Terrain is { } t ? $"{t.Width}x{t.Depth} terrain" : "no terrain")} " +
+                 $"-> {outPath}");
         return 0;
     }
 
-    private static void CollectTerrainTriangles(Node node, Transform3D parentXf, List<SysVec3> triangles)
+    /// <summary>One mesh's plan-view (XZ) extent, and whether the author declared
+    /// it ground. Used only by <see cref="WarnAboutUngroupedGround"/>.</summary>
+    private readonly record struct MeshBox(string Path, bool IsTerrain, Vector2 Min, Vector2 Max);
+
+    private static void CollectTerrainTriangles(Node node, string path, Transform3D parentXf,
+                                                List<SysVec3> triangles, List<MeshBox> footprints)
     {
         var xf = node is Node3D spatial ? parentXf * spatial.Transform : parentXf;
 
-        if (node is MeshInstance3D { Mesh: { } mesh } instance && instance.IsInGroup("terrain"))
+        if (node is MeshInstance3D { Mesh: { } mesh } instance)
         {
-            foreach (var vertex in mesh.GetFaces())
+            var isTerrain = instance.IsInGroup("terrain");
+            if (isTerrain)
             {
-                var world = xf * vertex;
-                triangles.Add(new SysVec3(world.X, world.Y, world.Z));
+                foreach (var vertex in mesh.GetFaces())
+                {
+                    var world = xf * vertex;
+                    triangles.Add(new SysVec3(world.X, world.Y, world.Z));
+                }
             }
+
+            // Plan-view extent from the mesh's own AABB — its eight corners through
+            // the world transform, so rotation is respected without walking faces.
+            var local = mesh.GetAabb();
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
+            for (var c = 0; c < 8; c++)
+            {
+                var corner = xf * local.GetEndpoint(c);
+                min = new Vector2(Mathf.Min(min.X, corner.X), Mathf.Min(min.Y, corner.Z));
+                max = new Vector2(Mathf.Max(max.X, corner.X), Mathf.Max(max.Y, corner.Z));
+            }
+            footprints.Add(new MeshBox(path, isTerrain, min, max));
         }
 
         foreach (var child in node.GetChildren())
-            CollectTerrainTriangles(child, xf, triangles);
+            CollectTerrainTriangles(child, $"{path}/{child.Name}", triangles: triangles, footprints: footprints, parentXf: xf);
+    }
+
+    /// <summary>How much of the realm's plan view a mesh must cover, on BOTH axes,
+    /// before an ungrouped one looks like forgotten ground rather than scenery.
+    /// The Crag's largest non-terrain mesh (a rampart wall) is 13% x 1%, and
+    /// terrain split into 4x4 chunks would be 25% each — so this sits between.</summary>
+    private const float GroundSuspicionFraction = 0.2f;
+
+    /// <summary>Catch the realistic authoring slip: a ground mesh that never made
+    /// it into the "terrain" group. Nothing can INFER which meshes are walkable —
+    /// a hill and a boulder are the same triangles, and only the author knows
+    /// which one raiders stand on — but a mesh spanning much of the realm in plan
+    /// view is worth a second look. A warning, never an error: a wide decorative
+    /// plane (water, a plaza) is perfectly legitimate.</summary>
+    private static void WarnAboutUngroupedGround(List<MeshBox> footprints)
+    {
+        if (footprints.Count == 0)
+            return;
+
+        var min = new Vector2(float.MaxValue, float.MaxValue);
+        var max = new Vector2(float.MinValue, float.MinValue);
+        foreach (var box in footprints)
+        {
+            min = new Vector2(Mathf.Min(min.X, box.Min.X), Mathf.Min(min.Y, box.Min.Y));
+            max = new Vector2(Mathf.Max(max.X, box.Max.X), Mathf.Max(max.Y, box.Max.Y));
+        }
+        var span = max - min;
+        if (span.X <= 0f || span.Y <= 0f)
+            return;
+
+        foreach (var box in footprints)
+        {
+            if (box.IsTerrain)
+                continue;
+            var coverX = (box.Max.X - box.Min.X) / span.X;
+            var coverZ = (box.Max.Y - box.Min.Y) / span.Y;
+            if (coverX < GroundSuspicionFraction || coverZ < GroundSuspicionFraction)
+                continue;
+            GD.PrintErr($"warning: '{box.Path}' spans {coverX:P0} x {coverZ:P0} of the realm in plan view " +
+                        "but is NOT in the \"terrain\" group, so the bake will not sample it. If raiders are " +
+                        "meant to walk on it, add it to \"terrain\" (and to \"no_fade\"); if it is scenery, ignore this.");
+        }
     }
 }

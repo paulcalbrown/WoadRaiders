@@ -61,7 +61,7 @@ target from `Core`/`Shared`.
   loot piles up) — so every snapshot is framed as one or more tick-stamped chunks (most fit in
   one), and the client's `SnapshotAssembler` reassembles them with a tick guard that restores
   the never-deliver-stale property the old Sequenced channel provided.
-- The **connection key** (`WoadRaiders.v14`) is bumped whenever the wire format changes — the
+- The **connection key** (`WoadRaiders.v15`) is bumped whenever the wire format changes — the
   only build-compatibility gate at connect time. A refused connect is answered with a
   `ConnectDenied` payload (frozen format, readable across version gates) saying why — outdated
   build (with the download URL) or full server — so the client can tell the player instead of
@@ -219,15 +219,20 @@ core loop earns it.
       scenes**: the generated scene is saved by **Godot's own serializer** and contains only
       built-in nodes and resources — a REAL displaced terrain `ArrayMesh`, stone, braziers,
       lights, markers; no scripts, no metadata — so it opens whole in any Godot editor,
-      exactly as if someone had modelled it there (clients missing a custom map's scene
-      rebuild the realm from the wire geometry instead). The camera became a perspective
+      exactly as if someone had modelled it there (the scene is the ONLY visual source — a
+      client missing it refuses the raid with the download link rather than approximate it). The camera became a perspective
       **chase rig** that swings behind your travel and keeps clear of the land (movement
       keys are camera-relative). The first realm, **The Crag**
       (glen → gorge bridge → switchback climbs → rolling moor with a standing-stone circle →
       walled summit court, ~260 units of climb), is **generated scene-first**: its design
-      lives client-side (`scripts/tools/CragDesign.cs` — the layout math — consumed by
-      `RealmSceneBuilder`, which has the whole engine to dress the realm with: any meshes,
-      materials, particles, or asset kits; boulder fields are the first pure scenery).
+      lives client-side as an `IRealmDesign` (`scripts/tools/CragDesign.cs` — the layout
+      math) that builds and returns a `RealmScene`, the facade holding the bake
+      conventions; a new scene starts empty, so each design states its own look, and the
+      realm-agnostic `RealmSceneBuilder` just runs whichever design was asked for and
+      saves the result. A design has the whole engine to dress the realm
+      with: any meshes, materials, particles, or asset kits; boulder fields are the first
+      pure scenery. Adding a realm is a design class, a line in `RealmDesigns`, and
+      `dotnet run tools/GenerateRealm.cs <Name>`.
       `tools/GenerateRealm.cs` orchestrates: Godot builds and saves `Crag.tscn` itself
       (ResourceSaver, random ids normalized so regeneration is byte-deterministic), then
       `Crag.json` — the geometry the server hosts — is **baked FROM the scene** by the same
@@ -257,15 +262,18 @@ core loop earns it.
       realm's Terrain mesh), which the bake tool samples from above onto a heightfield grid
       (`terrain_cell_size` metadata on the root overrides the 40-unit default; put big
       ground meshes in `no_fade` too; the sampling math is the unit-tested
-      `Core.TerrainSampler`) — plus nodes in the `brazier` group for fire props, then check
+      `Core.TerrainSampler`). Scenery — braziers, banners, anything — needs no convention
+      at all: the bake walks past whatever it doesn't recognise. Then check
       the baked JSON with `dotnet run tools/ValidateRealm.cs` (camps reachable, borders
-      sealed, no stranding pits — the same bar the generated realm passes). Clients that
-      have the scene render it as authored; clients that don't rebuild the realm from the
-      wire geometry, so a custom-map server never shows anyone an empty world.
+      sealed, no stranding pits — the same bar the generated realm passes). Every client
+      renders the scene as authored; one that lacks it refuses the raid (see below) rather
+      than draw a second, diverging version of the realm.
 - [x] **Dungeon art pass** — hand-crafted maps **render their own Godot scene** (meshes,
       materials, lights authored in the editor; the collision boxes stay the sim truth). The export
       tool records the source scene in the JSON; the server passes it over the wire; the client
-      instantiates it — falling back to placeholder textured boxes if the scene is missing. The wall
+      instantiates it — *(the placeholder-box fallback for a missing scene was retired: the
+      authored scene is now the only visual truth, and a client without it refuses the raid
+      and points at the download URL)*. The wall
       occlusion fade works on authored meshes too (tall meshes only, via `GeometryInstance3D`
       transparency; opt out with a `no_fade` group). `TestArena.tscn` demos it with its own
       materials and torch-lit braziers.
@@ -361,6 +369,6 @@ the realm checker (`ValidateRealm.cs` — the same playability bar for hand-made
 LiteNetLib **probes** (`ClassProbe`, `InstanceProbe`, `PortalProbe`, `TerrainProbe`) that
 verify class stats, instance isolation, the portal flow, and the terrain/verticality
 end-to-end against a running server — no Godot needed. The Godot-side pieces (the
-`CragDesign` layout math + `RealmSceneBuilder`, `bake_realm.gd` — baking any scene to
+realm designs + `RealmScene`/`RealmSceneBuilder`, `bake_realm.gd` — baking any scene to
 server geometry via the C# `RealmBaker` + `Core.TerrainSampler`, `build_realm_scene.gd`,
 scene measurement) live in `WoadRaiders.Client/`.

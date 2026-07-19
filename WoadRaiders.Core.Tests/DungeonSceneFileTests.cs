@@ -90,11 +90,10 @@ public class DungeonSceneFileTests
             geometry.EnemySpawns.Select(s => s.Type).ToArray());
         Assert.Equal(new Vector3(30, 0, 40), geometry.EnemySpawns[0].Position);
 
-        // One brazier prop, at its transform COMPOSED with the holder's; the
-        // "Braziers" folder node itself is not a prop.
-        var prop = Assert.Single(geometry.Props);
-        Assert.Equal(PropType.Brazier, prop.Type);
-        Assert.Equal(new Vector3(7, 8, 9), prop.Position);
+        // The fixture still carries a node in the old "brazier" group ON PURPOSE:
+        // props were removed from the format, so that group means nothing now.
+        // The parser must walk straight past it — which the exact solid, spawn,
+        // and marker counts asserted above prove it does.
     }
 
     [Fact]

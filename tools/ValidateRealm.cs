@@ -34,7 +34,7 @@ var map = MapLoader.Load(args[0]);
 Console.WriteLine($"[{Path.GetFileName(args[0])}] scene={map.ScenePath ?? "(none)"}, " +
                   $"{(map.Terrain is { } t ? $"terrain {t.Width}x{t.Depth} @ {t.CellSize}" : "no terrain")}, " +
                   $"{map.Solids.Count} solids, {map.EnemySpawns.Count} enemy spawns" +
-                  $"{(map.BossSpawn is not null ? " + boss" : "")}, {map.Props.Count} props");
+                  $"{(map.BossSpawn is not null ? " + boss" : "")}");
 
 var ok = true;
 if (map.Terrain is null)
@@ -101,12 +101,6 @@ if (args.Length == 3)
     Check("enemy spawns", map.EnemySpawns.Select(SpawnKey).OrderBy(k => k)
             .SequenceEqual(other.EnemySpawns.Select(SpawnKey).OrderBy(k => k)),
         $"{map.EnemySpawns.Count} vs {other.EnemySpawns.Count}");
-
-    string PropKey(DungeonProp p) =>
-        $"{p.Type}:{p.Position.X:0.##},{p.Position.Y:0.##},{p.Position.Z:0.##}";
-    Check("props", map.Props.Select(PropKey).OrderBy(k => k)
-            .SequenceEqual(other.Props.Select(PropKey).OrderBy(k => k)),
-        $"{map.Props.Count} vs {other.Props.Count}");
 
     Console.WriteLine(same ? "compare: GEOMETRY IDENTICAL" : "compare: GEOMETRY DIFFERS");
     ok &= same;

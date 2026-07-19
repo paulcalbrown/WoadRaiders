@@ -27,16 +27,6 @@ public static class DungeonSnapshot
             boxes[i * 6 + 5] = s.Max.Z;
         }
 
-        var props = new float[dungeon.Props.Count * 4];
-        for (var i = 0; i < dungeon.Props.Count; i++)
-        {
-            var p = dungeon.Props[i];
-            props[i * 4 + 0] = (float)p.Type;
-            props[i * 4 + 1] = p.Position.X;
-            props[i * 4 + 2] = p.Position.Y;
-            props[i * 4 + 3] = p.Position.Z;
-        }
-
         var packet = new DungeonGeometryPacket
         {
             SpawnX = dungeon.SpawnPoint.X,
@@ -44,7 +34,6 @@ public static class DungeonSnapshot
             SpawnZ = dungeon.SpawnPoint.Z,
             ScenePath = dungeon.ScenePath ?? "",
             Boxes = boxes,
-            Props = props,
         };
 
         if (dungeon.Terrain is { } t)
@@ -76,18 +65,6 @@ public static class DungeonSnapshot
                 new Vector3(packet.Boxes[i], packet.Boxes[i + 1], packet.Boxes[i + 2]),
                 new Vector3(packet.Boxes[i + 3], packet.Boxes[i + 4], packet.Boxes[i + 5])));
 
-        var props = new List<DungeonProp>(packet.Props.Length / 4);
-        for (var i = 0; i + 3 < packet.Props.Length; i += 4)
-        {
-            // Tolerate an unknown prop type byte (version skew) by skipping it —
-            // props are cosmetics; never crash the receive path over them.
-            var raw = (int)packet.Props[i];
-            if (raw < 0 || raw > (int)PropType.Brazier)
-                continue;
-            props.Add(new DungeonProp((PropType)raw,
-                new Vector3(packet.Props[i + 1], packet.Props[i + 2], packet.Props[i + 3])));
-        }
-
         var terrain = packet.HasTerrain
             ? new HeightField(packet.TerrainOriginX, packet.TerrainOriginZ, packet.TerrainCellSize,
                               packet.TerrainWidth, packet.TerrainDepth, packet.TerrainHeights)
@@ -98,7 +75,6 @@ public static class DungeonSnapshot
             solids, Array.Empty<EnemySpawnPoint>(), terrain)
         {
             ScenePath = string.IsNullOrEmpty(packet.ScenePath) ? null : packet.ScenePath,
-            Props = props,
         };
     }
 
@@ -129,8 +105,6 @@ public static class DungeonSnapshot
             foreach (var h in packet.TerrainHeights)
                 hash.Add(h);
         }
-        foreach (var f in packet.Props)
-            hash.Add(f);
         return hash.ToHashCode();
     }
 }

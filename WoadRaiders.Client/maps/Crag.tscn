@@ -2580,7 +2580,7 @@ shape = SubResource("BoxShape3D_16")
 
 [node name="Braziers" type="Node3D" parent="."]
 
-[node name="Brazier0" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier0" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 640, 1.313, 640)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier0"]
@@ -2602,7 +2602,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_1")
 draw_pass_1 = SubResource("QuadMesh_1")
 
-[node name="Brazier1" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier1" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 760, 1.898, 640)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier1"]
@@ -2624,7 +2624,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_2")
 draw_pass_1 = SubResource("QuadMesh_2")
 
-[node name="Brazier2" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier2" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 900, 1.5875001, 700)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier2"]
@@ -2646,7 +2646,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_3")
 draw_pass_1 = SubResource("QuadMesh_3")
 
-[node name="Brazier3" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier3" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1500, 12.485001, 780)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier3"]
@@ -2668,7 +2668,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_4")
 draw_pass_1 = SubResource("QuadMesh_4")
 
-[node name="Brazier4" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier4" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2100, 23.586, 880)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier4"]
@@ -2690,7 +2690,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_5")
 draw_pass_1 = SubResource("QuadMesh_5")
 
-[node name="Brazier5" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier5" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2500, 29.598751, 1020)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier5"]
@@ -2712,7 +2712,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_6")
 draw_pass_1 = SubResource("QuadMesh_6")
 
-[node name="Brazier6" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier6" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2900, 36.572876, 1090)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier6"]
@@ -2734,7 +2734,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_7")
 draw_pass_1 = SubResource("QuadMesh_7")
 
-[node name="Brazier7" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier7" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3080, -24.095, 1040)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier7"]
@@ -2756,7 +2756,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_8")
 draw_pass_1 = SubResource("QuadMesh_8")
 
-[node name="Brazier8" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier8" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3600, 40.207, 1040)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier8"]
@@ -2778,7 +2778,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_9")
 draw_pass_1 = SubResource("QuadMesh_9")
 
-[node name="Brazier9" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier9" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3800, 44.0545, 1140)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier9"]
@@ -2800,7 +2800,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_10")
 draw_pass_1 = SubResource("QuadMesh_10")
 
-[node name="Brazier10" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier10" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4300, 76.963, 1210)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier10"]
@@ -2822,7 +2822,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_11")
 draw_pass_1 = SubResource("QuadMesh_11")
 
-[node name="Brazier11" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier11" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4700, 97.492004, 1300)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier11"]
@@ -2844,7 +2844,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_12")
 draw_pass_1 = SubResource("QuadMesh_12")
 
-[node name="Brazier12" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier12" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4300, 126.866, 1520)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier12"]
@@ -2866,7 +2866,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_13")
 draw_pass_1 = SubResource("QuadMesh_13")
 
-[node name="Brazier13" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier13" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3950, 147.7472, 1630)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier13"]
@@ -2888,7 +2888,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_14")
 draw_pass_1 = SubResource("QuadMesh_14")
 
-[node name="Brazier14" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier14" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3780, 149.66513, 1830)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier14"]
@@ -2910,7 +2910,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_15")
 draw_pass_1 = SubResource("QuadMesh_15")
 
-[node name="Brazier15" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier15" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3850, 148.8045, 2200)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier15"]
@@ -2932,7 +2932,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_16")
 draw_pass_1 = SubResource("QuadMesh_16")
 
-[node name="Brazier16" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier16" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4130, 150.87743, 2530)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier16"]
@@ -2954,7 +2954,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_17")
 draw_pass_1 = SubResource("QuadMesh_17")
 
-[node name="Brazier17" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier17" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4470, 153.4045, 2530)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier17"]
@@ -2976,7 +2976,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_18")
 draw_pass_1 = SubResource("QuadMesh_18")
 
-[node name="Brazier18" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier18" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4130, 152.34299, 2870)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier18"]
@@ -2998,7 +2998,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_19")
 draw_pass_1 = SubResource("QuadMesh_19")
 
-[node name="Brazier19" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier19" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4470, 152.19594, 2870)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier19"]
@@ -3020,7 +3020,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_20")
 draw_pass_1 = SubResource("QuadMesh_20")
 
-[node name="Brazier20" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier20" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2450, 182.41144, 1950)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier20"]
@@ -3042,7 +3042,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_21")
 draw_pass_1 = SubResource("QuadMesh_21")
 
-[node name="Brazier21" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier21" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2500, 10.594, 600)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier21"]
@@ -3064,7 +3064,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_22")
 draw_pass_1 = SubResource("QuadMesh_22")
 
-[node name="Brazier22" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier22" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4900, 158.695, 3300)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier22"]
@@ -3086,7 +3086,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_23")
 draw_pass_1 = SubResource("QuadMesh_23")
 
-[node name="Brazier23" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier23" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5250, 198.91849, 3600)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier23"]
@@ -3108,7 +3108,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_24")
 draw_pass_1 = SubResource("QuadMesh_24")
 
-[node name="Brazier24" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier24" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5150, 224.9245, 4000)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier24"]
@@ -3130,7 +3130,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_25")
 draw_pass_1 = SubResource("QuadMesh_25")
 
-[node name="Brazier25" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier25" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4800, 253.717, 4200)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier25"]
@@ -3152,7 +3152,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_26")
 draw_pass_1 = SubResource("QuadMesh_26")
 
-[node name="Brazier26" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier26" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4420, 261.971, 4440)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier26"]
@@ -3174,7 +3174,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_27")
 draw_pass_1 = SubResource("QuadMesh_27")
 
-[node name="Brazier27" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier27" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4500, 261.5675, 4440)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier27"]
@@ -3196,7 +3196,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_28")
 draw_pass_1 = SubResource("QuadMesh_28")
 
-[node name="Brazier28" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier28" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3950, 264.2183, 4550)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier28"]
@@ -3218,7 +3218,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_29")
 draw_pass_1 = SubResource("QuadMesh_29")
 
-[node name="Brazier29" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier29" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4450, 261.80045, 4550)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier29"]
@@ -3240,7 +3240,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_30")
 draw_pass_1 = SubResource("QuadMesh_30")
 
-[node name="Brazier30" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier30" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3950, 262.6875, 4950)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier30"]
@@ -3262,7 +3262,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_31")
 draw_pass_1 = SubResource("QuadMesh_31")
 
-[node name="Brazier31" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier31" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4450, 263.99814, 4950)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier31"]
@@ -3284,7 +3284,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_32")
 draw_pass_1 = SubResource("QuadMesh_32")
 
-[node name="Brazier32" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier32" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4100, 262.44125, 4820)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier32"]
@@ -3306,7 +3306,7 @@ randomness = 0.4
 process_material = SubResource("ParticleProcessMaterial_33")
 draw_pass_1 = SubResource("QuadMesh_33")
 
-[node name="Brazier33" type="Node3D" parent="Braziers" groups=["brazier"]]
+[node name="Brazier33" type="Node3D" parent="Braziers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4300, 262.8675, 4820)
 
 [node name="Bowl" type="MeshInstance3D" parent="Braziers/Brazier33"]

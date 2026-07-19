@@ -5,7 +5,7 @@ namespace WoadRaiders.Core;
 /// <summary>
 /// Builds a <see cref="DungeonGeometry"/> straight from a Godot .tscn text
 /// scene — the shared scene-to-geometry pipeline behind the map tools: the
-/// bake tool (RealmBaker) reads a scene's markers, collision, and props
+/// bake tool (RealmBaker) reads a scene's markers and collision
 /// through it when baking server geometry JSON, and ValidateRealm accepts
 /// scenes via it. Plain C#: unit-tested without an engine. (The server itself
 /// hosts baked JSON — scenes are the AUTHORING format, not the serving one.)
@@ -28,8 +28,6 @@ namespace WoadRaiders.Core;
 ///       3. arbitrary meshes in the "terrain" group need the in-Godot bake
 ///          tool instead (it samples the meshes and hands the result in via
 ///          <paramref name="sampledTerrain"/>).
-///   - Braziers:     nodes in the group "brazier" (or named "Brazier*") become
-///                   cosmetic fire props.
 /// </summary>
 public static class DungeonSceneFile
 {
@@ -44,7 +42,6 @@ public static class DungeonSceneFile
         Vector3? boss = null;
         var solids = new List<Aabb>();
         var enemySpawns = new List<EnemySpawnPoint>();
-        var props = new List<DungeonProp>();
         HeightField? metadataTerrain = null;
         HeightField? realmTerrain = null;
         var terrainMeshes = 0;
@@ -93,10 +90,6 @@ public static class DungeonSceneFile
             {
                 terrainMeshes++;
             }
-            else if (IsBrazier(name, groups))
-            {
-                props.Add(new DungeonProp(PropType.Brazier, world.Origin));
-            }
             else if (type == "CollisionShape3D" && TryReadBoxSize(doc, node, out var size))
             {
                 solids.Add(WorldAabb(world, size * 0.5f));
@@ -124,7 +117,6 @@ public static class DungeonSceneFile
         {
             ScenePath = scenePath,
             BossSpawn = boss,
-            Props = props,
         };
     }
 
@@ -192,10 +184,6 @@ public static class DungeonSceneFile
                                width, depth, heights);
     }
 
-    private static bool IsBrazier(string name, HashSet<string> groups) =>
-        groups.Contains("brazier")
-        || (name.StartsWith("Brazier", StringComparison.Ordinal)
-            && !name.StartsWith("Braziers", StringComparison.Ordinal)); // "Braziers" = a folder node
 
     private static EnemyType TypeFromName(string name)
     {
