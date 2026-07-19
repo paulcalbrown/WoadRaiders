@@ -24,7 +24,15 @@ public static class HeightFieldMesh
     /// result with a material that reads vertex colour (see
     /// TerrainSurface.Material), or the palette is discarded.</summary>
     public static ArrayMesh Build(float originX, float originZ, float cell, int w, int d, float[] heights,
-                                  Func<float, float, Color> colour)
+                                  Func<float, float, Color> colour) =>
+        Build(originX, originZ, cell, w, d, heights, (_, _, h, ny) => colour(h, ny));
+
+    /// <summary>The position-aware variant: <paramref name="colour"/> is handed
+    /// the vertex's world (x, z) as well as its height and upward tilt, for
+    /// palettes that vary by PLACE — a realm tinting one chamber's floor apart
+    /// from another's at the same depth.</summary>
+    public static ArrayMesh Build(float originX, float originZ, float cell, int w, int d, float[] heights,
+                                  Func<float, float, float, float, Color> colour)
     {
         var vertices = new Vector3[w * d];
         var normals = new Vector3[w * d];
@@ -45,7 +53,7 @@ public static class HeightFieldMesh
                 var hs = heights[Math.Min(j + 1, d - 1) * w + i];
                 var normal = new Vector3(hw - he, 2f * cell, hn - hs).Normalized();
                 normals[idx] = normal;
-                colors[idx] = colour(h, normal.Y);
+                colors[idx] = colour(originX + i * cell, originZ + j * cell, h, normal.Y);
             }
         }
 

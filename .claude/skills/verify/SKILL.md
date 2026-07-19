@@ -16,7 +16,7 @@ dotnet test WoadRaiders.slnx --no-build
 
 ```powershell
 dotnet run --project WoadRaiders.Server -- [port] --map <map.json>
-# Without --map it loads EVERY catalog realm map (DungeonCatalog: Crag.json).
+# Without --map it loads EVERY catalog realm map (DungeonCatalog: Crag.json, Crypt.json).
 # The server hosts geometry JSON only; .tscn scenes are the AUTHORING format,
 # baked to JSON by the tools below.
 # Players forge/join INSTANCES of them: a JoinRequest either creates a
@@ -95,6 +95,15 @@ tools/<Probe>.cs` with the server up):
   authoritative Y (server-side verticality), and replaying the same inputs over
   the client-rebuilt geometry lands where the server says (prediction-grade
   determinism).
+- `CryptProbe.cs` is its mirror for the DESCENDING indoor realm: forges the
+  Crypt, asserts the walk east SINKS the authoritative Y (down the stair, over
+  the chasm's stepped bridge deck), and replays for determinism.
+- `WoadRaiders.Client/tools/snap_realm.gd` renders screenshots of a realm's
+  authored scene from scripted vantage points (needs a GPU window, NOT
+  --headless) — how a headless-workflow session eyeballs a realm's look.
+  `tools/probe_assets.gd` prints the authored AABB of every kit asset under
+  assets/crypt/ (run with --headless after `godot-mono --headless --path
+  WoadRaiders.Client --import`).
 - `InstanceProbe.cs` drives four clients through the instance flow: forge,
   browse the list, join by id, cross-instance isolation, and the
   JoinDenied path. Run it against a FRESH server.
