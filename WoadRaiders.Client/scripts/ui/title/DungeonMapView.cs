@@ -15,10 +15,9 @@ public partial class DungeonMapView : Control
 {
     private const float Pad = 14f; // breathing room inside the control
 
-    // Relief shading bands (world heights): below Deep is gorge-dark, above
-    // Wild is crag-rock; the playable band in between ramps dark → pale.
-    private const float DeepBand = -50f;
-    private const float WildBand = 320f;
+    // How far the relief ramp extends past the heights the cast stands at
+    // (see PlayableBand) before ground reads as pit-dark or wild rock.
+    private const float BandMargin = 60f;
 
     private DungeonGeometry? _geometry;
 
@@ -50,6 +49,23 @@ public partial class DungeonMapView : Control
     public (int Enemies, bool HasBoss) Census =>
         _geometry is { } g ? (g.EnemySpawns.Count, g.BossSpawn is not null) : (0, false);
 
+    /// <summary>The band of heights the realm is PLAYED at: the span its
+    /// spawn, camps, and boss stand on, padded by <see cref="BandMargin"/>.</summary>
+    private static (float Deep, float Wild) PlayableBand(DungeonGeometry g)
+    {
+        float lo = g.SpawnPoint.Y, hi = g.SpawnPoint.Y;
+        void Fold(float y)
+        {
+            lo = Mathf.Min(lo, y);
+            hi = Mathf.Max(hi, y);
+        }
+        foreach (var spawn in g.EnemySpawns)
+            Fold(spawn.Position.Y);
+        if (g.BossSpawn is { } boss)
+            Fold(boss.Y);
+        return (lo - BandMargin, hi + BandMargin);
+    }
+
     public override void _Draw()
     {
         if (_geometry is not { } g || (g.Solids.Count == 0 && g.Terrain is null))
@@ -64,9 +80,14 @@ public partial class DungeonMapView : Control
             (Size.Y - size.Z * scale) / 2f - bounds.Min.Z * scale);
         Vector2 Map(float x, float z) => origin + new Vector2(x, z) * scale;
 
-        // The land itself, as shaded relief.
+        // The land itself, as shaded relief. The shading bands come from the
+        // realm's OWN elevations — the heights its cast stands at — so an
+        // open climb (the Crag) and a sunken descent (the Crypt) both draw
+        // their walked ground in the ramp, with everything below pit-dark and
+        // everything above wild-rock-dark.
         if (g.Terrain is { } terrain)
         {
+            var (deepBand, wildBand) = PlayableBand(g);
             const int step = 2; // 2x2 samples per swatch keeps the draw cheap
             var gorgeDark = new Color(0.03f, 0.05f, 0.10f);
             var lowland = new Color(0.10f, 0.22f, 0.20f);
@@ -77,9 +98,9 @@ public partial class DungeonMapView : Control
                 for (var i = 0; i < terrain.Width - 1; i += step)
                 {
                     var h = terrain.At(i, j);
-                    var color = h < DeepBand ? gorgeDark
-                        : h > WildBand ? crag
-                        : lowland.Lerp(upland, (h - DeepBand) / (WildBand - DeepBand));
+                    var color = h < deepBand ? gorgeDark
+                        : h > wildBand ? crag
+                        : lowland.Lerp(upland, (h - deepBand) / (wildBand - deepBand));
                     var x = terrain.OriginX + i * terrain.CellSize;
                     var z = terrain.OriginZ + j * terrain.CellSize;
                     var a = Map(x, z);

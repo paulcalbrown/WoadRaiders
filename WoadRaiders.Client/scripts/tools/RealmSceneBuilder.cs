@@ -80,7 +80,13 @@ public partial class RealmSceneBuilder : RefCounted
         foreach (var child in node.GetChildren())
         {
             child.Owner = root;
-            SetOwnerRecursive(child, root);
+            // An instanced scene (a .glb kit piece, a reusable prop scene) is
+            // one node from this scene's point of view: owning its INTERNALS
+            // would inline the whole imported tree into the saved .tscn.
+            // Leaving them alone keeps the instance an ExtResource reference —
+            // exactly what hand-instancing in the editor produces.
+            if (string.IsNullOrEmpty(child.SceneFilePath))
+                SetOwnerRecursive(child, root);
         }
     }
 }

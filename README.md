@@ -80,7 +80,7 @@ dotnet run --project WoadRaiders.Server
 # → WoadRaiders dedicated server listening on udp/9050 (1 maps, up to 16 instances
 #   of 8 raiders; sim 30Hz, snapshots 20Hz). Ctrl+C to stop.
 ```
-Without arguments it loads **every catalog realm** (The Crag) from the `maps/`
+Without arguments it loads **every catalog realm** (The Crag, The Sunken Crypt) from the `maps/`
 directory beside its binary (the build copies the canonical JSON there from
 `WoadRaiders.Client/maps/`, so a published server is self-contained) and lets players
 forge/join instances of them. Options: a bare number sets the
@@ -100,7 +100,7 @@ two in lockstep if you upgrade Godot.
    default to the public dev server `woadraiders.eastus.azurecontainer.io`; editor runs default
    to `127.0.0.1:9050`) → **character select** (Knight, Rogue, Mage, or Ranger — per-class stats
    live in `Core.ClassArchetypes`; Mage and Ranger fire real projectiles) → **realm select**
-   (The Crag) → the **raid browser**, where you forge a fresh instance or join a
+   (The Crag, The Sunken Crypt) → the **raid browser**, where you forge a fresh instance or join a
    live one → the run itself. You arrive through a blue entrance portal; fellow raiders wear
    overhead nameplates with woad-blue health bars. Kill the **realm's lord** and a green exit
    portal opens — step through it to end the run on a **summary screen** (time, gold, relics,
@@ -245,6 +245,20 @@ core loop earns it.
       The Barrow and Cairn dungeons were removed with the old camera. Wire `v14`; probes:
       `tools/TerrainProbe.cs` (terrain on the wire, spawn on the ground, the authoritative Y
       climbing as you walk, replay determinism) + the existing class/instance/portal probes.
+      The second realm, **The Sunken Crypt** (`scripts/tools/CryptDesign.cs` + partials), is
+      the first INDOOR design: the wild default is unexcavated rock mass (its roof follows
+      the rooms' envelope) and every hall is a plate sunk into it — undercroft → stepped
+      descent stair (real treads quantized into the heightfield) → hub rotunda → ossuary +
+      bone-crawl loop → flooded cloister → a Processional broken by a charnel chasm (stepped
+      bridge deck, rogue ambush pit with a scree ramp out) → catacomb maze → candle chapel →
+      the Mausoleum boss court ~260 units DOWN. It dresses itself with CC0 glTF kits
+      (`WoadRaiders.Client/assets/crypt/` — KayKit Dungeon Remastered + Halloween Bits,
+      Kenney Graveyard, Poly Pizza singles; licenses alongside), instanced as
+      `instance=ExtResource` references, torch/candle/soulfire omnis with an AnimationPlayer
+      flicker (no scripts), volumetric fog + SSAO, and a region-aware vertex palette
+      (position-aware `HeightFieldMesh` overload). `GenerateRealm.cs` gained a headless
+      `--import` step for the kits, and `tools/CryptProbe.cs` mirrors TerrainProbe for a
+      DESCENDING realm (the authoritative Y sinks; replay agrees across the bridge deck).
 - [x] **Fully 3D dungeon geometry (`DungeonGeometry`)** — dungeons are sets of **world-space solid
       boxes** + spawn markers, exactly what a Godot-editor scene reduces to. Collision is a vertical
       **cylinder-vs-box** test that is 3D-aware (walls block; beams above head height don't), sliding

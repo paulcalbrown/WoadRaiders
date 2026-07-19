@@ -42,6 +42,7 @@ public static class RealmDesigns
     private static readonly Func<IRealmDesign>[] All =
     {
         () => new CragDesign(),
+        () => new CryptDesign(),
     };
 
     /// <summary>The design with this name, or null. Case-insensitive, so

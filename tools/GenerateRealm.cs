@@ -51,6 +51,12 @@ var jsonPath = Path.Combine("WoadRaiders.Client", "maps", $"{realm}.json");
 
 Step("dotnet", "build WoadRaiders.Client/WoadRaiders.Client.csproj -v q --nologo",
     "building the client (the designs and scene tools are C# in it)");
+// Designs may instance imported asset kits (res://assets/**.glb/.gltf); those
+// only load once Godot's editor import has produced its cache. Tolerant of the
+// exit code: --import has a history of nonzero-on-success (godot#83449), and a
+// genuinely missing import fails the scene build right after, loudly.
+TolerantStep("godot-mono", "--headless --path WoadRaiders.Client --import",
+    "importing assets (the kits a design may instance)");
 Step("godot-mono", "--headless --path WoadRaiders.Client -s res://tools/build_realm_scene.gd -- " +
     $"res://maps/{realm}.tscn {realm}", $"building {realm}.tscn from its design with Godot's own serializer");
 
@@ -72,10 +78,12 @@ if (issues.Count > 0)
     throw new InvalidOperationException("the baked realm fails validation:\n  - " + string.Join("\n  - ", issues));
 
 // The route walk: a virtual raider walks the whole intended path with the REAL
-// Move rules at player speed. Stalls fail the build; the climb must gain height.
-// Realms with no route here skip the walk — RealmValidator's reachability proof
-// stands on its own, so a new realm owes this only if it has an intended path.
-var routes = new Dictionary<string, (Vector2[] Path, float MinFinalHeight)>(StringComparer.OrdinalIgnoreCase)
+// Move rules at player speed. Stalls fail the build, and the walker must END in
+// the realm's final height band — the Crag's climb must gain height, the
+// Crypt's descent must lose it. Realms with no route here skip the walk —
+// RealmValidator's reachability proof stands on its own, so a new realm owes
+// this only if it has an intended path.
+var routes = new Dictionary<string, (Vector2[] Path, float MinFinalHeight, float MaxFinalHeight)>(StringComparer.OrdinalIgnoreCase)
 {
     ["Crag"] = ([
     new(700, 700), new(1000, 700), new(1600, 800), new(2200, 900), new(2450, 1000),
@@ -84,7 +92,18 @@ var routes = new Dictionary<string, (Vector2[] Path, float MinFinalHeight)>(Stri
     new(3750, 1750), new(3800, 2000), new(3900, 2500), new(4300, 2700), new(4800, 2900),
     new(4800, 3200), new(5300, 3700), new(5350, 3850), new(5000, 4100), new(4700, 4300),
     new(4560, 4300), new(4460, 4340), new(4460, 4450), new(4200, 4750), new(4200, 4820),
-    ], 250f),
+    ], 250f, float.MaxValue),
+
+    // The Crypt: undercroft → stair → hub → processional → the span → the maze
+    // → deep stair → antechamber → the Mausoleum. Ends DEEP or the descent is
+    // broken.
+    ["Crypt"] = ([
+    new(480, 1800), new(760, 1800), new(1180, 1800), new(1450, 1800),
+    new(1750, 1800), new(2100, 1800), new(2380, 1800), new(2650, 1800),
+    new(2820, 1800), new(3060, 1800), new(3360, 1800), new(3660, 1800),
+    new(3660, 2160), new(3660, 2500), new(3660, 2760), new(3260, 2980),
+    new(3000, 3060), new(2760, 3140), new(2620, 3180), new(2320, 3260),
+    ], float.MinValue, -230f),
 };
 if (!routes.TryGetValue(realm, out var route))
 {
@@ -113,6 +132,9 @@ else
     if (pos.Y < route.MinFinalHeight)
         throw new InvalidOperationException($"the route walker ended at height {pos.Y:0}, below the expected " +
                                             $"{route.MinFinalHeight:0} — the climb is broken");
+    if (pos.Y > route.MaxFinalHeight)
+        throw new InvalidOperationException($"the route walker ended at height {pos.Y:0}, above the expected " +
+                                            $"{route.MaxFinalHeight:0} — the descent is broken");
     Console.WriteLine($"Route walk OK — the raider stands at ({pos.X:0}, {pos.Y:0}, {pos.Z:0}) before the boss.");
 }
 
@@ -127,6 +149,18 @@ Console.WriteLine($"Wrote {realm}.tscn (the design) and {realm}.json (baked from
                   $"{(geometry.BossSpawn is not null ? " + the boss" : "")}.");
 
 // ------------------------------------------------------------- helpers
+
+static void TolerantStep(string exe, string args, string what)
+{
+    try
+    {
+        Step(exe, args, what);
+    }
+    catch (InvalidOperationException e)
+    {
+        Console.WriteLine($"  (tolerated: {e.Message.Split('\n')[0]})");
+    }
+}
 
 static void Step(string exe, string args, string what)
 {

@@ -77,6 +77,16 @@ public sealed class RealmScene
         return AddTerrain(mesh, field, material);
     }
 
+    /// <summary>The position-aware variant: <paramref name="colour"/> also sees
+    /// each vertex's world (x, z), for palettes that vary by place — see
+    /// HeightFieldMesh's matching overload.</summary>
+    public MeshInstance3D AddTerrain(HeightField field, Func<float, float, float, float, Color> colour, Material material)
+    {
+        var mesh = HeightFieldMesh.Build(field.OriginX, field.OriginZ, field.CellSize,
+                                         field.Width, field.Depth, field.Heights.ToArray(), colour);
+        return AddTerrain(mesh, field, material);
+    }
+
     /// <summary>Lay down ground the design built itself — a sculpted mesh, an
     /// imported kit piece, anything. Pass <paramref name="sampler"/> when a
     /// heightfield describes the same ground, so <see cref="GroundAt"/> works;
