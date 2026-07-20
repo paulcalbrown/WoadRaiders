@@ -16,10 +16,19 @@ namespace WoadRaiders.Core;
 /// become holes, and the mesh is eroded by the agent radius so runtime checks
 /// are center-point only.
 ///
+/// EVERY triangle goes in, and nothing tells this bake what any of them was
+/// meant to be. Walkability falls out of the geometry: slope against
+/// <see cref="MaxWalkableSlopeDegrees"/>, headroom against CharacterHeight,
+/// and erosion by the agent's radius. That erosion is also why a realm can be
+/// baked from its whole scene without anyone sorting the architecture from
+/// the ornament — detail smaller than the mover simply cannot survive it
+/// (8,000 candle-scale props measured: navmesh 100% intact), while anything
+/// big enough to walk into blocks, because it should.
+///
 /// Drops are the one sim rule polygons cannot carry: falling off a ledge (or
 /// riding a steep face downhill) is always legal, but on a navmesh those edges
 /// simply end. So after the first bake a scout literally walks off every
-/// boundary edge with <see cref="NavMeshGeometry.Move"/>'s rules; wherever it
+/// boundary edge with <see cref="RealmGeometry.Move"/>'s rules; wherever it
 /// lands back on the mesh below, the bake adds a one-way off-mesh drop link
 /// and rebuilds — the path planner can then route through exactly the falls
 /// the mover can perform, and no others.
@@ -174,7 +183,7 @@ public static class NavMeshBuilder
     {
         var links = new List<(RcVec3f start, RcVec3f end, bool bidir)>();
         var navMesh = ToNavMesh(bare);
-        var scoutGeo = new NavMeshGeometry(navMesh, soup, Vector3.Zero);
+        var scoutGeo = new RealmGeometry(navMesh, soup, Vector3.Zero);
         var query = new DtNavMeshQuery(navMesh);
         var filter = new DtQueryDefaultFilter();
         var landedExtents = new RcVec3f(8f, 12f, 8f);

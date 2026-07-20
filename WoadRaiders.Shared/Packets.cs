@@ -521,14 +521,21 @@ public sealed class EquipmentUpdatePacket : INetSerializable
 }
 
 /// <summary>
-/// Server → client. The realm's geometry — spawn, the triangle soup (floors
-/// first, then structure), and its baked navmesh — sent once on join
-/// (reliable, so LiteNetLib fragments it freely). The client rebuilds the
-/// realm's data and movement geometry from it, so prediction clamps to
-/// exactly the polygons the server moves on. A map with no soup is the flat
-/// test arena; it ships neither soup nor navmesh.
+/// Server → client. The realm's geometry — spawn, the triangle soup, and its
+/// baked navmesh — sent once on join (reliable, so LiteNetLib fragments it
+/// freely). The client rebuilds the realm's data and movement geometry from
+/// it, so prediction clamps to exactly the polygons the server moves on. A
+/// map with no soup is the flat test arena; it ships neither soup nor navmesh.
+///
+/// The bulk rides COMPRESSED. This is the largest thing the protocol ever
+/// sends and it goes out reliably, whose window bounds a join to roughly
+/// 90 KB per round trip — so the realm's size is a raid's opening wait.
+/// Coordinates and indices are exactly the sort of repetitive data that
+/// collapses (measured: the Crypt's 131k triangles, props and all, ship in
+/// 671 KB rather than 6.4 MB), and decompression is byte-exact, so both peers still
+/// rebuild identical geometry and prediction cannot drift.
 /// </summary>
-public sealed class DungeonGeometryPacket : INetSerializable
+public sealed class RealmGeometryPacket : INetSerializable
 {
     public float SpawnX;
     public float SpawnY;
@@ -540,11 +547,8 @@ public sealed class DungeonGeometryPacket : INetSerializable
     /// <summary>Soup vertex positions, xyz triples; empty on flat maps.</summary>
     public float[] SoupVertices = System.Array.Empty<float>();
 
-    /// <summary>Soup vertex indices, one triangle per triple, floors first.</summary>
+    /// <summary>Soup vertex indices, one triangle per triple. Untyped: order carries no meaning.</summary>
     public int[] SoupTriangles = System.Array.Empty<int>();
-
-    /// <summary>How many leading triangles are floor (the rest are structure).</summary>
-    public int FloorTriangleCount;
 
     /// <summary>
     /// The realm's baked navmesh (serialized Detour tile bytes) for the standard
@@ -554,6 +558,17 @@ public sealed class DungeonGeometryPacket : INetSerializable
     /// </summary>
     public byte[] NavMesh = System.Array.Empty<byte>();
 
+    /// <summary>The largest realm the reader will inflate — the guard against a
+    /// tiny payload that unpacks into an out-of-memory kill.</summary>
+    private const int MaxGeometryBytes = 64 * 1024 * 1024;
+
+    /// <summary>
+    /// The compressed payload, built once and reused. The server holds ONE
+    /// packet per map and serializes it for every peer that joins, so without
+    /// this the compression would be paid per raider rather than per realm.
+    /// </summary>
+    private byte[]? _packed;
+
     public void Serialize(NetDataWriter w)
     {
         w.Put(SpawnX);
@@ -561,16 +576,10 @@ public sealed class DungeonGeometryPacket : INetSerializable
         w.Put(SpawnZ);
         w.Put(ScenePath);
 
-        w.Put(SoupVertices.Length);
-        foreach (var v in SoupVertices)
-            w.Put(v);
-        w.Put(SoupTriangles.Length);
-        foreach (var t in SoupTriangles)
-            w.Put(t);
-        w.Put(FloorTriangleCount);
-
-        w.Put(NavMesh.Length);
-        w.Put(NavMesh);
+        var payload = _packed ??= Pack();
+        w.Put(PayloadBytes());
+        w.Put(payload.Length);
+        w.Put(payload);
     }
 
     public void Deserialize(NetDataReader r)
@@ -581,31 +590,100 @@ public sealed class DungeonGeometryPacket : INetSerializable
         ScenePath = r.GetString();
 
         // Every length comes off a hostile wire: bound each allocation before
-        // trusting it (the server's handler disconnects on a throw).
-        var vertexFloats = r.GetInt();
-        if (vertexFloats is < 0 or > 12_000_000 || vertexFloats % 3 != 0)
+        // trusting it (the server's handler disconnects on a throw). The
+        // INFLATED size is bounded first and the reader is held to exactly
+        // that, so a few compressed bytes cannot claim a gigabyte.
+        var inflated = r.GetInt();
+        if (inflated is < 0 or > MaxGeometryBytes)
+            throw new System.IO.InvalidDataException($"unreasonable geometry size {inflated}");
+        var packedLength = r.GetInt();
+        if (packedLength < 0 || packedLength > r.AvailableBytes)
+            throw new System.IO.InvalidDataException($"unreasonable compressed size {packedLength}");
+        var packed = new byte[packedLength];
+        if (packedLength > 0)
+            r.GetBytes(packed, packedLength);
+        Unpack(packed, inflated);
+    }
+
+    private int PayloadBytes() =>
+        4 + SoupVertices.Length * 4 + 4 + SoupTriangles.Length * 4 + 4 + NavMesh.Length;
+
+    private byte[] Pack()
+    {
+        var raw = new byte[PayloadBytes()];
+        var at = 0;
+        void PutInt(int value)
+        {
+            System.BitConverter.TryWriteBytes(raw.AsSpan(at), value);
+            at += 4;
+        }
+        PutInt(SoupVertices.Length);
+        System.Buffer.BlockCopy(SoupVertices, 0, raw, at, SoupVertices.Length * 4);
+        at += SoupVertices.Length * 4;
+        PutInt(SoupTriangles.Length);
+        System.Buffer.BlockCopy(SoupTriangles, 0, raw, at, SoupTriangles.Length * 4);
+        at += SoupTriangles.Length * 4;
+        PutInt(NavMesh.Length);
+        System.Buffer.BlockCopy(NavMesh, 0, raw, at, NavMesh.Length);
+
+        using var packed = new System.IO.MemoryStream();
+        using (var brotli = new System.IO.Compression.BrotliStream(
+                   packed, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+            brotli.Write(raw, 0, raw.Length);
+        return packed.ToArray();
+    }
+
+    private void Unpack(byte[] packed, int inflated)
+    {
+        var raw = new byte[inflated];
+        using (var source = new System.IO.MemoryStream(packed, writable: false))
+        using (var brotli = new System.IO.Compression.BrotliStream(source, System.IO.Compression.CompressionMode.Decompress))
+        {
+            var filled = 0;
+            while (filled < inflated)
+            {
+                var read = brotli.Read(raw, filled, inflated - filled);
+                if (read <= 0)
+                    throw new System.IO.InvalidDataException("the geometry payload ended early");
+                filled += read;
+            }
+        }
+
+        var at = 0;
+        int TakeInt()
+        {
+            if (at + 4 > raw.Length)
+                throw new System.IO.InvalidDataException("the geometry payload is truncated");
+            var value = System.BitConverter.ToInt32(raw, at);
+            at += 4;
+            return value;
+        }
+        void Take(int bytes)
+        {
+            if (bytes < 0 || at + bytes > raw.Length)
+                throw new System.IO.InvalidDataException("the geometry payload is truncated");
+        }
+
+        var vertexFloats = TakeInt();
+        if (vertexFloats < 0 || vertexFloats % 3 != 0)
             throw new System.IO.InvalidDataException($"unreasonable soup vertex count {vertexFloats}");
+        Take(vertexFloats * 4);
         SoupVertices = new float[vertexFloats];
-        for (var i = 0; i < SoupVertices.Length; i++)
-            SoupVertices[i] = r.GetFloat();
+        System.Buffer.BlockCopy(raw, at, SoupVertices, 0, vertexFloats * 4);
+        at += vertexFloats * 4;
 
-        var triangleInts = r.GetInt();
-        if (triangleInts is < 0 or > 16_000_000 || triangleInts % 3 != 0)
+        var triangleInts = TakeInt();
+        if (triangleInts < 0 || triangleInts % 3 != 0)
             throw new System.IO.InvalidDataException($"unreasonable soup triangle count {triangleInts}");
+        Take(triangleInts * 4);
         SoupTriangles = new int[triangleInts];
-        for (var i = 0; i < SoupTriangles.Length; i++)
-            SoupTriangles[i] = r.GetInt();
+        System.Buffer.BlockCopy(raw, at, SoupTriangles, 0, triangleInts * 4);
+        at += triangleInts * 4;
 
-        FloorTriangleCount = r.GetInt();
-        if (FloorTriangleCount < 0 || FloorTriangleCount * 3 > SoupTriangles.Length)
-            throw new System.IO.InvalidDataException($"unreasonable floor triangle count {FloorTriangleCount}");
-
-        var navMeshLength = r.GetInt();
-        if (navMeshLength is < 0 or > 16_000_000)
-            throw new System.IO.InvalidDataException($"unreasonable navmesh size {navMeshLength}");
+        var navMeshLength = TakeInt();
+        Take(navMeshLength);
         NavMesh = new byte[navMeshLength];
-        if (navMeshLength > 0)
-            r.GetBytes(NavMesh, navMeshLength);
+        System.Buffer.BlockCopy(raw, at, NavMesh, 0, navMeshLength);
     }
 }
 

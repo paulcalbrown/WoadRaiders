@@ -7,33 +7,41 @@ using Aabb = WoadRaiders.Core.Aabb; // the sim's world box, not Godot's
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The scene a realm design composes — a thin facade over the root Node3D that
-/// knows the BAKE CONVENTIONS (BoxMesh slabs in the "ground" and "structure"
-/// groups, and the marker names) so a design never has to.
+/// The scene a realm design composes — a thin facade over the root Node3D,
+/// laying stone and placing the markers so a design need not think about the
+/// .tscn it is really writing.
 ///
 /// Realms are BUILT, not carved: floors, ramps, stairs, walls, and roofs are
 /// all SLABS — great cut stones, each a BoxMesh under an arbitrary transform.
-/// "ground" slabs are what raiders walk on; "structure" slabs block and
-/// occlude. The served geometry is baked FROM the finished scene afterwards,
-/// and a slab scene even parses engine-free (Core.DungeonSceneFile reads
-/// BoxMesh sizes and transforms straight from the .tscn text).
+/// The served geometry is baked FROM the finished scene afterwards, and a slab
+/// scene even parses engine-free (Core.RealmSceneFile reads BoxMesh sizes and
+/// transforms straight from the .tscn text).
 ///
-/// Everything here is a convenience, not a requirement. A design may hang
-/// whatever it likes off <see cref="Root"/> — any meshes, materials,
-/// particles, or imported asset kits; the bake samples real triangles from
-/// anything it finds in the two groups and ignores the rest. A fresh scene is
+/// There is almost nothing here a design MUST use. Every mesh it hangs off
+/// <see cref="Root"/> by any means becomes collision, so the helpers below buy
+/// convenience, not compliance: the bake reads no group and no name (see
+/// Core.RealmSceneFile for the conventions in full). What they do add is the
+/// design's OWN bookkeeping — which branch of the tree a slab is filed under,
+/// what it is called, whether the occlusion fader may dissolve it, and which
+/// stones <see cref="OnFloor"/> should seat markers on. A fresh scene is
 /// EMPTY — no light, no sky. A design states its whole look itself; the only
-/// thing a realm MUST have is a player spawn (Core.DungeonSceneFile's rule).
+/// thing a realm MUST have is a player spawn (Core.RealmSceneFile's rule).
 /// </summary>
 public sealed class RealmScene
 {
     private Node3D? _ground;
     private Node3D? _structure;
 
-    // A design-time mirror of every slab, so markers can be seated on floors
-    // (OnFloor) with exactly the geometry the bake will serve.
-    private readonly SoupBuilder _soup = new();
+    // A design-time mirror of the slabs the design laid as FLOOR, so it can
+    // seat markers and scenery on them (OnFloor). Deliberately not every slab:
+    // a design knows perfectly well which stones it meant as ground, and the
+    // roofs it lays over a crypt are up-facing surfaces too — seat a boss by
+    // "the topmost surface here" and he stands on the roof of his own court.
+    // This is the design's own intent, not a convention the bake reads: what
+    // is served as collision is still every mesh in the finished scene.
+    private readonly SoupBuilder _floors = new();
     private TriangleSoup? _built;
+    private int _floorCount;
 
     /// <summary>The scene root. Add anything Godot can express.</summary>
     public Node3D Root { get; } = new();
@@ -45,11 +53,40 @@ public sealed class RealmScene
 
     // ------------------------------------------------------------- the stones
 
-    /// <summary>A floor slab raiders walk on (group "ground").</summary>
+    /// <summary>
+    /// Declare a node — and everything hung beneath it — PASSABLE: present to
+    /// the eye, absent to the body. The bake takes every other mesh in the
+    /// scene, so this is the only thing a design may say about geometry that
+    /// the pipeline will not work out for itself, and the only tag it reads.
+    ///
+    /// Use it where physics and FICTION disagree: a banner across a doorway, a
+    /// cobweb, a curtain, mist. Those are thin slabs of triangles no different
+    /// in shape from a wall panel, so nothing measurable can tell them apart —
+    /// only the author knows a raider should walk through. What it is NOT for
+    /// is quieting a route ValidateRealm complained about. That complaint is
+    /// nearly always the level design talking, and excusing the prop hides it:
+    /// a blocked route the validator can prove, but geometry that was never
+    /// there it can never miss. The bake prints what this drops on every run,
+    /// so a realm quietly excusing more and more of itself is visible.
+    ///
+    /// Returns the node, so a placement can be wrapped where it is made.
+    /// </summary>
+    public T Passable<T>(T node) where T : Node
+    {
+        node.AddToGroup(RealmSceneFile.NoCollideGroup, persistent: true);
+        return node;
+    }
+
+    // The floor/structure distinction below is the DESIGN's own bookkeeping —
+    // which branch of the scene tree a slab is filed under, what it is called,
+    // and whether the occlusion fader may dissolve it. The bake reads none of
+    // it: what holds a raider up is decided from the geometry itself.
+
+    /// <summary>A floor slab raiders walk on, filed under "Ground" and never faded.</summary>
     public MeshInstance3D AddFloor(Aabb box, Material material, string? name = null) =>
         AddSlab(box, material, floor: true, name);
 
-    /// <summary>A blocking slab — wall, roof, monument (group "structure").</summary>
+    /// <summary>A blocking slab — wall, roof, monument — filed under "Structure".</summary>
     public MeshInstance3D AddStructure(Aabb box, Material material, string? name = null) =>
         AddSlab(box, material, floor: false, name);
 
@@ -72,13 +109,15 @@ public sealed class RealmScene
             Transform = xform,
             Mesh = new BoxMesh { Size = size, Material = material },
         };
-        node.AddToGroup(floor ? "ground" : "structure", persistent: true);
         if (floor)
             node.AddToGroup("no_fade", persistent: true); // the fader never eats the floor underfoot
         parent.AddChild(node);
         SlabCount++;
 
-        // Mirror the slab into the design-time soup for OnFloor.
+        if (!floor)
+            return node;
+
+        // Mirror floor slabs into the design-time soup that OnFloor seats on.
         Span<System.Numerics.Vector3> corners = stackalloc System.Numerics.Vector3[8];
         for (var k = 0; k < 8; k++)
         {
@@ -86,7 +125,8 @@ public sealed class RealmScene
             var world = xform * new Vector3(local.X, local.Y, local.Z);
             corners[k] = new System.Numerics.Vector3(world.X, world.Y, world.Z);
         }
-        _soup.AddBoxCorners(corners, floor);
+        _floors.AddBoxCorners(corners);
+        _floorCount++;
         _built = null;
         return node;
     }
@@ -137,12 +177,13 @@ public sealed class RealmScene
         }
     }
 
-    /// <summary>The floor height under a point, per the slabs laid so far — how a
-    /// design seats markers and scenery on what it just built. 0 with no floors.</summary>
+    /// <summary>The floor height under a point, per the FLOOR slabs laid so far
+    /// — how a design seats markers and scenery on what it just built. 0 before
+    /// any floor exists.</summary>
     public float FloorAt(float x, float z)
     {
-        _built ??= SlabCount > 0 ? _soup.Build() : null;
-        return _built?.FloorHeightAt(x, z) ?? 0f;
+        _built ??= _floorCount > 0 ? _floors.Build() : null;
+        return _built?.TopSurfaceAt(x, z) ?? 0f;
     }
 
     /// <summary>A point set on the floor, from plan-view (x, z) coordinates.</summary>

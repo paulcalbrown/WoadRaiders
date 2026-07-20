@@ -4,30 +4,29 @@ using WoadRaiders.Core;
 namespace WoadRaiders.Shared;
 
 /// <summary>
-/// Projects a <see cref="DungeonGeometry"/> into the <see cref="DungeonGeometryPacket"/>
+/// Projects a <see cref="RealmDefinition"/> into the <see cref="RealmGeometryPacket"/>
 /// sent to a client on join, and rebuilds the realm from it on the receiving side. The
-/// dungeon is immutable once loaded, so the server builds the packet once and
+/// realm is immutable once loaded, so the server builds the packet once and
 /// reuses it for every connection. Lives in Shared — the wire-protocol seam —
 /// alongside <see cref="WorldSnapshot"/>, so both world↔packet projections sit
 /// together and are testable in isolation (including as a round trip).
 /// </summary>
-public static class DungeonSnapshot
+public static class RealmSnapshot
 {
-    public static DungeonGeometryPacket From(DungeonGeometry dungeon, byte[]? navMesh = null)
+    public static RealmGeometryPacket From(RealmDefinition realm, byte[]? navMesh = null)
     {
-        var packet = new DungeonGeometryPacket
+        var packet = new RealmGeometryPacket
         {
-            SpawnX = dungeon.SpawnPoint.X,
-            SpawnY = dungeon.SpawnPoint.Y,
-            SpawnZ = dungeon.SpawnPoint.Z,
-            ScenePath = dungeon.ScenePath ?? "",
+            SpawnX = realm.SpawnPoint.X,
+            SpawnY = realm.SpawnPoint.Y,
+            SpawnZ = realm.SpawnPoint.Z,
+            ScenePath = realm.ScenePath ?? "",
             NavMesh = navMesh ?? Array.Empty<byte>(),
         };
-        if (dungeon.Soup is { } soup)
+        if (realm.Soup is { } soup)
         {
             packet.SoupVertices = soup.Vertices;
             packet.SoupTriangles = soup.Triangles;
-            packet.FloorTriangleCount = soup.FloorTriangleCount;
         }
         return packet;
     }
@@ -35,15 +34,15 @@ public static class DungeonSnapshot
     /// <summary>
     /// Rebuilds the realm's DATA from the packet — the client-side inverse of
     /// <see cref="From"/> (the soup floats cross the wire bit-exact). Enemy
-    /// spawns are server-only and never on the wire, so the rebuilt geometry
+    /// spawns are server-only and never on the wire, so the rebuilt definition
     /// carries none.
     /// </summary>
-    public static DungeonGeometry ToGeometry(DungeonGeometryPacket packet)
+    public static RealmDefinition ToDefinition(RealmGeometryPacket packet)
     {
         var soup = packet.SoupTriangles.Length > 0
-            ? new TriangleSoup(packet.SoupVertices, packet.SoupTriangles, packet.FloorTriangleCount)
+            ? new TriangleSoup(packet.SoupVertices, packet.SoupTriangles)
             : null;
-        return new DungeonGeometry(
+        return new RealmDefinition(
             new Vector3(packet.SpawnX, packet.SpawnY, packet.SpawnZ),
             soup, Array.Empty<EnemySpawnPoint>())
         {
@@ -58,12 +57,12 @@ public static class DungeonSnapshot
     /// the packet ships no geometry (the flat test arena): the world falls
     /// back to its open-arena clamp rules, on both ends alike.
     /// </summary>
-    public static IDungeonGeometry? ToMovementGeometry(DungeonGeometryPacket packet)
+    public static IRealmGeometry? ToMovementGeometry(RealmGeometryPacket packet)
     {
-        var realm = ToGeometry(packet);
+        var realm = ToDefinition(packet);
         if (realm.Soup is not { } soup || packet.NavMesh.Length == 0)
             return null;
-        return new NavMeshGeometry(NavMeshBuilder.Deserialize(packet.NavMesh), soup, realm.SpawnPoint);
+        return new RealmGeometry(NavMeshBuilder.Deserialize(packet.NavMesh), soup, realm.SpawnPoint);
     }
 
     /// <summary>
@@ -73,7 +72,7 @@ public static class DungeonSnapshot
     /// System.HashCode is seeded per process — which is exactly the lifetime of
     /// the comparison; never persist or send it.
     /// </summary>
-    public static int Fingerprint(DungeonGeometryPacket packet)
+    public static int Fingerprint(RealmGeometryPacket packet)
     {
         var hash = new HashCode();
         hash.Add(packet.SpawnX);
@@ -84,7 +83,6 @@ public static class DungeonSnapshot
             hash.Add(v);
         foreach (var t in packet.SoupTriangles)
             hash.Add(t);
-        hash.Add(packet.FloorTriangleCount);
         hash.AddBytes(packet.NavMesh);
         return hash.ToHashCode();
     }

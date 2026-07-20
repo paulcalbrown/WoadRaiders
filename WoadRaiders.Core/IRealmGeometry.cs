@@ -4,18 +4,18 @@ namespace WoadRaiders.Core;
 
 /// <summary>
 /// The seam between the simulation and whatever describes the realm's shape.
-/// The shipping provider is <see cref="NavMeshGeometry"/> — a baked Detour
+/// The shipping provider is <see cref="RealmGeometry"/> — a baked Detour
 /// navmesh over the realm's triangle soup. A world with no geometry at all
 /// keeps the open-arena defaults below. Coordinates are world-space, Y-up.
 /// </summary>
-public interface IDungeonGeometry
+public interface IRealmGeometry
 {
     /// <summary>Where new/respawning players are placed.</summary>
     Vector3 SpawnPoint { get; }
 
     /// <summary>
     /// Resolve an attempted move: apply <paramref name="delta"/> to
-    /// <paramref name="position"/>, colliding with the dungeon (sliding along
+    /// <paramref name="position"/>, colliding with the realm (sliding along
     /// walls) and keeping the result on a walkable surface.
     /// <paramref name="radius"/> is the mover's collision cylinder radius
     /// (bosses are wider than regular characters).
@@ -31,11 +31,16 @@ public interface IDungeonGeometry
     bool HasLineOfSight(Vector3 from, Vector3 to) => true;
 
     /// <summary>
-    /// The height of the base ground plane (the terrain — no solids) at a world
-    /// XZ point. Player projectiles hug this so a shot follows a slope instead
-    /// of burying itself in the first rise. Flat providers keep the default: 0.
+    /// The height of the surface underfoot at <paramref name="near"/> — what a
+    /// player projectile hugs so a shot follows a slope instead of burying
+    /// itself in the first rise, and what the camera keeps clear of.
+    ///
+    /// Takes a whole point, not an XZ pair, because a built realm stacks
+    /// walkable levels: under the Crypt's chasm bridge the deck and the pit
+    /// floor share an XZ, and only the asker's own height says which of them
+    /// is THEIR ground. Flat providers keep the default: 0.
     /// </summary>
-    float GroundHeight(float x, float z) => 0f;
+    float GroundHeight(Vector3 near) => 0f;
 
     /// <summary>
     /// The underside of whatever roofs a world-space point — the headroom the

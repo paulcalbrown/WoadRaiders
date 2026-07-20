@@ -9,7 +9,7 @@ namespace WoadRaiders.Server.Tests;
 // Drives the session with no socket â€” the point of extracting it from the server.
 public class GameSessionTests
 {
-    private static DungeonGeometry OpenArena() =>
+    private static RealmDefinition OpenArena() =>
         new(Vector3.Zero, null, Array.Empty<EnemySpawnPoint>());
 
     [Fact]
@@ -63,12 +63,12 @@ public class GameSessionTests
     [Fact]
     public void Announces_the_boss_awaiting_at_startup()
     {
-        var dungeon = new DungeonGeometry(Vector3.Zero, null,
+        var realm = new RealmDefinition(Vector3.Zero, null,
             new[] { new EnemySpawnPoint(new Vector3(400, 0, 0), EnemyType.Minion) })
         {
             BossSpawn = new Vector3(900, 0, 900),
         };
-        var session = new GameSession(dungeon, new Random(1));
+        var session = new GameSession(realm, new Random(1));
         var events = new List<SessionEvent>();
         session.Notice += events.Add;
 

@@ -14,27 +14,26 @@ public static class TestRealms
 {
     /// <summary>A flat floor slab centred on the origin, top face at y = 0.</summary>
     public static TriangleSoup Flat(float halfExtent = 600f) => new SoupBuilder()
-        .AddBox(new Aabb(new Vector3(-halfExtent, -20, -halfExtent), new Vector3(halfExtent, 0, halfExtent)),
-                floor: true)
+        .AddBox(new Aabb(new Vector3(-halfExtent, -20, -halfExtent), new Vector3(halfExtent, 0, halfExtent)))
         .Build();
 
     /// <summary>Movement geometry over a soup, baked for both agent widths.</summary>
-    public static NavMeshGeometry Geo(TriangleSoup soup, Vector3 spawn = default) =>
+    public static RealmGeometry Geo(TriangleSoup soup, Vector3 spawn = default) =>
         new(soup, spawn,
             (SimConstants.CharacterRadius, NavMeshBuilder.Build(soup)),
             (EnemyArchetypes.Of(EnemyType.Boss).Radius,
              NavMeshBuilder.Build(soup, EnemyArchetypes.Of(EnemyType.Boss).Radius)));
 
     /// <summary>An open flat realm — the slab world's stand-in for "no walls anywhere".</summary>
-    public static NavMeshGeometry Open() => Geo(Flat());
+    public static RealmGeometry Open() => Geo(Flat());
 
     /// <summary>A flat floor with structure walls standing on it.</summary>
-    public static NavMeshGeometry WithWalls(params Aabb[] walls)
+    public static RealmGeometry WithWalls(params Aabb[] walls)
     {
         var builder = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(-600, -20, -600), new Vector3(600, 0, 600)), floor: true);
+            .AddBox(new Aabb(new Vector3(-600, -20, -600), new Vector3(600, 0, 600)));
         foreach (var wall in walls)
-            builder.AddBox(wall, floor: false);
+            builder.AddBox(wall);
         return Geo(builder.Build());
     }
 }

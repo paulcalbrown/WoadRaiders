@@ -4,8 +4,8 @@ namespace WoadRaiders.Core;
 
 /// <summary>
 /// The authoritative game simulation — pure C#, no engine, no networking.
-/// Simulates in full 3D world space (Y-up); dungeon shape is abstracted behind
-/// <see cref="IDungeonGeometry"/>. The dedicated server owns one instance and
+/// Simulates in full 3D world space (Y-up); realm shape is abstracted behind
+/// <see cref="IRealmGeometry"/>. The dedicated server owns one instance and
 /// advances it in fixed steps via <see cref="Step"/>. The client keeps its own
 /// single-player copy for prediction.
 /// </summary>
@@ -35,8 +35,8 @@ public sealed class GameWorld
     public IReadOnlyDictionary<int, GroundItem> GroundItems => _groundItems;
     public IReadOnlyDictionary<int, ProjectileState> Projectiles => _projectiles;
 
-    /// <summary>Dungeon geometry for collision and spawns. Null → open flat arena.</summary>
-    public IDungeonGeometry? Geometry { get; set; }
+    /// <summary>Realm geometry for collision and spawns. Null → open flat arena.</summary>
+    public IRealmGeometry? Geometry { get; set; }
 
     /// <summary>How many fixed steps have been simulated since the world began.</summary>
     public int Tick { get; private set; }
@@ -488,7 +488,7 @@ public sealed class GameWorld
             // style; a sharp rise is a wall and stops the bolt.
             if (proj.FollowsTerrain && Geometry is not null)
             {
-                var followY = Geometry.GroundHeight(next.X, next.Z) + SimConstants.EyeHeight;
+                var followY = Geometry.GroundHeight(next) + SimConstants.EyeHeight;
                 var dy = followY - next.Y;
                 if (dy > SimConstants.StepHeight)
                 {

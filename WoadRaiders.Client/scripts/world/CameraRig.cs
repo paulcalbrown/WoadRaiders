@@ -65,7 +65,7 @@ public partial class CameraRig : Camera3D
     public static Vector3 LiveGroundForward { get; private set; } = new(1f, 0f, 0f);
 
     /// <summary>The realm's geometry, once known — lets the boom stay above the terrain.</summary>
-    public IDungeonGeometry? Geometry { get; set; }
+    public IRealmGeometry? Geometry { get; set; }
 
     private Vector3 _target;
     private Vector3 _smoothVel;
@@ -150,8 +150,8 @@ public partial class CameraRig : Camera3D
         {
             var mid = (position + _target) * 0.5f;
             var floor = Mathf.Max(
-                geometry.GroundHeight(position.X, position.Z),
-                geometry.GroundHeight(mid.X, mid.Z));
+                geometry.GroundHeight(position.ToSim()),
+                geometry.GroundHeight(mid.ToSim()));
             position.Y = Mathf.Max(position.Y, floor + GroundClearance);
         }
         return position;

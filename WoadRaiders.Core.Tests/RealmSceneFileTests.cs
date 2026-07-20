@@ -8,13 +8,18 @@ namespace WoadRaiders.Core.Tests;
 
 /// <summary>
 /// The scene-to-geometry pipeline, engine-free: Godot .tscn text goes in,
-/// realm data comes out — markers, and BoxMesh SLABS in the "ground" and
-/// "structure" groups (with composed and rotated transforms) triangulated
-/// straight from the scene text. This is what the tools run when they read a
-/// realm scene, tested directly.
+/// realm data comes out — markers, and every BoxMesh slab in the scene (with
+/// composed and rotated transforms) triangulated straight from the scene
+/// text. No groups, no naming, no privileged mesh: an author builds a scene
+/// and the pipeline reads what is there. This is what the tools run when they
+/// read a realm scene, tested directly.
 /// </summary>
-public class DungeonSceneFileTests
+public class RealmSceneFileTests
 {
+    // The fixture keeps the "ground"/"structure" groups an older pipeline
+    // required, precisely so their IRRELEVANCE is under test: tagged and
+    // untagged meshes must bake alike, and scenes authored before the split
+    // was retired must keep loading unchanged.
     private const string Realm = """
         [gd_scene load_steps=3 format=3]
 
@@ -61,7 +66,7 @@ public class DungeonSceneFileTests
     [Fact]
     public void A_realm_scene_parses_into_markers_and_a_slab_soup()
     {
-        var geometry = DungeonSceneFile.Parse(Realm, "res://maps/Realm.tscn");
+        var geometry = RealmSceneFile.Parse(Realm, "res://maps/Realm.tscn");
 
         Assert.Equal(new Vector3(100, 1, 200), geometry.SpawnPoint);
         Assert.Equal(new Vector3(400, 9, 500), geometry.BossSpawn);
@@ -72,23 +77,93 @@ public class DungeonSceneFileTests
             geometry.EnemySpawns.Select(s => s.Type).ToArray());
         Assert.Equal(new Vector3(30, 0, 40), geometry.EnemySpawns[0].Position);
 
-        // Three slabs, 12 triangles each; the un-grouped "Scenery" mesh is
-        // ignored — scenery needs no convention.
+        // FOUR slabs, 12 triangles each — including "Scenery", which sits in
+        // no group at all. Authors tag nothing: every mesh in the scene is
+        // geometry, and what it MEANS is read back off its shape afterwards.
         var soup = geometry.Soup;
         Assert.NotNull(soup);
-        Assert.Equal(36, soup!.Triangles.Length / 3);
-        Assert.Equal(12, soup.FloorTriangleCount); // one ground slab, first in the soup
+        Assert.Equal(48, soup!.Triangles.Length / 3);
+    }
+
+    [Fact]
+    public void No_collide_excuses_a_mesh_and_everything_under_it()
+    {
+        // The one claim an author may make about geometry. The hall is solid;
+        // the banner hanging in it is not, and neither is the tassel hung off
+        // the banner — the claim runs down the subtree so one tag on a folder
+        // of dressing covers all of it. The spawn marker inside that folder
+        // still marks a spawn: the claim is about GEOMETRY, not about nodes.
+        var realm = RealmSceneFile.Parse("""
+            [gd_scene load_steps=2 format=3]
+
+            [sub_resource type="BoxMesh" id="slab"]
+            size = Vector3(400, 20, 400)
+
+            [node name="Realm" type="Node3D"]
+
+            [node name="Hall" type="MeshInstance3D" parent="."]
+            mesh = SubResource("slab")
+
+            [node name="Dressing" type="Node3D" parent="." groups=["no_collide"]]
+
+            [node name="Banner" type="MeshInstance3D" parent="Dressing"]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, 0)
+            mesh = SubResource("slab")
+
+            [node name="Tassel" type="MeshInstance3D" parent="Dressing/Banner"]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 100, 0)
+            mesh = SubResource("slab")
+
+            [node name="PlayerSpawn" type="Marker3D" parent="Dressing"]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 60, 7)
+            """);
+
+        // One slab's worth of triangles: the hall alone.
+        Assert.Equal(12, realm.Soup!.Triangles.Length / 3);
+        Assert.Equal(10f, realm.Soup.TopSurfaceAt(0f, 0f) ?? float.NaN, 3);   // the hall's top face
+        Assert.Equal(new Vector3(5, 60, 7), realm.SpawnPoint);                // the marker still counts
+    }
+
+    [Fact]
+    public void A_mesh_in_no_group_is_geometry_like_any_other()
+    {
+        // The scene's only mesh is untagged and unnamed — the case that used
+        // to bake to nothing at all and refuse to load.
+        var soup = RealmSceneFile.Parse("""
+            [gd_scene load_steps=2 format=3]
+
+            [sub_resource type="BoxMesh" id="slab"]
+            size = Vector3(100, 20, 100)
+
+            [node name="Realm" type="Node3D"]
+
+            [node name="AnyOldMesh" type="MeshInstance3D" parent="."]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 30, 0)
+            mesh = SubResource("slab")
+
+            [node name="PlayerSpawn" type="Marker3D" parent="."]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
+            """).Soup;
+
+        Assert.NotNull(soup);
+        // Its top face holds a raider up, and its side blocks a body — both
+        // read from the triangles' own normals, neither declared anywhere.
+        Assert.Equal(40f, soup!.TopSurfaceAt(0f, 0f) ?? float.NaN, 3);
+        Assert.True(soup.SegmentHits(new Vector3(-80, 30, 0), new Vector3(80, 30, 0), blockersOnly: true),
+            "the slab's sheer side should block a body's clearance probe");
+        Assert.False(soup.SegmentHits(new Vector3(-20, 45, 0), new Vector3(20, 45, 0), blockersOnly: true),
+            "nothing sheer stands above the slab's top face");
     }
 
     [Fact]
     public void Slabs_compose_transforms_and_ride_where_they_stand()
     {
-        var soup = DungeonSceneFile.Parse(Realm).Soup!;
+        var soup = RealmSceneFile.Parse(Realm).Soup!;
 
         // Floor: parent (10,0,20) + own (5,30,0), size (100,20,60) → top face
         // at y=40 over x∈[-35,65], z∈[-10,50].
-        Assert.Equal(40f, soup.FloorHeightAt(15f, 20f) ?? float.NaN, 3);
-        Assert.Null(soup.FloorHeightAt(200f, 200f)); // no floor out there
+        Assert.Equal(40f, soup.TopSurfaceAt(15f, 20f) ?? float.NaN, 3);
+        Assert.Null(soup.TopSurfaceAt(200f, 200f)); // no floor out there
 
         // Turned: the same slab yawed 90° under the parent — its footprint
         // swaps, so its long side now runs along z. As structure it never
@@ -107,21 +182,21 @@ public class DungeonSceneFileTests
             mesh = SubResource("p")
             [node name="PlayerSpawn" type="Marker3D" parent="."]
             """;
-        var e = Assert.Throws<InvalidDataException>(() => DungeonSceneFile.Parse(text));
+        var e = Assert.Throws<InvalidDataException>(() => RealmSceneFile.Parse(text));
         Assert.Contains("bake", e.Message);
 
         // The bake tool samples the meshes and hands the whole soup in — then it parses.
         var sampled = new SoupBuilder()
-            .AddBox(new Aabb(Vector3.Zero, new Vector3(10, 1, 10)), floor: true)
+            .AddBox(new Aabb(Vector3.Zero, new Vector3(10, 1, 10)))
             .Build();
-        var geometry = DungeonSceneFile.Parse(text, sampledSoup: sampled);
+        var geometry = RealmSceneFile.Parse(text, sampledSoup: sampled);
         Assert.Same(sampled, geometry.Soup);
     }
 
     [Fact]
     public void A_scene_of_markers_alone_is_a_flat_map()
     {
-        var geometry = DungeonSceneFile.Parse("""
+        var geometry = RealmSceneFile.Parse("""
             [gd_scene format=3]
             [node name="R" type="Node3D"]
             [node name="PlayerSpawn" type="Marker3D" parent="."]
@@ -132,7 +207,7 @@ public class DungeonSceneFileTests
     [Fact]
     public void A_scene_without_a_player_spawn_is_refused()
     {
-        var e = Assert.Throws<InvalidDataException>(() => DungeonSceneFile.Parse("""
+        var e = Assert.Throws<InvalidDataException>(() => RealmSceneFile.Parse("""
             [gd_scene format=3]
             [node name="R" type="Node3D"]
             """));
@@ -144,7 +219,7 @@ public class DungeonSceneFileTests
     {
         // Multi-line dictionaries, curves, strings with '=' — the parser must
         // shrug at everything a real authored scene carries.
-        var geometry = DungeonSceneFile.Parse("""
+        var geometry = RealmSceneFile.Parse("""
             [gd_scene format=3]
             [sub_resource type="Animation" id="a"]
             _data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]

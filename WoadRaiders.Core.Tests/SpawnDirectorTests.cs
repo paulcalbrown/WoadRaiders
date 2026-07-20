@@ -8,7 +8,7 @@ namespace WoadRaiders.Core.Tests;
 public class SpawnDirectorTests
 {
     // Five markers spread well away from the origin player spawn, plus a boss chamber.
-    private static DungeonGeometry MakeDungeon() => new(
+    private static RealmDefinition MakeRealm() => new(
         Vector3.Zero,
         null,
         new[]
@@ -23,10 +23,10 @@ public class SpawnDirectorTests
         BossSpawn = new Vector3(900, 0, 900),
     };
 
-    private static SpawnDirector Directed(out GameWorld world, DungeonGeometry? dungeon = null, int seed = 1)
+    private static SpawnDirector Directed(out GameWorld world, RealmDefinition? realm = null, int seed = 1)
     {
         world = new GameWorld();
-        return new SpawnDirector(world, dungeon ?? MakeDungeon(), new Random(seed));
+        return new SpawnDirector(world, realm ?? MakeRealm(), new Random(seed));
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class SpawnDirectorTests
     [Fact]
     public void Target_count_is_clamped_up_for_sparse_maps()
     {
-        var sparse = new DungeonGeometry(Vector3.Zero, null,
+        var sparse = new RealmDefinition(Vector3.Zero, null,
             new[] { new EnemySpawnPoint(new Vector3(400, 0, 0), EnemyType.Minion) }); // 1 marker
         var director = new SpawnDirector(new GameWorld(), sparse, new Random(1));
 
@@ -125,7 +125,7 @@ public class SpawnDirectorTests
     {
         // Four markers: three hugging the spawn, one far. The initial spawn uses all
         // four (authored), but a random respawn must avoid the near ones.
-        var dungeon = new DungeonGeometry(Vector3.Zero, null, new[]
+        var realm = new RealmDefinition(Vector3.Zero, null, new[]
         {
             new EnemySpawnPoint(new Vector3(30, 0, 0), EnemyType.Minion),   // < 200 from spawn
             new EnemySpawnPoint(new Vector3(0, 0, 30), EnemyType.Minion),   // < 200
@@ -133,7 +133,7 @@ public class SpawnDirectorTests
             new EnemySpawnPoint(new Vector3(500, 0, 500), EnemyType.Rogue), // > 200 — the only safe respawn
         });
         var world = new GameWorld();
-        var director = new SpawnDirector(world, dungeon, new Random(3));
+        var director = new SpawnDirector(world, realm, new Random(3));
         director.SpawnInitial();
 
         // Kill a near enemy so the director must top the population up.

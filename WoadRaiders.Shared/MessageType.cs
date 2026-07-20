@@ -31,8 +31,8 @@ public enum MessageType : byte
     /// <summary>Server → one client: your current equipped item ids per slot.</summary>
     EquipmentUpdate = 7,
 
-    /// <summary>Server → client: the dungeon's 3D collision geometry (sent once on join).</summary>
-    DungeonGeometry = 8,
+    /// <summary>Server → client: the realm's 3D collision geometry (sent once on join).</summary>
+    RealmGeometry = 8,
 
     /// <summary>Client → server: send me the current list of live dungeon instances.</summary>
     InstanceListRequest = 9,

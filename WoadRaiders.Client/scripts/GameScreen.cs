@@ -38,8 +38,8 @@ public partial class GameScreen : Node3D
     private WorldView _worldView = null!;
     private HudController _hud = null!;
     private CameraRig _camera = null!;
-    private DungeonGeometry? _geometry;
-    private IDungeonGeometry? _movement; // the baked navmesh (or flat rules) everything MOVES on
+    private RealmDefinition? _realm;
+    private IRealmGeometry? _movement; // the baked navmesh (or flat rules) everything MOVES on
     private Node3D? _mapRoot;            // all dungeon visuals live under here, so a map swap can rebuild them
     private int? _builtMapFingerprint;   // fingerprint of the map the visuals were built for
     private bool _portalAnnounced;       // the "way opens" banner fires once per session
@@ -189,10 +189,10 @@ public partial class GameScreen : Node3D
         GetTree().ChangeSceneToFile(RaidSelectScreen.ScenePath);
     }
 
-    private void OnGeometry(DungeonGeometryPacket packet)
+    private void OnGeometry(RealmGeometryPacket packet)
     {
-        _geometry = DungeonSnapshot.ToGeometry(packet);       // the realm's DATA: scene identity, visuals
-        _movement = DungeonSnapshot.ToMovementGeometry(packet); // what prediction and cursor rays move on
+        _realm = RealmSnapshot.ToDefinition(packet);       // the realm's DATA: scene identity, visuals
+        _movement = RealmSnapshot.ToMovementGeometry(packet); // what prediction and cursor rays move on
         _camera.Geometry = _movement; // the boom keeps clear of this terrain
 
         // A reconnect to the same match re-sends the same map — leave the standing
@@ -200,7 +200,7 @@ public partial class GameScreen : Node3D
         // DIFFERENT map (server restarted with a new arena); rendering the old
         // walls over the new collision geometry would mean invisible walls, so
         // tear the map root down and rebuild.
-        var fingerprint = DungeonSnapshot.Fingerprint(packet);
+        var fingerprint = RealmSnapshot.Fingerprint(packet);
         if (_builtMapFingerprint == fingerprint)
             return;
         if (_builtMapFingerprint is not null)
@@ -211,14 +211,14 @@ public partial class GameScreen : Node3D
         _mapRoot?.QueueFree();
         _mapRoot = new Node3D { Name = "Map" };
         AddChild(_mapRoot);
-        if (!DungeonVisualBuilder.Build(_mapRoot, _geometry, _fader))
+        if (!DungeonVisualBuilder.Build(_mapRoot, _realm, _fader))
         {
             // The server is hosting a realm whose scene this build doesn't ship.
             // There is no honest way to draw it, and playing on collision we
             // cannot see would be worse than stopping — so refuse and say where
             // a build that CAN draw it lives.
-            var realm = System.IO.Path.GetFileNameWithoutExtension(_geometry.ScenePath ?? "");
-            GD.PrintErr($"No scene in this build for '{_geometry.ScenePath}' — refusing the raid.");
+            var realm = System.IO.Path.GetFileNameWithoutExtension(_realm.ScenePath ?? "");
+            GD.PrintErr($"No scene in this build for '{_realm.ScenePath}' — refusing the raid.");
             _connection.RefuseLocally(
                 $"This build has no map for {(realm.Length > 0 ? realm : "that realm")}. " +
                 $"Get the latest at {NetConfig.DownloadUrl}");
@@ -227,14 +227,14 @@ public partial class GameScreen : Node3D
             _builtMapFingerprint = null; // a later, playable map must still build
             return;
         }
-        StartMapMusic(_geometry.ScenePath);
+        StartMapMusic(_realm.ScenePath);
 
         // Announce the arrival — and if we asked to FORGE one dungeon but the
         // server served another (it doesn't host it?), say so loudly. A join by
         // instance id takes whatever dungeon that instance runs, so no check.
-        var info = DungeonCatalog.ForScene(_geometry.ScenePath ?? "");
+        var info = DungeonCatalog.ForScene(_realm.ScenePath ?? "");
         _hud.AnnounceLocation(info?.Name
-            ?? System.IO.Path.GetFileNameWithoutExtension(_geometry.ScenePath ?? "the uncharted depths"));
+            ?? System.IO.Path.GetFileNameWithoutExtension(_realm.ScenePath ?? "the uncharted depths"));
         if (ClientConfig.Mode == JoinMode.Create && info is { } served && served.Id != ClientConfig.Dungeon)
             GD.PrintErr($"Asked to raid {ClientConfig.Dungeon} but the server served {served.Id} — " +
                         "is that dungeon hosted? (Check the server's startup log.)");
@@ -277,7 +277,7 @@ public partial class GameScreen : Node3D
         // (The portal banner may fire again: a rejoined world is news again.)
         _portalAnnounced = false;
         _state.Reset();
-        _localPlayer.BeginSession(welcome.PlayerId, _geometry?.SpawnPoint ?? SysVec3.Zero, _movement,
+        _localPlayer.BeginSession(welcome.PlayerId, _realm?.SpawnPoint ?? SysVec3.Zero, _movement,
                                   ClientConfig.PlayerClass);
         GD.Print($"Joined instance #{welcome.InstanceId} as player {welcome.PlayerId} ({ClientConfig.PlayerClass})");
     }

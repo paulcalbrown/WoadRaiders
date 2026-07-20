@@ -20,9 +20,10 @@ namespace WoadRaiders.Client;
 ///
 /// The kits are authored at different scales (KayKit props run stylized-large,
 /// Kenney's run miniature), so every placement states its own scale; this
-/// game's characters stand ~44 units (~25 units to the metre). Pure scenery —
-/// only "ground" and "structure" slabs reach the bake, so nothing placed here
-/// can change what the server hosts.
+/// game's characters stand ~44 units (~25 units to the metre). The whole pass
+/// is declared PASSABLE (<see cref="RealmScene.Passable{T}"/>), so none of it
+/// reaches the server as collision — see the note in <c>Relics()</c> for why
+/// this realm chooses that, and Core.RealmSceneFile for what the claim means.
 /// </summary>
 public sealed partial class CryptDesign
 {
@@ -57,15 +58,20 @@ public sealed partial class CryptDesign
 
     private void Relics()
     {
-        var relics = _scene.Folder("Relics");
+        // The whole pass is PASSABLE. The Crypt was laid out as rooms a raider
+        // fights through, and its dressing was placed to be looked at — coffins
+        // strewn where they fell, bones underfoot, urns in the corners of the
+        // walking line. Made solid, they turn every chamber into an obstacle
+        // course the fights were never spaced for. That is a decision about
+        // this realm rather than a rule about realms: another might well want
+        // its sarcophagi to be cover, and would simply not say this.
+        var relics = _scene.Passable(_scene.Folder("Relics"));
 
         // ---- the kits ----
         var skull = Kit.Load("assets/crypt/kaykit_halloween/skull.gltf");
         var skullCandle = Kit.Load("assets/crypt/kaykit_halloween/skull_candle.gltf");
         var smallSkull = Kit.Load("assets/crypt/polypizza/skull_quaternius.glb");
         var boneA = Kit.Load("assets/crypt/kaykit_halloween/bone_A.gltf");
-        var boneB = Kit.Load("assets/crypt/kaykit_halloween/bone_B.gltf");
-        var boneC = Kit.Load("assets/crypt/kaykit_halloween/bone_C.gltf");
         var ribcage = Kit.Load("assets/crypt/kaykit_halloween/ribcage.gltf");
         var greatBone = Kit.Load("assets/crypt/polypizza/bone_large_quaternius.glb");
         var standingBones = Kit.Load("assets/crypt/polypizza/skeleton_quaternius.glb");
@@ -148,25 +154,6 @@ public sealed partial class CryptDesign
                 var (kit, scale) = pick(i);
                 var p = OnWall(c, side, along, inset);
                 Place(kit, p.X, p.Z, scale, Facing(side) + (Hash(i, salt, 71) - 0.5f) * 0.3f);
-            }
-        }
-
-        // A little heap of the dead — two or three remains, chosen and turned
-        // by hash so every pile reads differently.
-        void BonePile(float cx, float cz, int salt)
-        {
-            for (var k = 0; k < 3; k++)
-            {
-                var x = cx + (Hash(k, salt, 883) - 0.5f) * 44f;
-                var z = cz + (Hash(k, salt, 887) - 0.5f) * 44f;
-                var yaw = Hash(k, salt, 907) * Mathf.Tau;
-                switch ((int)(Hash(k, salt, 911) * 4f))
-                {
-                    case 0: Place(skull, x, z, 8f, yaw, lift: 1f); break;
-                    case 1: Place(ribcage, x, z, 12f, yaw, lift: 10f); break;
-                    case 2: Place(boneB, x, z, 16f, yaw, lift: 2f); break;
-                    default: Place(boneC, x, z, 13f, yaw, lift: 2f); break;
-                }
             }
         }
 

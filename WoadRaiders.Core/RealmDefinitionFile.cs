@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace WoadRaiders.Core;
 
 /// <summary>
-/// JSON (de)serialization for <see cref="DungeonGeometry"/> — the interchange
+/// JSON (de)serialization for <see cref="RealmDefinition"/> — the interchange
 /// format between the realm bake / the Godot editor export tool and the
 /// headless server. Engine-free so it is unit-testable and usable anywhere.
 ///
@@ -13,9 +13,9 @@ namespace WoadRaiders.Core;
 ///   "scene": "res://maps/YourMap.tscn",          (optional — visual identity / authored scene)
 ///   "spawn": [x, y, z],
 ///   "soup": {                                     (optional — a soupless map is the flat test arena)
-///     "vertices": [x,y,z, x,y,z, ...],
-///     "triangles": [a,b,c, a,b,c, ...],           (floor triangles first)
-///     "floorTriangleCount": n
+///     "vertices": [x,y,z, x,y,z, ...],            (welded: a corner appears once, however many
+///                                                  triangles name it)
+///     "triangles": [a,b,c, a,b,c, ...]            (untyped: order carries no meaning)
 ///   },
 ///   "enemySpawns": [ [x,y,z], ... ],
 ///   "enemySpawnTypes": [ 0, 1, 2, ... ],         (optional — parallel to enemySpawns;
@@ -23,22 +23,26 @@ namespace WoadRaiders.Core;
 ///   "bossSpawn": [x, y, z]                       (optional — the map's boss)
 /// }
 /// </summary>
-public static class DungeonGeometryFile
+public static class RealmDefinitionFile
 {
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        WriteIndented = true,
+        // NOT indented. A realm's soup is hundreds of thousands of numbers and
+        // this file is derived output — never hand-edited, always re-baked
+        // from the scene — so a line and an indent per coordinate buys nothing
+        // and costs megabytes in the repository.
+        WriteIndented = false,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static DungeonGeometry Load(string path) => Parse(File.ReadAllText(path));
+    public static RealmDefinition Load(string path) => Parse(File.ReadAllText(path));
 
-    public static DungeonGeometry Parse(string json)
+    public static RealmDefinition Parse(string json)
     {
         var doc = JsonSerializer.Deserialize<GeometryDoc>(json, Options)
-                  ?? throw new InvalidDataException("empty dungeon geometry document");
+                  ?? throw new InvalidDataException("empty realm definition document");
 
         var positions = doc.EnemySpawns ?? Array.Empty<float[]>();
         var types = doc.EnemySpawnTypes;
@@ -59,7 +63,7 @@ public static class DungeonGeometryFile
             spawns.Add(new EnemySpawnPoint(ToVec(positions[i], "enemySpawn"), (EnemyType)raw));
         }
 
-        return new DungeonGeometry(ToVec(doc.Spawn, "spawn"), ParseSoup(doc.Soup), spawns)
+        return new RealmDefinition(ToVec(doc.Spawn, "spawn"), ParseSoup(doc.Soup), spawns)
         {
             ScenePath = string.IsNullOrWhiteSpace(doc.Scene) ? null : doc.Scene,
             BossSpawn = doc.BossSpawn is null ? null : ToVec(doc.BossSpawn, "bossSpawn"),
@@ -73,10 +77,12 @@ public static class DungeonGeometryFile
         if (doc.Vertices is null || doc.Triangles is null)
             throw new InvalidDataException("'soup.vertices' and 'soup.triangles' are required when 'soup' is present");
         // The TriangleSoup constructor validates lengths, indices, and finiteness.
-        return new TriangleSoup(doc.Vertices, doc.Triangles, doc.FloorTriangleCount);
+        // A 'floorTriangleCount' from an older bake is read and ignored: the
+        // split it recorded is now derived from the geometry itself.
+        return new TriangleSoup(doc.Vertices, doc.Triangles);
     }
 
-    public static string ToJson(DungeonGeometry g)
+    public static string ToJson(RealmDefinition g)
     {
         var doc = new GeometryDoc
         {
@@ -87,7 +93,6 @@ public static class DungeonGeometryFile
                 {
                     Vertices = soup.Vertices,
                     Triangles = soup.Triangles,
-                    FloorTriangleCount = soup.FloorTriangleCount,
                 }
                 : null,
             EnemySpawns = g.EnemySpawns.Select(s => new[] { s.Position.X, s.Position.Y, s.Position.Z }).ToArray(),
@@ -116,6 +121,5 @@ public static class DungeonGeometryFile
     {
         public float[]? Vertices { get; set; }
         public int[]? Triangles { get; set; }
-        public int FloorTriangleCount { get; set; }
     }
 }

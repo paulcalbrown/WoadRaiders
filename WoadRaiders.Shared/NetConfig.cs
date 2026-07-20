@@ -63,20 +63,29 @@ public static class NetConfig
     /// v12 = PlayerSnapshot.Name (fellow raiders' overhead nameplates),
     /// v13 = connect rejects carry a <see cref="ConnectDeniedPacket"/> payload
     ///       (server key + reason), so an outdated client learns why,
-    /// v14 = open realms (DungeonGeometryPacket heightfield terrain + props;
+    /// v14 = open realms (RealmGeometryPacket heightfield terrain + props;
     ///       the Gauntlet-style realm rework),
-    /// v15 = props dropped from DungeonGeometryPacket. The authored .tscn is the
+    /// v15 = props dropped from RealmGeometryPacket. The authored .tscn is the
     ///       only visual source, so nothing ever rendered from that record; a
     ///       cosmetic landmark is now just a node in the scene,
-    /// v16 = the baked navmesh (DungeonGeometryPacket.NavMesh): the server bakes
+    /// v16 = the baked navmesh (RealmGeometryPacket.NavMesh): the server bakes
     ///       each realm's Detour mesh once at load and ships the bytes, and both
-    ///       peers move on NavMeshGeometry instead of sampling the heightfield,
+    ///       peers move on RealmGeometry instead of sampling the heightfield,
     /// v17 = the heightfield and terrain concept removed outright: the packet
     ///       ships the realm's triangle soup (floors first) + navmesh; the
     ///       terrain grid and solid boxes are gone. Realms are BUILT — slabs,
-    ///       not landscape.
+    ///       not landscape,
+    /// v18 = the soup loses its floor/structure split (no FloorTriangleCount;
+    ///       triangle order carries no meaning). What can be stood on and what
+    ///       blocks are read from each triangle's normal, and what can be
+    ///       WALKED is the navmesh's answer — so authors tag nothing,
+    /// v19 = the geometry payload rides COMPRESSED (brotli over soup+navmesh,
+    ///       inflated size declared and bounded), and the bake WELDS vertices
+    ///       instead of repeating each triangle's three corners. The realm is
+    ///       the biggest thing the protocol sends and it goes out reliably, so
+    ///       its size is the raid's opening wait: the Crypt fell 411 → 78 KB.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v17";
+    public const string ConnectionKey = "WoadRaiders.v19";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";

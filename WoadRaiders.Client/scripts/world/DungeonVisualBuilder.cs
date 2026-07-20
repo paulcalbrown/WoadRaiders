@@ -31,9 +31,9 @@ public static class DungeonVisualBuilder
     /// the realm the server is hosting — nothing is added in that case, and the
     /// caller must end the session rather than leave the player in a world they
     /// cannot see but can still collide with.</summary>
-    public static bool Build(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
+    public static bool Build(Node3D parent, RealmDefinition realm, OcclusionFader fader)
     {
-        if (!TryLoadAuthoredScene(parent, geometry, fader))
+        if (!TryLoadAuthoredScene(parent, realm, fader))
             return false;
 
         // The entrance portal stands at the realm's mouth, set back BEHIND the spawn
@@ -44,10 +44,11 @@ public static class DungeonVisualBuilder
         // landmark — no sim meaning — so it lives with the map visuals, rebuilt and
         // torn down with them.
         var forward = CameraRig.LiveGroundForward;
-        var mouth = geometry.SpawnPoint.ToGodot() - forward * PortalSetback;
+        var mouth = realm.SpawnPoint.ToGodot() - forward * PortalSetback;
         // Seat the gate on the floor (the spawn's own height when the setback
         // hangs past the slab's edge).
-        mouth.Y = geometry.Soup?.FloorHeightAt(mouth.X, mouth.Z) ?? geometry.SpawnPoint.Y;
+        mouth.Y = realm.Soup?.GroundBelow(mouth.X, mouth.Z, realm.SpawnPoint.Y, SimConstants.StepHeight)
+                  ?? realm.SpawnPoint.Y;
         parent.AddChild(new PortalView
         {
             Tint = UiTheme.WoadBlue,
@@ -57,9 +58,9 @@ public static class DungeonVisualBuilder
         return true;
     }
 
-    private static bool TryLoadAuthoredScene(Node3D parent, DungeonGeometry geometry, OcclusionFader fader)
+    private static bool TryLoadAuthoredScene(Node3D parent, RealmDefinition realm, OcclusionFader fader)
     {
-        var path = geometry.ScenePath;
+        var path = realm.ScenePath;
         if (string.IsNullOrEmpty(path) || !ResourceLoader.Exists(path))
             return false;
         if (ResourceLoader.Load<PackedScene>(path) is not { } packed)

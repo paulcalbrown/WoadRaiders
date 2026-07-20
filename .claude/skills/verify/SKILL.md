@@ -28,11 +28,14 @@ dotnet run --project WoadRaiders.Server -- [port] --map <map.json>
 #   Stop-Process -Id (Get-NetUDPEndpoint -LocalPort 9050).OwningProcess[0] -Force
 ```
 
-Custom maps are plain JSON (see `DungeonGeometryFile` docs): `spawn: [x,y,z]`,
+Custom maps are plain JSON (see `RealmDefinitionFile` docs): `spawn: [x,y,z]`,
 `enemySpawns: [[x,y,z],...]`, optional `enemySpawnTypes` (0 Minion, 1 Rogue,
-2 Mage — parallel array), optional `bossSpawn`, optional `terrain` (a smooth
-heightfield: originX/originZ/cellSize/width/depth + row-major `heights` — the
-base plane movement rides; see the verticality rules in `DungeonGeometry`).
+2 Mage — parallel array), optional `bossSpawn`, optional `soup` (the realm's
+triangle soup, untyped and vertex-welded — a soupless map is the flat test
+arena; movement rules live in `RealmGeometry`, baked from the soup behind
+`IRealmGeometry`). On the wire the soup and navmesh ride brotli-compressed —
+the Crypt's 131k triangles in 671 KB — since geometry goes out reliably on
+join and the reliable window makes its size the raid's opening wait.
 The geometry carries SIM truth only — scenery lives in the .tscn and never
 reaches the wire.
 
@@ -59,20 +62,26 @@ realm has a route). Reshape a realm by editing its design and rerunning; add
 one with a design class + a line in `RealmDesigns`. Hand-edits to the .tscn
 are equally fine — re-bake + ValidateRealm afterwards (steps 2–3 below).
 The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
-  1. Terrain: ANY meshes in group `terrain` (the natural way — sculpt in
-     Blender, CSG, or edit the generated Terrain mesh; put big ground meshes
-     in `no_fade` too). A `RealmTerrain` node or `metadata/terrain_*` on the
-     root also work (bake reads them without sampling). Collision:
-     axis-aligned `BoxShape3D` CollisionShape3Ds. Markers: `PlayerSpawn`
-     (required), `EnemySpawnN[_Rogue|_Mage]`, `BossSpawn`. Scenery (braziers,
-     banners, rocks) needs NO convention — the bake ignores what it doesn't
-     recognise, so place whatever you like.
+  1. Geometry: just BUILD the realm. Every mesh you model in the scene is
+     collision — no groups, no naming, no privileged mesh type. What holds a
+     raider up, what blocks them, and what is too small to matter are read
+     back off the geometry: a surface's own normal decides ground vs wall
+     (`TriangleSoup.WallNormalY`, ~87° — deliberately NOT the navmesh's 67.8°
+     walkable cutoff, so steep ground stays descendable), and Recast's voxels
+     plus agent-radius erosion discard sub-agent detail on their own.
+     Kit props are collision too — a sarcophagus blocks because it is one —
+     so place anything large where it is fair to meet it; ValidateRealm says
+     so if a piece ever seals a route. The ONE opt-out is the `no_collide`
+     group (node + subtree), for where physics and fiction disagree — a
+     banner, a cobweb — not for silencing the validator. The bake prints what
+     it excluded every run. `RealmScene.Passable(node)` is the design-side
+     call; the Crypt wraps its whole Relics folder in it.
+     Markers: `PlayerSpawn` (required), `EnemySpawnN[_Rogue|_Mage]`,
+     `BossSpawn`. `no_fade` is a render hint for the occlusion fader only.
   2. Bake to server geometry: `dotnet build WoadRaiders.Client`, then
      `godot-mono --headless --path WoadRaiders.Client -s
      res://tools/bake_realm.gd -- res://maps/MyRealm.tscn
-     res://maps/MyRealm.json` (sampling cell 40; root metadata
-     `terrain_cell_size` overrides; the sampling math is unit-tested
-     Core.TerrainSampler).
+     res://maps/MyRealm.json`.
   3. `dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.json`
      — Core.RealmValidator proves camps reachable, borders sealed, no
      stranding pits. `--compare` proves two maps carry identical sim geometry.
@@ -90,8 +99,8 @@ Working examples live in `tools/` (.NET 10 file-based apps — `dotnet run
 tools/<Probe>.cs` with the server up):
 - `ClassProbe.cs` forges an instance as a mage, walks to the nearest enemy,
   shoots it, and asserts class + projectile facts from the snapshot stream.
-- `TerrainProbe.cs` verifies the open-realm terrain: the heightfield
-  arrives on the wire, the spawn stands ON the ground, walking east RAISES the
+- `TerrainProbe.cs` verifies the open realm end to end: the soup and navmesh
+  arrive on the wire, the spawn stands ON the ground, walking east RAISES the
   authoritative Y (server-side verticality), and replaying the same inputs over
   the client-rebuilt geometry lands where the server says (prediction-grade
   determinism).

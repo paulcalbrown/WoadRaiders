@@ -111,7 +111,20 @@ public sealed partial class CryptDesign : IRealmDesign
         Room("span", 3100, 1200, 3700, 2400, floorY: -300, wallTopY: -60,
                 doorWest: 1800, doorWestY: -160, doorEast: 1800, doorEastY: -160);
         _scene.AddFloor(Box(S(3100), S(-172), S(1740), S(3700), S(-160), S(1860)), _bone, "Span");
-        _scene.AddStairs(new Vector3(S(3250), S(-300), S(2300)), new Vector3(S(3550), S(-160), S(1850)),
+        // Two climbs out, one at each end, and BOTH laid along the west wall.
+        // That last part is the whole lesson of this pit. A flight rising 442
+        // units is a wall for most of its length, so one struck diagonally
+        // across the floor does not just climb — it partitions, pinning a
+        // margin against the stone that can be walked forever and left never.
+        // The south stair used to run that way, and the strip it cut off was a
+        // dead corner from the day it was laid. The clean bake passed only
+        // because nothing could reach the corner to find out; the kit props
+        // opened a way in and it surfaced. Laid along the wall instead, each
+        // flight IS the margin rather than walling one off, and the whole
+        // chasm floor stays a single room with a way up at either end.
+        _scene.AddStairs(new Vector3(S(3160), S(-300), S(2300)), new Vector3(S(3160), S(-160), S(1860)),
+                         S(120), _floor);
+        _scene.AddStairs(new Vector3(S(3160), S(-300), S(1300)), new Vector3(S(3160), S(-160), S(1740)),
                          S(120), _floor);
         // The east landing beyond the span.
         Room("landing", 3700, 1500, 3900, 2100, floorY: -160, doorWest: 1800, doorSouth: 3800);

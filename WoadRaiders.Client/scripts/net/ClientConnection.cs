@@ -67,7 +67,7 @@ public sealed class ClientConnection
 
     // One event per server → client message. Handlers fire on the main thread
     // (from Poll), so subscribers may touch the scene tree freely.
-    public event Action<DungeonGeometryPacket>? GeometryReceived;
+    public event Action<RealmGeometryPacket>? GeometryReceived;
     public event Action<WelcomePacket>? Welcomed;
     public event Action<WorldSnapshotPacket>? SnapshotReceived;
     public event Action<ItemPickedUpPacket>? ItemPickedUp;
@@ -87,7 +87,7 @@ public sealed class ClientConnection
         // adding a message is a line here plus its event — no growing switch.
         _handlers = new Dictionary<MessageType, Action<NetPacketReader>>
         {
-            [MessageType.DungeonGeometry] = r => GeometryReceived?.Invoke(Read<DungeonGeometryPacket>(r)),
+            [MessageType.RealmGeometry] = r => GeometryReceived?.Invoke(Read<RealmGeometryPacket>(r)),
             [MessageType.Welcome] = r =>
             {
                 State = ConnectionState.Playing;
