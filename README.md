@@ -61,7 +61,14 @@ target from `Core`/`Shared`.
   loot piles up) — so every snapshot is framed as one or more tick-stamped chunks (most fit in
   one), and the client's `SnapshotAssembler` reassembles them with a tick guard that restores
   the never-deliver-stale property the old Sequenced channel provided.
-- The **connection key** (`WoadRaiders.v15`) is bumped whenever the wire format changes — the
+- `RealmGeometry`: the realm's soup + baked navmesh, sent once on join as one `ReliableOrdered`
+  message. It is the largest thing the protocol sends, and the reliable window bounds a join to
+  roughly 90 KB per round trip — so a realm's size *is* the raid's opening wait. It therefore
+  ships **vertex-welded and brotli-compressed** (the Crypt: 411 KB → 76 KB, 296 fragments → 55).
+  Decompression is byte-exact, so both peers still rebuild identical geometry and prediction
+  cannot drift; the reader bounds the *inflated* size before allocating, so a few bytes cannot
+  claim a gigabyte.
+- The **connection key** (`WoadRaiders.v19`) is bumped whenever the wire format changes — the
   only build-compatibility gate at connect time. A refused connect is answered with a
   `ConnectDenied` payload (frozen format, readable across version gates) saying why — outdated
   build (with the download URL) or full server — so the client can tell the player instead of
@@ -209,15 +216,13 @@ core loop earns it.
       (`MoveX`/`MoveZ`); the geometry decides height.
 - [x] **Open realms with real verticality (the Gauntlet rework)** — the game left its
       fixed-isometric dungeon roots for **Gauntlet Legends / Dark Legacy**-style realms.
-      `RealmDefinition` gained a smooth **heightfield terrain** base plane (bilinear
-      `HeightField`, shipped bit-exact over the wire so prediction walks the same ground) under
-      the solid boxes; movement now **rides the ground** — each step lands on the surface at its
+      Movement **rides the ground** — each step lands on the surface at its
       destination, a rise beyond `SimConstants.StepHeight` (18) is a wall or cliff, drops are
-      unlimited (one-way jump-downs are level design). Sight lines respect terrain crests;
+      unlimited (one-way jump-downs are level design). Sight lines respect crests;
       player bolts **hug the slopes** and sail level over gorges, enemy bolts aim in full 3D so
       overlook mages rain fire downhill. Realms are authored as **natural Godot .tscn
       scenes**: the generated scene is saved by **Godot's own serializer** and contains only
-      built-in nodes and resources — a REAL displaced terrain `ArrayMesh`, stone, braziers,
+      built-in nodes and resources — slabs of stone, braziers,
       lights, markers; no scripts, no metadata — so it opens whole in any Godot editor,
       exactly as if someone had modelled it there (the scene is the ONLY visual source — a
       client missing it refuses the raid with the download link rather than approximate it). The camera became a perspective
@@ -242,33 +247,51 @@ core loop earns it.
       with `Move`, and `Core.RealmValidator` flood fills prove every camp reachable /
       borders sealed / no stranding pits — the same checks hand-made realms get
       (`tools/ValidateRealm.cs`).
-      The Barrow and Cairn dungeons were removed with the old camera. Wire `v14`; probes:
-      `tools/TerrainProbe.cs` (terrain on the wire, spawn on the ground, the authoritative Y
+      The Barrow and Cairn dungeons were removed with the old camera. Probes:
+      `tools/TerrainProbe.cs` (geometry on the wire, spawn on the ground, the authoritative Y
       climbing as you walk, replay determinism) + the existing class/instance/portal probes.
       The second realm, **The Sunken Crypt** (`scripts/tools/CryptDesign.cs` + partials), is
       the first INDOOR design: the wild default is unexcavated rock mass (its roof follows
       the rooms' envelope) and every hall is a plate sunk into it — undercroft → stepped
-      descent stair (real treads quantized into the heightfield) → hub rotunda → ossuary +
+      descent stair (real tread slabs, each rising under StepHeight) → hub rotunda → ossuary +
       bone-crawl loop → flooded cloister → a Processional broken by a charnel chasm (stepped
       bridge deck, rogue ambush pit with a scree ramp out) → catacomb maze → candle chapel →
       the Mausoleum boss court ~260 units DOWN. It dresses itself with CC0 glTF kits
       (`WoadRaiders.Client/assets/crypt/` — KayKit Dungeon Remastered + Halloween Bits,
       Kenney Graveyard, Poly Pizza singles; licenses alongside), instanced as
       `instance=ExtResource` references, torch/candle/soulfire omnis with an AnimationPlayer
-      flicker (no scripts), volumetric fog + SSAO, and a region-aware vertex palette
-      (position-aware `HeightFieldMesh` overload). `GenerateRealm.cs` gained a headless
+      flicker (no scripts), volumetric fog + SSAO, and a region-aware vertex palette.
+      `GenerateRealm.cs` gained a headless
       `--import` step for the kits, and `tools/CryptProbe.cs` mirrors TerrainProbe for a
       DESCENDING realm (the authoritative Y sinks; replay agrees across the bridge deck).
-- [x] **Fully 3D dungeon geometry (`RealmDefinition`)** — dungeons are sets of **world-space solid
-      boxes** + spawn markers, exactly what a Godot-editor scene reduces to. Collision is a vertical
-      **cylinder-vs-box** test that is 3D-aware (walls block; beams above head height don't), sliding
-      and shared verbatim by server and client prediction. Ships over the wire on join.
-- [x] **Hand-crafted maps from the Godot editor** — author any scene with `CollisionShape3D`/
-      `BoxShape3D` solids, a `Marker3D` named `PlayerSpawn`, typed `EnemySpawn*` markers (name
+- [x] **Fully 3D realm geometry** — three types, and the split between them is the thing to
+      know. **`RealmDefinition`** is a realm as DATA: its triangle soup, spawn markers, and
+      scene identity. It answers no spatial questions at all. **`IRealmGeometry`** is the seam
+      the simulation asks — move, line of sight, ground and ceiling heights, cursor rays, route
+      planning. **`RealmGeometry`** implements it, baked from a definition's soup: movement is
+      clamped to a **Detour navmesh** (polygon boundaries act as walls and produce sliding),
+      while sight lines, cursor rays and surface heights test the exact triangles the mesh was
+      baked from. The mover's radius is baked in, so the boss gets his own wider mesh. Server
+      and client prediction run this same code over **identical baked bytes**, so predicted
+      movement cannot drift from the authoritative sim. Ships over the wire on join.
+- [x] **Geometry that describes itself** — nothing about a realm is labelled by hand. Whether a
+      surface holds a raider up or blocks one is read from its **own normal**
+      (`TriangleSoup.WallNormalY`, ~87° — deliberately *not* the navmesh's 67.8° walkable
+      cutoff, so ground stays descendable at any grade); whether it can be **walked** is the
+      navmesh's answer, computed from slope, clearance and step height. The soup is indexed by
+      a **BVH**, because detail clumps and a grid sized from the realm's extent cannot
+      subdivide a carved statue any finer than a bare courtyard — sight lines through the
+      densest corner of a 480k-triangle realm went 1,091 µs → 6.4 µs. Ground queries are
+      **Y-aware**: a realm stacks walkable levels, so "the ground here" is answered against the
+      asker's own height, or everyone under the Crypt's chasm bridge is told the deck overhead
+      is their floor.
+- [x] **Hand-crafted maps from the Godot editor** — author any scene with meshes you model,
+      a `Marker3D` named `PlayerSpawn`, typed `EnemySpawn*` markers (name
       contains `Rogue`/`Mage` for those types), and an optional `BossSpawn`; bake it to the
       geometry the server hosts with `WoadRaiders.Client/tools/bake_realm.gd`, then serve:
       `dotnet run --project WoadRaiders.Server -- --map maps/YourRealm.json`.
-      `maps/TestArena.tscn` is a working example of the conventions. **The game only ever
+      `maps/TestArena.json` is the flat dev arena — spawn markers and no geometry at all, which
+      the sim treats as an open plane; the shipping realms are the worked examples. **The game only ever
       consumes map files** — runtime procedural generation stays out by design; the shipping
       maps are hand-crafted or generated *offline* into the same formats. **Authors tag
       nothing**: every mesh you MODEL in the scene is collision, whatever it is and wherever
@@ -336,8 +359,7 @@ core loop earns it.
       movement direction and play **idle / run / attack** clips. Facing and movement are
       derived client-side from motion; the attack clip is driven by an authoritative `Attacking`
       flag on the snapshot (set when an attack lands, ticked down, broadcast).
-- [ ] **Dungeon content & depth** — more maps and kit variety; BepuPhysics for non-box collision
-      and DotRecast navmesh for smarter AI pathing, all behind `IRealmGeometry`.
+- [ ] **Dungeon content & depth** — more maps and kit variety.
 - [ ] **Gauntlet-style systems** — enemy generators (destroy to stop the horde), an exit/portal to
       descend to the next realm, health-drain + food pickups, keys/doors/gates, more themed
       realms (the realm FORM itself shipped in the open-realms rework above).
@@ -385,5 +407,5 @@ LiteNetLib **probes** (`ClassProbe`, `InstanceProbe`, `PortalProbe`, `TerrainPro
 verify class stats, instance isolation, the portal flow, and the terrain/verticality
 end-to-end against a running server — no Godot needed. The Godot-side pieces (the
 realm designs + `RealmScene`/`RealmSceneBuilder`, `bake_realm.gd` — baking any scene to
-server geometry via the C# `RealmBaker` + `Core.TerrainSampler`, `build_realm_scene.gd`,
+server geometry via the C# `RealmBaker`, `build_realm_scene.gd`,
 scene measurement) live in `WoadRaiders.Client/`.

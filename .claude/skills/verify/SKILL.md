@@ -94,8 +94,8 @@ Working examples live in `tools/` (.NET 10 file-based apps — `dotnet run
 tools/<Probe>.cs` with the server up):
 - `ClassProbe.cs` forges an instance as a mage, walks to the nearest enemy,
   shoots it, and asserts class + projectile facts from the snapshot stream.
-- `TerrainProbe.cs` verifies the open-realm terrain: the heightfield
-  arrives on the wire, the spawn stands ON the ground, walking east RAISES the
+- `TerrainProbe.cs` verifies the open realm end to end: the soup and navmesh
+  arrive on the wire, the spawn stands ON the ground, walking east RAISES the
   authoritative Y (server-side verticality), and replaying the same inputs over
   the client-rebuilt geometry lands where the server says (prediction-grade
   determinism).
