@@ -64,7 +64,8 @@ target from `Core`/`Shared`.
 - `RealmGeometry`: the realm's soup + baked navmesh, sent once on join as one `ReliableOrdered`
   message. It is the largest thing the protocol sends, and the reliable window bounds a join to
   roughly 90 KB per round trip — so a realm's size *is* the raid's opening wait. It therefore
-  ships **vertex-welded and brotli-compressed** (the Crypt: 411 KB → 76 KB, 296 fragments → 55).
+  ships **vertex-welded and brotli-compressed** — which is what lets a realm carry its kit props
+  as collision at all: the Crypt's 131k triangles go out in 671 KB, under a second's join.
   Decompression is byte-exact, so both peers still rebuild identical geometry and prediction
   cannot drift; the reader bounds the *inflated* size before allocating, so a few bytes cannot
   claim a gigabyte.
@@ -294,9 +295,9 @@ core loop earns it.
       the sim treats as an open plane; the shipping realms are the worked examples. **The game only ever
       consumes map files** — runtime procedural generation stays out by design; the shipping
       maps are hand-crafted or generated *offline* into the same formats. **Authors tag
-      nothing**: every mesh you MODEL in the scene is collision, whatever it is and wherever
-      it sits — no groups, no naming, no privileged mesh type (instanced kit props are
-      dressing and are skipped whole). What holds a raider up, what blocks them, and what is
+      nothing**: every mesh in the scene is collision, whatever it is and wherever
+      it sits — no groups, no naming, no privileged mesh type, and no exception for
+      instanced kit props. What holds a raider up, what blocks them, and what is
       too small to matter are all derived: a surface's own normal separates ground from wall
       (`TriangleSoup.WallNormalY`, ~87° — deliberately *not* the navmesh's 67.8° walkable
       cutoff, so steep ground stays descendable), and Recast's voxels plus agent-radius

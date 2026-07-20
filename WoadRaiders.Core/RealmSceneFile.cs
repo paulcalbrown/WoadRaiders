@@ -16,17 +16,16 @@ namespace WoadRaiders.Core;
 ///
 ///   - Geometry:     every mesh the realm is MODELLED from, whatever it is and
 ///                   wherever it sits. No group, no name, no privileged mesh
-///                   type. What is baked is not a curated subset — it is the
-///                   realm. Instanced sub-scenes (kit props, braziers, bone
-///                   piles) are DRESSING and are skipped whole: you model the
-///                   architecture and you drop in the props, which is the line
-///                   authors already draw. BoxMesh slabs parse straight from
-///                   the scene text here; any OTHER mesh needs the in-Godot
-///                   bake tool (Client RealmBaker), which samples real
-///                   triangles and hands the whole soup in via
-///                   <paramref name="sampledSoup"/> — it is also what enforces
-///                   the instanced-sub-scene rule, since scene text alone
-///                   cannot see inside an instance.
+///                   type, and no exception for instanced kit props either:
+///                   what is baked is not a curated subset, it is the realm.
+///                   A sarcophagus blocks because it is a sarcophagus.
+///                   BoxMesh slabs parse straight from the scene text here;
+///                   any OTHER mesh — a kit asset, a sculpted mesh — needs
+///                   the in-Godot bake tool (Client RealmBaker), which samples
+///                   real triangles and hands the whole soup in via
+///                   <paramref name="sampledSoup"/>, since scene text alone
+///                   cannot see inside an instance or measure an arbitrary
+///                   mesh.
 ///   - Player spawn: a Marker3D named exactly "PlayerSpawn" (required).
 ///   - Enemy spawns: Marker3D nodes named "EnemySpawn*" — type from the name:
 ///                   contains "Rogue" → Rogue, "Mage" → Mage, else Minion.

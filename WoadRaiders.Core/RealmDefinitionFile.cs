@@ -29,7 +29,11 @@ public static class RealmDefinitionFile
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        WriteIndented = true,
+        // NOT indented. A realm's soup is hundreds of thousands of numbers and
+        // this file is derived output — never hand-edited, always re-baked
+        // from the scene — so a line and an indent per coordinate buys nothing
+        // and costs megabytes in the repository.
+        WriteIndented = false,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 

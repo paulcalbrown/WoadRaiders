@@ -20,11 +20,12 @@ namespace WoadRaiders.Client;
 ///
 /// The kits are authored at different scales (KayKit props run stylized-large,
 /// Kenney's run miniature), so every placement states its own scale; this
-/// game's characters stand ~44 units (~25 units to the metre). Pure scenery,
-/// but not by exemption: the bake takes every mesh a realm is MODELLED from
-/// and skips only INSTANCED sub-scenes, which is exactly what these kit pieces
-/// are. Place a mesh here by hand rather than instancing one and it will reach
-/// the server as collision like any other stone.
+/// game's characters stand ~44 units (~25 units to the metre). These are
+/// scenery to look at but not to walk through: the bake takes every mesh in
+/// the realm, so a coffin laid here stands in a raider's way exactly as it
+/// appears to. Anything large enough to matter should therefore be placed
+/// where it would be fair to meet one — and ValidateRealm will say so if a
+/// piece ever seals a route.
 /// </summary>
 public sealed partial class CryptDesign
 {

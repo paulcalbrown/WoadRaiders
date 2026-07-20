@@ -531,8 +531,8 @@ public sealed class EquipmentUpdatePacket : INetSerializable
 /// sends and it goes out reliably, whose window bounds a join to roughly
 /// 90 KB per round trip — so the realm's size is a raid's opening wait.
 /// Coordinates and indices are exactly the sort of repetitive data that
-/// collapses (measured: the Crypt 411 KB → 84 KB, a prop-heavy realm
-/// 6.4 MB → 0.5 MB), and decompression is byte-exact, so both peers still
+/// collapses (measured: the Crypt's 131k triangles, props and all, ship in
+/// 671 KB rather than 6.4 MB), and decompression is byte-exact, so both peers still
 /// rebuild identical geometry and prediction cannot drift.
 /// </summary>
 public sealed class RealmGeometryPacket : INetSerializable

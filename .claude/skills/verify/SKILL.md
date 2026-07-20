@@ -33,9 +33,9 @@ Custom maps are plain JSON (see `RealmDefinitionFile` docs): `spawn: [x,y,z]`,
 2 Mage — parallel array), optional `bossSpawn`, optional `soup` (the realm's
 triangle soup, untyped and vertex-welded — a soupless map is the flat test
 arena; movement rules live in `RealmGeometry`, baked from the soup behind
-`IRealmGeometry`). On the wire the soup and navmesh ride brotli-compressed
-(the Crypt: 411 KB → 76 KB), since geometry goes out reliably on join and the
-reliable window makes its size the raid's opening wait.
+`IRealmGeometry`). On the wire the soup and navmesh ride brotli-compressed —
+the Crypt's 131k triangles in 671 KB — since geometry goes out reliably on
+join and the reliable window makes its size the raid's opening wait.
 The geometry carries SIM truth only — scenery lives in the .tscn and never
 reaches the wire.
 
@@ -69,8 +69,9 @@ The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
      (`TriangleSoup.WallNormalY`, ~87° — deliberately NOT the navmesh's 67.8°
      walkable cutoff, so steep ground stays descendable), and Recast's voxels
      plus agent-radius erosion discard sub-agent detail on their own.
-     Instanced sub-scenes (kit props, braziers, bone piles) are DRESSING and
-     are skipped whole — you model the architecture, you drop in the props.
+     Kit props are collision too — a sarcophagus blocks because it is one —
+     so place anything large where it is fair to meet it; ValidateRealm says
+     so if a piece ever seals a route.
      Markers: `PlayerSpawn` (required), `EnemySpawnN[_Rogue|_Mage]`,
      `BossSpawn`. `no_fade` is a render hint for the occlusion fader only.
   2. Bake to server geometry: `dotnet build WoadRaiders.Client`, then

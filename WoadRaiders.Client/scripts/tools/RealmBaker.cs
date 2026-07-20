@@ -9,8 +9,8 @@ namespace WoadRaiders.Client;
 /// Bakes a realm scene into the server geometry JSON it is played from — how
 /// any .tscn (hand-made or generated) becomes a hostable map. Every mesh the
 /// realm is MODELLED from yields its world-space triangles — no groups, no
-/// naming, no privileged mesh type; instanced sub-scenes are dressing and are
-/// skipped whole (see <see cref="CollectTriangles"/>, and
+/// naming, no privileged mesh type, and no exception for instanced kit props
+/// (see <see cref="CollectTriangles"/>, and
 /// <c>Core.RealmSceneFile</c> for the conventions in full). Sampling those
 /// triangles is the one step that needs the engine; everything else (the
 /// scene parsing, the JSON, validation) is engine-free Core code, unit-tested
@@ -87,27 +87,20 @@ public partial class RealmBaker : RefCounted
     /// from the geometry: by each triangle's normal, and by whether a surface
     /// survives Recast's voxels and agent-radius erosion.
     ///
-    /// Instanced sub-scenes — a kit sarcophagus, a brazier, a bone pile —
-    /// are dressing, and are skipped whole. That line is drawn where authors
-    /// already draw it (you MODEL the architecture and you DROP IN the props)
-    /// rather than by anything they must remember to tag.
-    ///
-    /// It is provisional, and closer to lifting than it looks. Sweeping the
-    /// kits in costs far less than first supposed: the navmesh barely moves
-    /// (+17%, since sub-agent detail cannot survive erosion), and once the
-    /// payload is welded and compressed the join goes to ~0.5 MB rather than
-    /// the 6.4 MB raw. What still stops it is ONE validation failure, and it
-    /// is not the props' doing — the far corner of the Crypt's chasm floor
-    /// has no way back out to the stair, and the clean bake only passes
-    /// because nothing can reach that corner to discover it. Props open a way
-    /// in and the pre-existing dead end surfaces. Fix the chasm and this skip
-    /// can go.
+    /// EVERYTHING is taken — the kit sarcophagus and the brazier and the bone
+    /// pile along with the walls, because a sarcophagus you cannot walk
+    /// through is the honest answer and an author should not have to say so.
+    /// The costs turned out to be smaller than they looked: the navmesh
+    /// barely moves (+17%, since sub-agent detail cannot survive radius
+    /// erosion), and welding plus compression put a 131k-triangle Crypt on
+    /// the join wire at ~670 KB. The one real obstacle was never the props —
+    /// it was a dead corner in the Crypt's chasm that only became reachable
+    /// once they were included, and that is fixed in the realm, where it
+    /// belonged.
     /// </summary>
     private static void CollectTriangles(Node node, Transform3D parentXf, List<float> triangles, bool isSceneRoot = true)
     {
         var xf = node is Node3D spatial ? parentXf * spatial.Transform : parentXf;
-        if (!isSceneRoot && !string.IsNullOrEmpty(node.SceneFilePath))
-            return; // an instanced asset: dressing, not fabric
 
         if (node is MeshInstance3D { Mesh: { } mesh })
         {
