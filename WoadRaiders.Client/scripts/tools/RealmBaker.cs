@@ -90,13 +90,18 @@ public partial class RealmBaker : RefCounted
     /// Instanced sub-scenes — a kit sarcophagus, a brazier, a bone pile —
     /// are dressing, and are skipped whole. That line is drawn where authors
     /// already draw it (you MODEL the architecture and you DROP IN the props)
-    /// rather than by anything they must remember to tag. It is provisional:
-    /// sweeping the kits in as well is measured and understood — it leaves
-    /// the navmesh almost untouched (+17%), because sub-agent detail cannot
-    /// survive erosion — but it puts 131k triangles and 6.4 MB on the join
-    /// wire, and a prop standing in the Crypt's chasm route seals the way to
-    /// its boss. Both are answered by a simplified collision proxy, not by
-    /// asking authors to label things again.
+    /// rather than by anything they must remember to tag.
+    ///
+    /// It is provisional, and closer to lifting than it looks. Sweeping the
+    /// kits in costs far less than first supposed: the navmesh barely moves
+    /// (+17%, since sub-agent detail cannot survive erosion), and once the
+    /// payload is welded and compressed the join goes to ~0.5 MB rather than
+    /// the 6.4 MB raw. What still stops it is ONE validation failure, and it
+    /// is not the props' doing — the far corner of the Crypt's chasm floor
+    /// has no way back out to the stair, and the clean bake only passes
+    /// because nothing can reach that corner to discover it. Props open a way
+    /// in and the pre-existing dead end surfaces. Fix the chasm and this skip
+    /// can go.
     /// </summary>
     private static void CollectTriangles(Node node, Transform3D parentXf, List<float> triangles, bool isSceneRoot = true)
     {
