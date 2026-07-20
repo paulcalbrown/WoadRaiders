@@ -78,9 +78,14 @@ public static class NetConfig
     /// v18 = the soup loses its floor/structure split (no FloorTriangleCount;
     ///       triangle order carries no meaning). What can be stood on and what
     ///       blocks are read from each triangle's normal, and what can be
-    ///       WALKED is the navmesh's answer — so authors tag nothing.
+    ///       WALKED is the navmesh's answer — so authors tag nothing,
+    /// v19 = the geometry payload rides COMPRESSED (brotli over soup+navmesh,
+    ///       inflated size declared and bounded), and the bake WELDS vertices
+    ///       instead of repeating each triangle's three corners. The realm is
+    ///       the biggest thing the protocol sends and it goes out reliably, so
+    ///       its size is the raid's opening wait: the Crypt fell 411 → 78 KB.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v18";
+    public const string ConnectionKey = "WoadRaiders.v19";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";

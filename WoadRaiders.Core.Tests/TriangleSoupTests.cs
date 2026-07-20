@@ -203,6 +203,35 @@ public class TriangleSoupTests
     }
 
     [Fact]
+    public void Building_welds_corners_without_moving_a_single_triangle()
+    {
+        // Two boxes sharing a face: 24 triangles quoting 8 corners each, of
+        // which only 12 positions are distinct once the shared face is folded.
+        var soup = new SoupBuilder()
+            .AddBox(new Aabb(new Vector3(0, 0, 0), new Vector3(100, 100, 100)))
+            .AddBox(new Aabb(new Vector3(100, 0, 0), new Vector3(200, 100, 100)))
+            .Build();
+
+        // Every triangle survives; the corners quoting them collapse from the
+        // 48 the builder emits to the 12 positions two adjoining boxes have.
+        Assert.Equal(24, soup.Triangles.Length / 3);
+        Assert.Equal(12, soup.Vertices.Length / 3);
+
+        // Welding renames corners; it must never move one, nor fold two of a
+        // triangle's corners together into a degenerate sliver.
+        var corners = new HashSet<(float, float, float)>();
+        for (var v = 0; v < soup.Vertices.Length; v += 3)
+            corners.Add((soup.Vertices[v], soup.Vertices[v + 1], soup.Vertices[v + 2]));
+        foreach (var x in new[] { 0f, 100f, 200f })
+        foreach (var y in new[] { 0f, 100f })
+        foreach (var z in new[] { 0f, 100f })
+            Assert.Contains((x, y, z), corners);
+
+        for (var t = 0; t < soup.Triangles.Length; t += 3)
+            Assert.Equal(3, new HashSet<int> { soup.Triangles[t], soup.Triangles[t + 1], soup.Triangles[t + 2] }.Count);
+    }
+
+    [Fact]
     public void A_soup_of_one_triangle_still_indexes_and_answers()
     {
         // Wound counter-clockwise seen from above, so its normal faces the sky

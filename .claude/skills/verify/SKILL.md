@@ -31,8 +31,11 @@ dotnet run --project WoadRaiders.Server -- [port] --map <map.json>
 Custom maps are plain JSON (see `RealmDefinitionFile` docs): `spawn: [x,y,z]`,
 `enemySpawns: [[x,y,z],...]`, optional `enemySpawnTypes` (0 Minion, 1 Rogue,
 2 Mage — parallel array), optional `bossSpawn`, optional `soup` (the realm's
-triangle soup, floors first — a soupless map is the flat test arena; movement
-rules live in `RealmGeometry`, baked from the soup behind `IRealmGeometry`).
+triangle soup, untyped and vertex-welded — a soupless map is the flat test
+arena; movement rules live in `RealmGeometry`, baked from the soup behind
+`IRealmGeometry`). On the wire the soup and navmesh ride brotli-compressed
+(the Crypt: 411 KB → 76 KB), since geometry goes out reliably on join and the
+reliable window makes its size the raid's opening wait.
 The geometry carries SIM truth only — scenery lives in the .tscn and never
 reaches the wire.
 

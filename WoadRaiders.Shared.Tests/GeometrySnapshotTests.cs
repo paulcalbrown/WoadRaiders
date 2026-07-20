@@ -100,28 +100,62 @@ public class GeometrySnapshotTests
     [Fact]
     public void Hostile_lengths_are_rejected_not_allocated()
     {
-        // A hand-rolled hostile stream: valid spawn + scene, then an absurd
-        // vertex count. Deserialization must throw (the server's receive path
-        // disconnects the sender), never allocate.
-        var evilVerts = new NetDataWriter();
-        evilVerts.Put(1f);
-        evilVerts.Put(2f);
-        evilVerts.Put(3f);
-        evilVerts.Put("");
-        evilVerts.Put(int.MaxValue);
-        Assert.ThrowsAny<Exception>(() =>
-            new RealmGeometryPacket().Deserialize(new NetDataReader(evilVerts.Data, 0, evilVerts.Length)));
+        static NetDataWriter Head()
+        {
+            var w = new NetDataWriter();
+            w.Put(1f);
+            w.Put(2f);
+            w.Put(3f);
+            w.Put("");
+            return w;
+        }
+        static void Reject(NetDataWriter w) => Assert.ThrowsAny<Exception>(() =>
+            new RealmGeometryPacket().Deserialize(new NetDataReader(w.Data, 0, w.Length)));
 
-        // Same for the navmesh blob on an otherwise-valid flat packet.
-        var evilNavMesh = new NetDataWriter();
-        evilNavMesh.Put(1f);
-        evilNavMesh.Put(2f);
-        evilNavMesh.Put(3f);
-        evilNavMesh.Put("");
-        evilNavMesh.Put(0);            // no vertices
-        evilNavMesh.Put(0);            // no triangles
-        evilNavMesh.Put(int.MaxValue); // an absurd navmesh
-        Assert.ThrowsAny<Exception>(() =>
-            new RealmGeometryPacket().Deserialize(new NetDataReader(evilNavMesh.Data, 0, evilNavMesh.Length)));
+        // An absurd inflated size, rejected before anything is allocated.
+        var huge = Head();
+        huge.Put(int.MaxValue);
+        huge.Put(4);
+        huge.Put(new byte[4]);
+        Reject(huge);
+
+        // A compressed length longer than the bytes actually present.
+        var overrun = Head();
+        overrun.Put(1024);
+        overrun.Put(int.MaxValue);
+        Reject(overrun);
+
+        // The shape compression invites: a few honest bytes claiming to
+        // inflate into far more. The reader is held to exactly the size the
+        // sender declared, so the stream runs dry and the packet is refused
+        // rather than the claim being trusted.
+        var bomb = Head();
+        bomb.Put(32 * 1024 * 1024);
+        bomb.Put(4);
+        bomb.Put(new byte[4]);
+        Reject(bomb);
+    }
+
+    [Fact]
+    public void The_geometry_rides_compressed_and_arrives_intact()
+    {
+        var realm = Realm();
+        var packet = RealmSnapshot.From(realm, NavMeshBuilder.Serialize(
+            NavMeshBuilder.BuildMeshData(realm.Soup!)));
+
+        var w = new NetDataWriter();
+        packet.Serialize(w);
+        var loose = packet.SoupVertices.Length * 4 + packet.SoupTriangles.Length * 4 + packet.NavMesh.Length;
+        Assert.True(w.Length < loose,
+            $"the payload should ship smaller than its parts ({w.Length} vs {loose} bytes)");
+
+        // Byte-exact on the far side: prediction depends on both peers moving
+        // over identical geometry, so "smaller" is only tolerable because
+        // nothing is approximated.
+        var back = new RealmGeometryPacket();
+        back.Deserialize(new NetDataReader(w.Data, 0, w.Length));
+        Assert.Equal(packet.SoupVertices, back.SoupVertices);
+        Assert.Equal(packet.SoupTriangles, back.SoupTriangles);
+        Assert.Equal(packet.NavMesh, back.NavMesh);
     }
 }

@@ -100,5 +100,37 @@ public sealed class SoupBuilder
         return this;
     }
 
-    public TriangleSoup Build() => new(_verts.ToArray(), _tris.ToArray());
+    /// <summary>
+    /// Assemble the soup, welding vertices as it goes. Everything upstream
+    /// hands over corner positions per FACE — a box arrives with its eight
+    /// corners repeated across twelve triangles, and the engine bake, which
+    /// reads triangles straight out of Godot, shares nothing at all — so a
+    /// realm ships three unique vertices per triangle where a handful serve
+    /// dozens. Matching is exact-bit, never epsilon: those corners are
+    /// computed by the same expression, so they agree to the last bit, and an
+    /// exact test cannot make the result depend on the order they arrived in.
+    /// The triangles are untouched as geometry; only how they name their
+    /// corners changes.
+    /// </summary>
+    public TriangleSoup Build()
+    {
+        var welded = new Dictionary<(float X, float Y, float Z), int>(_verts.Count / 3);
+        var verts = new List<float>(_verts.Count);
+        var tris = new int[_tris.Count];
+        for (var i = 0; i < _tris.Count; i++)
+        {
+            var v = _tris[i] * 3;
+            var corner = (_verts[v], _verts[v + 1], _verts[v + 2]);
+            if (!welded.TryGetValue(corner, out var index))
+            {
+                index = welded.Count;
+                welded[corner] = index;
+                verts.Add(corner.Item1);
+                verts.Add(corner.Item2);
+                verts.Add(corner.Item3);
+            }
+            tris[i] = index;
+        }
+        return new TriangleSoup(verts.ToArray(), tris);
+    }
 }

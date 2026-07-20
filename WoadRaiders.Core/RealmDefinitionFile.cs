@@ -13,7 +13,8 @@ namespace WoadRaiders.Core;
 ///   "scene": "res://maps/YourMap.tscn",          (optional — visual identity / authored scene)
 ///   "spawn": [x, y, z],
 ///   "soup": {                                     (optional — a soupless map is the flat test arena)
-///     "vertices": [x,y,z, x,y,z, ...],
+///     "vertices": [x,y,z, x,y,z, ...],            (welded: a corner appears once, however many
+///                                                  triangles name it)
 ///     "triangles": [a,b,c, a,b,c, ...]            (untyped: order carries no meaning)
 ///   },
 ///   "enemySpawns": [ [x,y,z], ... ],
