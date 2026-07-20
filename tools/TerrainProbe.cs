@@ -8,7 +8,7 @@
 // It forges a fresh instance of the Crag and asserts, from the authoritative
 // stream alone:
 //   A) the Welcome arrives (the v14 protocol works),
-//   B) the geometry packet carries a heightfield terrain + brazier props,
+//   B) the geometry packet carries the realm's triangle soup + navmesh,
 //   C) our spawn stands ON the terrain (snapshot Y ≈ the field's sample there),
 //   D) walking east up the realm RAISES the authoritative Y (verticality is
 //      simulated server-side, not painted on),
@@ -33,6 +33,7 @@ int myId = -1;
 uint sequence = 0;
 var welcomed = false;
 DungeonGeometry? geometry = null;
+IDungeonGeometry? movement = null; // the shipped navmesh — what prediction (and this replay) moves on
 DungeonGeometryPacket? geometryPacket = null;
 float? spawnY = null;
 float peakY = float.MinValue;
@@ -61,9 +62,10 @@ listener.NetworkReceiveEvent += (peer, reader, channel, delivery) =>
             geometryPacket = new DungeonGeometryPacket();
             geometryPacket.Deserialize(reader);
             geometry = DungeonSnapshot.ToGeometry(geometryPacket);
-            Console.WriteLine($"[probe] geometry: terrain={geometryPacket.HasTerrain} " +
-                              $"({geometryPacket.TerrainWidth}x{geometryPacket.TerrainDepth}), " +
-                              $"{geometryPacket.Boxes.Length / 6} solids");
+            movement = DungeonSnapshot.ToMovementGeometry(geometryPacket);
+            Console.WriteLine($"[probe] geometry: {geometryPacket.SoupTriangles.Length / 3} triangles " +
+                              $"({geometryPacket.FloorTriangleCount} floor), " +
+                              $"{geometryPacket.NavMesh.Length / 1024} KB navmesh");
             break;
 
         case MessageType.Welcome:
@@ -109,27 +111,29 @@ while (clock.Elapsed < TimeSpan.FromSeconds(12))
 }
 net.Stop();
 
-var terrainOk = geometryPacket is { HasTerrain: true } && geometry?.Terrain is not null;
-var spawnGroundY = geometry is not null && latestPos is not null
-    ? geometry.Terrain!.Sample(geometry.SpawnPoint.X, geometry.SpawnPoint.Z)
+var terrainOk = geometryPacket is { } gp && gp.SoupTriangles.Length > 0 && geometry?.Soup is not null;
+var spawnGroundY = movement is not null && geometry is not null
+    ? movement.GroundHeight(geometry.SpawnPoint.X, geometry.SpawnPoint.Z)
     : float.NaN;
 var spawnOk = spawnY is { } sy && MathF.Abs(sy - spawnGroundY) < 2f;
 var climbed = spawnY is { } s && peakY > s + 15f;
 
-// Replay-determinism: walk the same inputs over the REBUILT geometry and land
-// where the server's last snapshot puts us.
+// Replay-determinism: walk the same inputs over the REBUILT movement geometry
+// (the navmesh the server shipped) and land where the server's snapshot puts us.
 var replayOk = false;
-if (geometry is not null && latestPos is { } serverPos && spawnY is not null)
+if (geometry is not null && movement is not null && latestPos is { } serverPos && spawnY is not null)
 {
     var pos = geometry.SpawnPoint;
     var step = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
     for (var i = 0; i < (int)sequence; i++)
-        pos = geometry.Move(pos, new Vector3(step, 0, 0));
+        pos = movement.Move(pos, new Vector3(step, 0, 0));
     // The server processed at most `sequence` of our inputs (some may still be
     // in flight), so our replay can only be AHEAD along +X, never behind.
+    // Y is judged by the MOVEMENT geometry's ground — the same floor surface
+    // the server's sim rides.
     replayOk = pos.X >= serverPos.X - 1f
                && MathF.Abs(pos.Z - serverPos.Z) < 1f
-               && MathF.Abs(geometry.Terrain!.Sample(serverPos.X, serverPos.Z) - serverPos.Y) < 2f;
+               && MathF.Abs(movement.GroundHeight(serverPos.X, serverPos.Z) - serverPos.Y) < 2f;
     Console.WriteLine($"[probe] server pos ({serverPos.X:0.0}, {serverPos.Y:0.0}, {serverPos.Z:0.0}), " +
                       $"replay pos ({pos.X:0.0}, {pos.Y:0.0}, {pos.Z:0.0})");
 }

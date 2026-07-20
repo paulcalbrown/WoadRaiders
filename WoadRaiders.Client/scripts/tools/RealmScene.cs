@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Godot;
 using WoadRaiders.Core;
 using Aabb = WoadRaiders.Core.Aabb; // the sim's world box, not Godot's
@@ -9,161 +8,145 @@ namespace WoadRaiders.Client;
 
 /// <summary>
 /// The scene a realm design composes — a thin facade over the root Node3D that
-/// knows the BAKE CONVENTIONS (terrain meshes in the "terrain" group, BoxShape3D
-/// collision and the marker names) so a design never has to.
+/// knows the BAKE CONVENTIONS (BoxMesh slabs in the "ground" and "structure"
+/// groups, and the marker names) so a design never has to.
 ///
-/// Everything here is a convenience, not a requirement. A design may ignore the
-/// helpers entirely and hang whatever it likes off <see cref="Root"/> — any
-/// meshes, materials, particles, or imported asset kits — because the served
-/// geometry is baked FROM the finished scene afterwards, and the bake only
-/// looks for the conventions above. Nothing else in the tree constrains it.
+/// Realms are BUILT, not carved: floors, ramps, stairs, walls, and roofs are
+/// all SLABS — great cut stones, each a BoxMesh under an arbitrary transform.
+/// "ground" slabs are what raiders walk on; "structure" slabs block and
+/// occlude. The served geometry is baked FROM the finished scene afterwards,
+/// and a slab scene even parses engine-free (Core.DungeonSceneFile reads
+/// BoxMesh sizes and transforms straight from the .tscn text).
 ///
-/// A fresh scene is EMPTY — no light, no sky, no ground. A design states its
-/// whole look with <see cref="Add{T}"/> — a WorldEnvironment for the sky, and
-/// whatever lights it wants — building them itself, since a look is the realm's
-/// own (<see cref="TerrainSurface"/> and <see cref="SceneryRecipes"/> offer
-/// ready-made pieces, but nothing obliges a realm to use them).
-/// Nothing is inherited behind its back. (A realm that ships
-/// no WorldEnvironment still renders — DungeonVisualBuilder notices and lights
-/// it with the dungeon default at runtime — but it will not look designed.)
-///
-/// The only thing a realm MUST have is a player spawn; that is
-/// Core.DungeonSceneFile's rule, not this class's. The root's NAME is not this
-/// class's business either — <see cref="RealmSceneBuilder"/> stamps it from the
-/// design's name when the scene is saved.
+/// Everything here is a convenience, not a requirement. A design may hang
+/// whatever it likes off <see cref="Root"/> — any meshes, materials,
+/// particles, or imported asset kits; the bake samples real triangles from
+/// anything it finds in the two groups and ignores the rest. A fresh scene is
+/// EMPTY — no light, no sky. A design states its whole look itself; the only
+/// thing a realm MUST have is a player spawn (Core.DungeonSceneFile's rule).
 /// </summary>
 public sealed class RealmScene
 {
-    /// <summary>The cell size Core.DungeonSceneFile assumes when the scene says
-    /// nothing — a realm on this pitch needs no metadata at all.</summary>
-    private const float DefaultCellSize = 40f;
+    private Node3D? _ground;
+    private Node3D? _structure;
 
-    private Node3D? _solidVisuals;
-    private StaticBody3D? _solidBodies;
+    // A design-time mirror of every slab, so markers can be seated on floors
+    // (OnFloor) with exactly the geometry the bake will serve.
+    private readonly SoupBuilder _soup = new();
+    private TriangleSoup? _built;
 
     /// <summary>The scene root. Add anything Godot can express.</summary>
     public Node3D Root { get; } = new();
 
-    /// <summary>The heightfield behind <see cref="GroundAt"/>, if the design gave
-    /// one. Null for realms that place their ground by other means.</summary>
-    public HeightField? Terrain { get; private set; }
-
-    public int SolidCount { get; private set; }
+    public int SlabCount { get; private set; }
     public int EnemyCount { get; private set; }
     public bool HasPlayerSpawn { get; private set; }
     public bool HasBoss { get; private set; }
 
-    // ------------------------------------------------------------- the land
+    // ------------------------------------------------------------- the stones
 
-    /// <summary>Lay a heightfield down as a real displaced mesh: the bake tool
-    /// samples it back off the "terrain" group, and <see cref="GroundAt"/> can
-    /// place things on it. Only realms on a non-default cell pitch write any
-    /// metadata; the rest stay convention-clean.
-    ///
-    /// What the land LOOKS like is the realm's own business, so both halves are
-    /// required: <paramref name="colour"/> is baked into the mesh's vertices
-    /// (height and surface-tilt in, colour out) and <paramref name="material"/>
-    /// is what reads them back — they are a pair, so a material that ignores
-    /// vertex colour discards the palette. TerrainSurface.Material reads them,
-    /// and a realm supplies the colours — CragDesign's highland bands are one
-    /// such palette, not the only one.
-    ///
-    /// Because the colours ride in the saved scene, a realm's palette needs no
-    /// support from the wire format at all.</summary>
-    public MeshInstance3D AddTerrain(HeightField field, Func<float, float, Color> colour, Material material)
-    {
-        var mesh = HeightFieldMesh.Build(field.OriginX, field.OriginZ, field.CellSize,
-                                         field.Width, field.Depth, field.Heights.ToArray(), colour);
-        return AddTerrain(mesh, field, material);
-    }
+    /// <summary>A floor slab raiders walk on (group "ground").</summary>
+    public MeshInstance3D AddFloor(Aabb box, Material material, string? name = null) =>
+        AddSlab(box, material, floor: true, name);
 
-    /// <summary>The position-aware variant: <paramref name="colour"/> also sees
-    /// each vertex's world (x, z), for palettes that vary by place — see
-    /// HeightFieldMesh's matching overload.</summary>
-    public MeshInstance3D AddTerrain(HeightField field, Func<float, float, float, float, Color> colour, Material material)
-    {
-        var mesh = HeightFieldMesh.Build(field.OriginX, field.OriginZ, field.CellSize,
-                                         field.Width, field.Depth, field.Heights.ToArray(), colour);
-        return AddTerrain(mesh, field, material);
-    }
+    /// <summary>A blocking slab — wall, roof, monument (group "structure").</summary>
+    public MeshInstance3D AddStructure(Aabb box, Material material, string? name = null) =>
+        AddSlab(box, material, floor: false, name);
 
-    /// <summary>Lay down ground the design built itself — a sculpted mesh, an
-    /// imported kit piece, anything. Pass <paramref name="sampler"/> when a
-    /// heightfield describes the same ground, so <see cref="GroundAt"/> works;
-    /// without it the bake still samples the real triangles.</summary>
-    public MeshInstance3D AddTerrain(Mesh mesh, HeightField? sampler = null, Material? material = null)
+    public MeshInstance3D AddSlab(Aabb box, Material material, bool floor, string? name = null) =>
+        AddSlabAt(new Transform3D(Basis.Identity, box.Center.ToGodot()), box.Size.ToGodot(), material, floor, name);
+
+    /// <summary>
+    /// A slab under any transform — the primitive behind ramps and stairs.
+    /// The transform lands verbatim in the saved scene, where the bake (and
+    /// the engine-free parser) turn it back into world triangles.
+    /// </summary>
+    public MeshInstance3D AddSlabAt(Transform3D xform, Vector3 size, Material material, bool floor, string? name = null)
     {
-        if (sampler is not null)
+        var parent = floor
+            ? _ground ??= Attach(new Node3D(), "Ground")
+            : _structure ??= Attach(new Node3D(), "Structure");
+        var node = new MeshInstance3D
         {
-            Terrain = sampler;
-            if (!Mathf.IsEqualApprox(sampler.CellSize, DefaultCellSize))
-                Root.SetMeta("terrain_cell_size", sampler.CellSize);
-        }
-
-        // "terrain" is what the bake tool samples; "no_fade" keeps the occlusion
-        // fader off the ground everything stands on.
-        var node = new MeshInstance3D { Mesh = mesh, MaterialOverride = material };
-        node.AddToGroup("terrain", persistent: true);
-        node.AddToGroup("no_fade", persistent: true);
-        return Attach(node, "Terrain");
-    }
-
-    /// <summary>The ground height under a point, per the heightfield the design
-    /// laid down — 0 for realms that never gave one.</summary>
-    public float GroundAt(float x, float z) => Terrain?.Sample(x, z) ?? 0f;
-
-    /// <summary>A point set on the ground. The usual way to place a spawn or a
-    /// landmark from plan-view (x, z) coordinates.</summary>
-    public Vector3 OnGround(float x, float z) => new(x, GroundAt(x, z), z);
-
-    // ------------------------------------------------------------- solids
-
-    /// <summary>A blocking box: a visual and the matching BoxShape3D the bake
-    /// reads as a solid. What solids are MADE of is the realm's business, so the
-    /// material is required — pass one instance for a whole run of them and the
-    /// saved scene stores it once.
-    ///
-    /// The collision is AUTHORED, not derived from the visual, and the two stay
-    /// independent on purpose. Terrain goes the other way — the bake samples a
-    /// heightfield from whatever mesh is grouped "terrain" — because sampling
-    /// straight down is a faithful projection. There is no such reduction from
-    /// an arbitrary mesh to an axis-aligned box, and inferring one would save
-    /// nothing anyway: a realm's meshes are overwhelmingly NOT solid (in The
-    /// Crag, 104 of 120), so "which meshes block" would need a group, exactly as
-    /// this shape does. Authoring it instead buys collision that need not match
-    /// any mesh: an invisible blocker sealing an exploit route, or one box
-    /// standing in for a detailed kit piece.</summary>
-    public void AddSolid(Aabb box, Material material)
-    {
-        _solidVisuals ??= Attach(new Node3D(), "SolidVisuals");
-        // A StaticBody3D holder: the bake matches any CollisionShape3D wherever it
-        // sits, and the game never runs Godot physics — but a shape orphaned from
-        // a CollisionObject3D raises a configuration warning in the editor, and
-        // these scenes are meant to open as clean, natural Godot files.
-        _solidBodies ??= Attach(new StaticBody3D(), "Static");
-
-        var center = box.Center.ToGodot();
-        var size = box.Size.ToGodot();
-        var index = SolidCount++;
-        _solidVisuals.AddChild(new MeshInstance3D
-        {
-            Name = $"Solid_{index}",
-            Position = center,
+            Name = name ?? $"{(floor ? "Floor" : "Structure")}_{SlabCount}",
+            Transform = xform,
             Mesh = new BoxMesh { Size = size, Material = material },
-        });
-        _solidBodies.AddChild(new CollisionShape3D
+        };
+        node.AddToGroup(floor ? "ground" : "structure", persistent: true);
+        if (floor)
+            node.AddToGroup("no_fade", persistent: true); // the fader never eats the floor underfoot
+        parent.AddChild(node);
+        SlabCount++;
+
+        // Mirror the slab into the design-time soup for OnFloor.
+        Span<System.Numerics.Vector3> corners = stackalloc System.Numerics.Vector3[8];
+        for (var k = 0; k < 8; k++)
         {
-            Name = $"Col_{index}",
-            Position = center,
-            Shape = new BoxShape3D { Size = size },
-        });
+            var local = SoupBuilder.LocalCorner(k, (size * 0.5f).ToSim());
+            var world = xform * new Vector3(local.X, local.Y, local.Z);
+            corners[k] = new System.Numerics.Vector3(world.X, world.Y, world.Z);
+        }
+        _soup.AddBoxCorners(corners, floor);
+        _built = null;
+        return node;
     }
 
-    public void AddSolids(IEnumerable<Aabb> boxes, Material material)
+    /// <summary>
+    /// A pitched floor slab whose top surface runs from one point to another —
+    /// a ramp. Both ends are the CENTRE of their edge; the slab hangs its
+    /// thickness below the surface.
+    /// </summary>
+    public MeshInstance3D AddRamp(Vector3 from, Vector3 to, float width, Material material,
+                                  float thickness = 12f, string? name = null)
     {
-        foreach (var box in boxes)
-            AddSolid(box, material);
+        var dir = (to - from).Normalized();
+        var side = new Vector3(dir.Z, 0, -dir.X);
+        if (side.LengthSquared() < 1e-6f)
+            throw new ArgumentException("a ramp must run somewhere on the ground plane, not straight up");
+        side = side.Normalized();
+        var normal = side.Cross(dir);
+        if (normal.Y < 0)
+            normal = -normal;
+        var centre = (from + to) * 0.5f - normal * (thickness * 0.5f);
+        return AddSlabAt(new Transform3D(new Basis(side, normal, dir), centre),
+                         new Vector3(width, thickness, (to - from).Length()), material, floor: true, name);
     }
+
+    /// <summary>
+    /// A stair of tread slabs from one point up (or down) to another, each
+    /// tread rising less than the sim's StepHeight so feet flow up it.
+    /// </summary>
+    public void AddStairs(Vector3 from, Vector3 to, float width, Material material)
+    {
+        var run = new Vector3(to.X - from.X, 0, to.Z - from.Z);
+        if (run.LengthSquared() < 1e-6f)
+            throw new ArgumentException("a stair must run somewhere on the ground plane, not straight up");
+        var dir = run.Normalized();
+        var side = new Vector3(dir.Z, 0, -dir.X);
+        var steps = Math.Max(1, Mathf.CeilToInt(Mathf.Abs(to.Y - from.Y) / (SimConstants.StepHeight - 2f)));
+
+        for (var i = 0; i < steps; i++)
+        {
+            var a = from.Lerp(to, i / (float)steps);
+            var b = from.Lerp(to, (i + 1) / (float)steps);
+            var top = MathF.Max(a.Y, b.Y);
+            var depth = MathF.Max(MathF.Abs(b.Y - a.Y) + 10f, 14f); // overlap the tread below
+            var centre = new Vector3((a.X + b.X) * 0.5f, top - depth * 0.5f, (a.Z + b.Z) * 0.5f);
+            AddSlabAt(new Transform3D(new Basis(side, Vector3.Up, dir), centre),
+                      new Vector3(width, depth, (b - a with { Y = a.Y }).Length()), material, floor: true);
+        }
+    }
+
+    /// <summary>The floor height under a point, per the slabs laid so far — how a
+    /// design seats markers and scenery on what it just built. 0 with no floors.</summary>
+    public float FloorAt(float x, float z)
+    {
+        _built ??= SlabCount > 0 ? _soup.Build() : null;
+        return _built?.FloorHeightAt(x, z) ?? 0f;
+    }
+
+    /// <summary>A point set on the floor, from plan-view (x, z) coordinates.</summary>
+    public Vector3 OnFloor(float x, float z) => new(x, FloorAt(x, z), z);
 
     // ------------------------------------------------------------- the cast
 
@@ -197,9 +180,7 @@ public sealed class RealmScene
 
     /// <summary>What the realm ended up containing — for the build log.</summary>
     public string Describe() =>
-        (Terrain is { } t ? $"{t.Width}x{t.Depth} terrain mesh, " : "no heightfield, ") +
-        $"{SolidCount} solids, {EnemyCount} enemy markers" +
-        (HasBoss ? " + boss" : " (no boss)");
+        $"{SlabCount} slabs, {EnemyCount} enemy markers" + (HasBoss ? " + boss" : " (no boss)");
 
     // ------------------------------------------------------------- plumbing
 
@@ -210,5 +191,4 @@ public sealed class RealmScene
         Root.AddChild(node);
         return node;
     }
-
 }

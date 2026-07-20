@@ -24,7 +24,7 @@ public sealed class LocalPlayer
 
     private readonly ClientConnection _connection;
     private readonly CameraRig _camera;
-    private DungeonGeometry? _geometry; // cursor rays land on this terrain
+    private IDungeonGeometry? _geometry; // cursor rays land on this terrain
     private ClientPrediction? _prediction;
     private AttackPrediction _attack;
     private uint _inputSequence; // monotonic across reconnects — the server buffer only needs increasing
@@ -66,7 +66,7 @@ public sealed class LocalPlayer
     public Vector3 AttackFacing => _attackFacing;
 
     /// <summary>Start (or on reconnect, restart) predicting as the given player and class.</summary>
-    public void BeginSession(int playerId, SysVec3 spawn, DungeonGeometry? geometry, CharacterClass cls)
+    public void BeginSession(int playerId, SysVec3 spawn, IDungeonGeometry? geometry, CharacterClass cls)
     {
         PlayerId = playerId;
         _geometry = geometry;

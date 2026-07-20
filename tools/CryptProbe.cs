@@ -9,7 +9,7 @@
 // It forges a fresh instance of the Crypt and asserts, from the authoritative
 // stream alone:
 //   A) the Welcome arrives,
-//   B) the geometry packet carries the crypt's heightfield terrain,
+//   B) the geometry packet carries the crypt's triangle soup + navmesh,
 //   C) our spawn stands ON the undercroft floor (snapshot Y ≈ the sample there),
 //   D) walking east — down the descent stair, across the Broken Span, into the
 //      catacomb maze — SINKS the authoritative Y (the descent is simulated
@@ -34,6 +34,7 @@ int myId = -1;
 uint sequence = 0;
 var welcomed = false;
 DungeonGeometry? geometry = null;
+IDungeonGeometry? movement = null; // the shipped navmesh — what prediction (and this replay) moves on
 DungeonGeometryPacket? geometryPacket = null;
 float? spawnY = null;
 float floorY = float.MaxValue;
@@ -62,9 +63,10 @@ listener.NetworkReceiveEvent += (peer, reader, channel, delivery) =>
             geometryPacket = new DungeonGeometryPacket();
             geometryPacket.Deserialize(reader);
             geometry = DungeonSnapshot.ToGeometry(geometryPacket);
-            Console.WriteLine($"[probe] geometry: terrain={geometryPacket.HasTerrain} " +
-                              $"({geometryPacket.TerrainWidth}x{geometryPacket.TerrainDepth}), " +
-                              $"{geometryPacket.Boxes.Length / 6} solids");
+            movement = DungeonSnapshot.ToMovementGeometry(geometryPacket);
+            Console.WriteLine($"[probe] geometry: {geometryPacket.SoupTriangles.Length / 3} triangles " +
+                              $"({geometryPacket.FloorTriangleCount} floor), " +
+                              $"{geometryPacket.NavMesh.Length / 1024} KB navmesh");
             break;
 
         case MessageType.Welcome:
@@ -99,7 +101,9 @@ Console.WriteLine("[probe] dialing 127.0.0.1:9050 ...");
 // ~160 over ~2.6 km of walking.
 var clock = Stopwatch.StartNew();
 var nextInput = TimeSpan.Zero;
-while (clock.Elapsed < TimeSpan.FromSeconds(12))
+// 18 s of eastward marching: the new-built necropolis reaches its second
+// descent (−160, past the hall of the dead) around the 14-second mark.
+while (clock.Elapsed < TimeSpan.FromSeconds(18))
 {
     net.PollEvents();
     if (welcomed && clock.Elapsed >= nextInput)
@@ -112,9 +116,9 @@ while (clock.Elapsed < TimeSpan.FromSeconds(12))
 }
 net.Stop();
 
-var terrainOk = geometryPacket is { HasTerrain: true } && geometry?.Terrain is not null;
-var spawnGroundY = geometry is not null && latestPos is not null
-    ? geometry.Terrain!.Sample(geometry.SpawnPoint.X, geometry.SpawnPoint.Z)
+var terrainOk = geometryPacket is { } gp && gp.SoupTriangles.Length > 0 && geometry?.Soup is not null;
+var spawnGroundY = movement is not null && geometry is not null
+    ? movement.GroundHeight(geometry.SpawnPoint.X, geometry.SpawnPoint.Z)
     : float.NaN;
 var spawnOk = spawnY is { } sy && MathF.Abs(sy - spawnGroundY) < 2f;
 var sank = spawnY is { } s && floorY < s - 100f;
@@ -122,20 +126,20 @@ var sank = spawnY is { } s && floorY < s - 100f;
 // Replay-determinism: walk the same inputs over the REBUILT geometry and land
 // where the server's last snapshot puts us.
 var replayOk = false;
-if (geometry is not null && latestPos is { } serverPos && spawnY is not null)
+if (geometry is not null && movement is not null && latestPos is { } serverPos && spawnY is not null)
 {
     var pos = geometry.SpawnPoint;
     var step = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
     for (var i = 0; i < (int)sequence; i++)
-        pos = geometry.Move(pos, new Vector3(step, 0, 0));
+        pos = movement.Move(pos, new Vector3(step, 0, 0));
     // The server processed at most `sequence` of our inputs (some may still be
     // in flight), so our replay can only be AHEAD along +X, never behind. The
-    // height check reads the server's own ground under its position, so the
-    // bridge deck (a solid, above the pit's terrain) is judged by Move, not
-    // by the terrain sample alone.
+    // height check compares against the movement geometry's own ground under
+    // the server position, so the bridge deck (above the pit's terrain) is
+    // judged by the same rules the server moved by.
     replayOk = pos.X >= serverPos.X - 1f
                && MathF.Abs(pos.Z - serverPos.Z) < 1f
-               && MathF.Abs(pos.Y - geometry.Move(serverPos, Vector3.Zero).Y) < 20f;
+               && MathF.Abs(pos.Y - movement.Move(serverPos, new Vector3(0.01f, 0, 0)).Y) < 20f;
     Console.WriteLine($"[probe] server pos ({serverPos.X:0.0}, {serverPos.Y:0.0}, {serverPos.Z:0.0}), " +
                       $"replay pos ({pos.X:0.0}, {pos.Y:0.0}, {pos.Z:0.0})");
 }

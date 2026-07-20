@@ -100,6 +100,15 @@ public static class SimConstants
     /// <summary>How close (units) a returning enemy must get to its post before it settles.</summary>
     public const float EnemyHomeEpsilon = 8f;
 
+    /// <summary>Seconds between an enemy's route plans; drift and stall replans wait this out.</summary>
+    public const float EnemyRepathInterval = 0.5f;
+
+    /// <summary>How far a destination may drift from the planned target before the route is stale.</summary>
+    public const float EnemyRepathDrift = 100f;
+
+    /// <summary>How close an enemy must pass a route waypoint to advance to the next one.</summary>
+    public const float EnemyWaypointReach = 25f;
+
     // --- The exit portal (opens when the boss falls) ---
     /// <summary>How close a player must stand to the portal to step through it.</summary>
     public const float PortalRadius = 55f;

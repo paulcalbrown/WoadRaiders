@@ -5,19 +5,18 @@ namespace WoadRaiders.Core;
 
 /// <summary>
 /// JSON (de)serialization for <see cref="DungeonGeometry"/> — the interchange
-/// format between map generators / the Godot editor export tool and the
+/// format between the realm bake / the Godot editor export tool and the
 /// headless server. Engine-free so it is unit-testable and usable anywhere.
 ///
 /// Shape:
 /// {
 ///   "scene": "res://maps/YourMap.tscn",          (optional — visual identity / authored scene)
 ///   "spawn": [x, y, z],
-///   "terrain": {                                  (optional — smooth heightfield base plane)
-///     "originX": x, "originZ": z, "cellSize": s,
-///     "width": w, "depth": d,
-///     "heights": [w*d floats, row-major]
+///   "soup": {                                     (optional — a soupless map is the flat test arena)
+///     "vertices": [x,y,z, x,y,z, ...],
+///     "triangles": [a,b,c, a,b,c, ...],           (floor triangles first)
+///     "floorTriangleCount": n
 ///   },
-///   "solids": [ { "min": [x,y,z], "max": [x,y,z] }, ... ],
 ///   "enemySpawns": [ [x,y,z], ... ],
 ///   "enemySpawnTypes": [ 0, 1, 2, ... ],         (optional — parallel to enemySpawns;
 ///                                                 EnemyType values, missing → all Minion)
@@ -41,10 +40,6 @@ public static class DungeonGeometryFile
         var doc = JsonSerializer.Deserialize<GeometryDoc>(json, Options)
                   ?? throw new InvalidDataException("empty dungeon geometry document");
 
-        var solids = new List<Aabb>();
-        foreach (var b in doc.Solids ?? Array.Empty<BoxDoc>())
-            solids.Add(new Aabb(ToVec(b.Min, "solid.min"), ToVec(b.Max, "solid.max")));
-
         var positions = doc.EnemySpawns ?? Array.Empty<float[]>();
         var types = doc.EnemySpawnTypes;
         if (types is not null && types.Length != positions.Length)
@@ -64,21 +59,21 @@ public static class DungeonGeometryFile
             spawns.Add(new EnemySpawnPoint(ToVec(positions[i], "enemySpawn"), (EnemyType)raw));
         }
 
-        return new DungeonGeometry(ToVec(doc.Spawn, "spawn"), solids, spawns, ParseTerrain(doc.Terrain))
+        return new DungeonGeometry(ToVec(doc.Spawn, "spawn"), ParseSoup(doc.Soup), spawns)
         {
             ScenePath = string.IsNullOrWhiteSpace(doc.Scene) ? null : doc.Scene,
             BossSpawn = doc.BossSpawn is null ? null : ToVec(doc.BossSpawn, "bossSpawn"),
         };
     }
 
-    private static HeightField? ParseTerrain(TerrainDoc? doc)
+    private static TriangleSoup? ParseSoup(SoupDoc? doc)
     {
         if (doc is null)
             return null;
-        if (doc.Heights is null)
-            throw new InvalidDataException("'terrain.heights' is required when 'terrain' is present");
-        // The HeightField constructor validates dimensions, cell size, and finiteness.
-        return new HeightField(doc.OriginX, doc.OriginZ, doc.CellSize, doc.Width, doc.Depth, doc.Heights);
+        if (doc.Vertices is null || doc.Triangles is null)
+            throw new InvalidDataException("'soup.vertices' and 'soup.triangles' are required when 'soup' is present");
+        // The TriangleSoup constructor validates lengths, indices, and finiteness.
+        return new TriangleSoup(doc.Vertices, doc.Triangles, doc.FloorTriangleCount);
     }
 
     public static string ToJson(DungeonGeometry g)
@@ -87,18 +82,14 @@ public static class DungeonGeometryFile
         {
             Scene = g.ScenePath,
             Spawn = new[] { g.SpawnPoint.X, g.SpawnPoint.Y, g.SpawnPoint.Z },
-            Terrain = g.Terrain is { } t
-                ? new TerrainDoc
+            Soup = g.Soup is { } soup
+                ? new SoupDoc
                 {
-                    OriginX = t.OriginX, OriginZ = t.OriginZ, CellSize = t.CellSize,
-                    Width = t.Width, Depth = t.Depth, Heights = t.Heights.ToArray(),
+                    Vertices = soup.Vertices,
+                    Triangles = soup.Triangles,
+                    FloorTriangleCount = soup.FloorTriangleCount,
                 }
                 : null,
-            Solids = g.Solids.Select(s => new BoxDoc
-            {
-                Min = new[] { s.Min.X, s.Min.Y, s.Min.Z },
-                Max = new[] { s.Max.X, s.Max.Y, s.Max.Z },
-            }).ToArray(),
             EnemySpawns = g.EnemySpawns.Select(s => new[] { s.Position.X, s.Position.Y, s.Position.Z }).ToArray(),
             EnemySpawnTypes = g.EnemySpawns.Select(s => (int)s.Type).ToArray(),
             BossSpawn = g.BossSpawn is { } b ? new[] { b.X, b.Y, b.Z } : null,
@@ -115,26 +106,16 @@ public static class DungeonGeometryFile
     {
         public string? Scene { get; set; }
         public float[]? Spawn { get; set; }
-        public TerrainDoc? Terrain { get; set; }
-        public BoxDoc[]? Solids { get; set; }
+        public SoupDoc? Soup { get; set; }
         public float[][]? EnemySpawns { get; set; }
         public int[]? EnemySpawnTypes { get; set; }
         public float[]? BossSpawn { get; set; }
     }
 
-    private sealed class TerrainDoc
+    private sealed class SoupDoc
     {
-        public float OriginX { get; set; }
-        public float OriginZ { get; set; }
-        public float CellSize { get; set; }
-        public int Width { get; set; }
-        public int Depth { get; set; }
-        public float[]? Heights { get; set; }
-    }
-
-    private sealed class BoxDoc
-    {
-        public float[]? Min { get; set; }
-        public float[]? Max { get; set; }
+        public float[]? Vertices { get; set; }
+        public int[]? Triangles { get; set; }
+        public int FloorTriangleCount { get; set; }
     }
 }

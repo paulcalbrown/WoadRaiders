@@ -45,7 +45,9 @@ public static class DungeonVisualBuilder
         // torn down with them.
         var forward = CameraRig.LiveGroundForward;
         var mouth = geometry.SpawnPoint.ToGodot() - forward * PortalSetback;
-        mouth.Y = geometry.GroundHeight(mouth.X, mouth.Z); // seat the gate on the land
+        // Seat the gate on the floor (the spawn's own height when the setback
+        // hangs past the slab's edge).
+        mouth.Y = geometry.Soup?.FloorHeightAt(mouth.X, mouth.Z) ?? geometry.SpawnPoint.Y;
         parent.AddChild(new PortalView
         {
             Tint = UiTheme.WoadBlue,

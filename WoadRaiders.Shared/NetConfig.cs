@@ -67,9 +67,16 @@ public static class NetConfig
     ///       the Gauntlet-style realm rework),
     /// v15 = props dropped from DungeonGeometryPacket. The authored .tscn is the
     ///       only visual source, so nothing ever rendered from that record; a
-    ///       cosmetic landmark is now just a node in the scene.
+    ///       cosmetic landmark is now just a node in the scene,
+    /// v16 = the baked navmesh (DungeonGeometryPacket.NavMesh): the server bakes
+    ///       each realm's Detour mesh once at load and ships the bytes, and both
+    ///       peers move on NavMeshGeometry instead of sampling the heightfield,
+    /// v17 = the heightfield and terrain concept removed outright: the packet
+    ///       ships the realm's triangle soup (floors first) + navmesh; the
+    ///       terrain grid and solid boxes are gone. Realms are BUILT — slabs,
+    ///       not landscape.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v15";
+    public const string ConnectionKey = "WoadRaiders.v17";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";

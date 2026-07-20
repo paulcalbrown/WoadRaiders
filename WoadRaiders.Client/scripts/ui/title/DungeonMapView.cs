@@ -5,11 +5,11 @@ using WoadRaiders.Core;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// A schematic map of a realm, drawn from its real geometry: the terrain as a
-/// shaded relief (glens glow, gorges darken, the wild crags frame it), wall
-/// slabs as woad-line strokes, the player spawn as a green sigil, the boss as a
-/// violet one, enemy posts as ember dots. What the card shows is what the
-/// server simulates — the preview can never drift from the map.
+/// A schematic map of a realm, drawn from its real geometry: the floors as a
+/// shaded relief (low halls glow deep, high courts pale, the void draws
+/// nothing), the player spawn as a green sigil, the boss as a violet one,
+/// enemy posts as ember dots. What the card shows is what the server
+/// simulates — the preview can never drift from the map.
 /// </summary>
 public partial class DungeonMapView : Control
 {
@@ -68,7 +68,7 @@ public partial class DungeonMapView : Control
 
     public override void _Draw()
     {
-        if (_geometry is not { } g || (g.Solids.Count == 0 && g.Terrain is null))
+        if (_geometry is not { } g || g.Soup is null)
             return;
 
         // Fit the realm's bounds into this control, preserving aspect.
@@ -80,43 +80,32 @@ public partial class DungeonMapView : Control
             (Size.Y - size.Z * scale) / 2f - bounds.Min.Z * scale);
         Vector2 Map(float x, float z) => origin + new Vector2(x, z) * scale;
 
-        // The land itself, as shaded relief. The shading bands come from the
-        // realm's OWN elevations — the heights its cast stands at — so an
-        // open climb (the Crag) and a sunken descent (the Crypt) both draw
-        // their walked ground in the ramp, with everything below pit-dark and
-        // everything above wild-rock-dark.
-        if (g.Terrain is { } terrain)
+        // The floors themselves, as shaded relief sampled from the soup. The
+        // shading bands come from the realm's OWN elevations — the heights its
+        // cast stands at — so an open climb (the Crag) and a sunken descent
+        // (the Crypt) both draw their walked ground in the ramp; where there is
+        // no floor at all, the card stays dark: the void is the wall.
         {
             var (deepBand, wildBand) = PlayableBand(g);
-            const int step = 2; // 2x2 samples per swatch keeps the draw cheap
+            var swatch = MathF.Max(20f, MathF.Max(size.X, size.Z) / 96f); // world units per square
             var gorgeDark = new Color(0.03f, 0.05f, 0.10f);
             var lowland = new Color(0.10f, 0.22f, 0.20f);
             var upland = new Color(0.55f, 0.62f, 0.58f);
             var crag = new Color(0.10f, 0.11f, 0.16f);
-            for (var j = 0; j < terrain.Depth - 1; j += step)
+            for (var z = bounds.Min.Z; z < bounds.Max.Z; z += swatch)
             {
-                for (var i = 0; i < terrain.Width - 1; i += step)
+                for (var x = bounds.Min.X; x < bounds.Max.X; x += swatch)
                 {
-                    var h = terrain.At(i, j);
+                    if (g.Soup.FloorHeightAt(x + swatch * 0.5f, z + swatch * 0.5f) is not { } h)
+                        continue;
                     var color = h < deepBand ? gorgeDark
                         : h > wildBand ? crag
                         : lowland.Lerp(upland, (h - deepBand) / (wildBand - deepBand));
-                    var x = terrain.OriginX + i * terrain.CellSize;
-                    var z = terrain.OriginZ + j * terrain.CellSize;
                     var a = Map(x, z);
-                    var b = Map(x + step * terrain.CellSize, z + step * terrain.CellSize);
+                    var b = Map(x + swatch, z + swatch);
                     DrawRect(new Rect2(a, b - a), color);
                 }
             }
-        }
-
-        // The walls, as the mason left them.
-        var wall = new Color(UiTheme.WoadDim, 0.85f);
-        foreach (var solid in g.Solids)
-        {
-            var a = Map(solid.Min.X, solid.Min.Z);
-            var b = Map(solid.Max.X, solid.Max.Z);
-            DrawRect(new Rect2(a, b - a), wall);
         }
 
         // The garrison: embers for the rank and file.

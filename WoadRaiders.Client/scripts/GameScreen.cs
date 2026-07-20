@@ -39,6 +39,7 @@ public partial class GameScreen : Node3D
     private HudController _hud = null!;
     private CameraRig _camera = null!;
     private DungeonGeometry? _geometry;
+    private IDungeonGeometry? _movement; // the baked navmesh (or flat rules) everything MOVES on
     private Node3D? _mapRoot;            // all dungeon visuals live under here, so a map swap can rebuild them
     private int? _builtMapFingerprint;   // fingerprint of the map the visuals were built for
     private bool _portalAnnounced;       // the "way opens" banner fires once per session
@@ -190,8 +191,9 @@ public partial class GameScreen : Node3D
 
     private void OnGeometry(DungeonGeometryPacket packet)
     {
-        _geometry = DungeonSnapshot.ToGeometry(packet);
-        _camera.Geometry = _geometry; // the boom keeps clear of this terrain
+        _geometry = DungeonSnapshot.ToGeometry(packet);       // the realm's DATA: scene identity, visuals
+        _movement = DungeonSnapshot.ToMovementGeometry(packet); // what prediction and cursor rays move on
+        _camera.Geometry = _movement; // the boom keeps clear of this terrain
 
         // A reconnect to the same match re-sends the same map — leave the standing
         // visuals alone. But a client that outlives a server swap can land on a
@@ -275,7 +277,7 @@ public partial class GameScreen : Node3D
         // (The portal banner may fire again: a rejoined world is news again.)
         _portalAnnounced = false;
         _state.Reset();
-        _localPlayer.BeginSession(welcome.PlayerId, _geometry?.SpawnPoint ?? SysVec3.Zero, _geometry,
+        _localPlayer.BeginSession(welcome.PlayerId, _geometry?.SpawnPoint ?? SysVec3.Zero, _movement,
                                   ClientConfig.PlayerClass);
         GD.Print($"Joined instance #{welcome.InstanceId} as player {welcome.PlayerId} ({ClientConfig.PlayerClass})");
     }

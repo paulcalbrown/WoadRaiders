@@ -1,333 +1,197 @@
-using System.Numerics;
+using Godot;
 using WoadRaiders.Core;
+using Aabb = WoadRaiders.Core.Aabb;
 
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The Crag's DESIGN — one <see cref="IRealmDesign"/> among however many: a
-/// "wild"
-/// highland of crags is the default, and the playable realm is carved into it
-/// as a chain of smooth-blended plates (discs and capsules with target
-/// heights) — glen → dale → gorge bridge → switchback climb → rolling moor
-/// with a standing-stone circle and an overlook spur → summit shoulder →
-/// walled boss court. A deep gorge cuts the land in two; its floor is a real
-/// place (rogue ambush) with a scree ramp back out. Deterministic: same
-/// numbers, same realm, every run (hash noise, no framework RNG).
+/// The Crag's DESIGN — a BUILT realm, not a carved one: a megalithic ascent of
+/// broad stone terraces rising from the gate court to the boss's high court,
+/// joined by wide stairs and a causeway over open air. Giants cut these
+/// stones; nothing here pretends to be landscape.
 ///
-/// This lives CLIENT-SIDE, next to the scene builder that runs it, so the
-/// design can place ANYTHING Godot can express — the simulation-relevant parts
-/// (terrain, collision, markers, braziers) follow the bake conventions, and
-/// everything else (the boulder scatter, and whatever dressing comes later) is
-/// pure scenery the bake never needs to understand. The served geometry JSON
-/// is BAKED FROM the finished scene, never the other way around.
+///   gate court (0) → stairs → the processional (120) → stairs →
+///   the high ward (240) → the causeway → the boss court (240, dais 256)
+///
+/// Drops off a terrace's open edges are legal shortcuts back down (the stairs
+/// climb back); the void beyond the stones seals the realm — there is nothing
+/// to walk on out there. Parapets guard only the edges above NOTHING, so no
+/// leap strands a raider.
 /// </summary>
 public sealed partial class CragDesign : IRealmDesign
 {
     public string Name => "Crag";
 
-    /// <summary>Compose the realm: the look, then the land, then what stands on
-    /// it, then the cast, then pure scenery. The order here is the scene's node
-    /// order.</summary>
+    // Terrace tops.
+    private const float Court = 0f;
+    private const float Processional = 120f;
+    private const float HighWard = 240f;
+    private const float Dais = 256f;
+
+    private static readonly Color Granite = new(0.42f, 0.44f, 0.47f);
+    private static readonly Color WornGranite = new(0.36f, 0.37f, 0.40f);
+    private static readonly Color OldBronze = new(0.45f, 0.38f, 0.25f);
+
     public RealmScene Build()
     {
         var scene = new RealmScene();
+        var floor = Slab(Granite);
+        var worn = Slab(WornGranite);
+        var bronze = Slab(OldBronze);
 
-        // This realm's own dusk, light rig, and stone (CragDesign.Scenery.cs).
-        DressWithDusk(scene);
+        // ------------------------------------------------------- the terraces
+        // The gate court — where the raiders arrive.
+        scene.AddFloor(Box(200, -60, 1400, 1200, Court, 2600), floor, "GateCourt");
+        // The processional — the long middle terrace, cut down to bedrock.
+        scene.AddFloor(Box(1500, -60, 1600, 2700, Processional, 2400), floor, "Processional");
+        // The high ward — the upper field before the causeway.
+        scene.AddFloor(Box(3000, -60, 1200, 3800, HighWard, 2800), floor, "HighWard");
+        // The causeway — a THIN bridge of stone over open air, on purpose.
+        scene.AddFloor(Box(3250, 216, 2800, 3550, HighWard, 3200), worn, "Causeway");
+        // The boss court, and the dais he stands on.
+        scene.AddFloor(Box(2900, -60, 3200, 3900, HighWard, 4000), floor, "BossCourt");
+        scene.AddFloor(Box(3250, HighWard, 3500, 3550, Dais, 3800), worn, "Dais");
 
-        var field = BuildHeightField();
-        // Highland colours baked into the mesh; the material reads them back.
-        scene.AddTerrain(field, HighlandColour, TerrainSurface.Material());
-        // The Crag's works are weathered stone — one material, shared by every box.
-        scene.AddSolids(Solids(field), Stone());
+        // ------------------------------------------------------- the stairs
+        scene.AddStairs(new Vector3(1200, Court, 2000), new Vector3(1500, Processional, 2000), 320, worn);
+        scene.AddStairs(new Vector3(2700, Processional, 2000), new Vector3(3000, HighWard, 2000), 320, worn);
 
-        DressWithBraziers(scene);
+        // ------------------------------------------------------- the walls
+        // Parapets along every edge with NOTHING below — a fall there would be
+        // into the void, so the stones forbid it. Terrace edges above lower
+        // terraces stay open: leaping down is a raider's right.
+        scene.AddStructure(Box(3250, HighWard, 2800, 3262, HighWard + 44, 3200), worn, "CausewayRailW");
+        scene.AddStructure(Box(3538, HighWard, 2800, 3550, HighWard + 44, 3200), worn, "CausewayRailE");
+        Perimeter(scene, worn);
 
-        scene.SetPlayerSpawn(scene.OnGround(PlayerSpawn.X, PlayerSpawn.Z));
-        foreach (var enemy in Enemies)
-            scene.AddEnemy(enemy.Type, scene.OnGround(enemy.X, enemy.Z));
-        scene.SetBossSpawn(scene.OnGround(BossSpawn.X, BossSpawn.Z));
+        // ------------------------------------------------------- the stones
+        // Standing stones — rings and sentinels; pure structure, set on the
+        // flanks so the processional's spine stays an open walk.
+        StoneRing(scene, bronze, 700, 1700, 180, 6);
+        StoneRing(scene, bronze, 2300, 2220, 100, 5);
+        Sentinel(scene, bronze, 3060, 1300);
+        Sentinel(scene, bronze, 3740, 1300);
+        Sentinel(scene, bronze, 3060, 2700);
+        Sentinel(scene, bronze, 3740, 2700);
+        Sentinel(scene, bronze, 2960, 3260);
+        Sentinel(scene, bronze, 3840, 3260);
 
-        // ---- pure scenery, past here: nothing the simulation ever sees. ----
-        DressWithBoulders(scene);
+        // ------------------------------------------------------- the cast
+        scene.SetPlayerSpawn(scene.OnFloor(400, 2000));
+        Camp(scene, EnemyType.Minion, 900, 1800, 900, 2200);
+        Camp(scene, EnemyType.Minion, 1700, 1750, 1700, 2250);
+        Camp(scene, EnemyType.Rogue, 2100, 1700, 2100, 2300);
+        Camp(scene, EnemyType.Minion, 2500, 1800, 2500, 2200);
+        scene.AddEnemy(EnemyType.Mage, scene.OnFloor(2300, 2000));
+        Camp(scene, EnemyType.Minion, 3200, 1500, 3200, 2500);
+        Camp(scene, EnemyType.Rogue, 3500, 1400, 3500, 2600);
+        scene.AddEnemy(EnemyType.Mage, scene.OnFloor(3650, 1800));
+        scene.AddEnemy(EnemyType.Mage, scene.OnFloor(3650, 2200));
+        Camp(scene, EnemyType.Rogue, 3300, 3350, 3500, 3350);
+        Camp(scene, EnemyType.Minion, 3050, 3700, 3750, 3700);
+        scene.AddEnemy(EnemyType.Mage, scene.OnFloor(3400, 3900));
+        scene.SetBossSpawn(scene.OnFloor(3400, 3650));
 
+        // ------------------------------------------------------- the dressing
+        Scenery(scene); // the imported kit pass (CragDesign.Scenery.cs) — pure scenery
+
+        // ------------------------------------------------------- the look
+        Skies(scene);
         return scene;
     }
 
-    private const float Cell = 40f;          // world units between height samples
-    private const int W = 151, D = 161;      // samples: the realm is 6000 x 6400 world units
-    private const int Seed = 77;
+    // ----------------------------------------------------------- vocabulary
 
-    // ------------------------------------------------------------- noise
+    private static Aabb Box(float x0, float y0, float z0, float x1, float y1, float z1) =>
+        new(new System.Numerics.Vector3(x0, y0, z0), new System.Numerics.Vector3(x1, y1, z1));
 
-    private static float Hash(int x, int z, int salt)
+    private static StandardMaterial3D Slab(Color colour) => new()
     {
-        var h = unchecked((uint)(x * 374761393 + z * 668265263 + salt * 974711 + Seed * 144665));
-        h = (h ^ (h >> 13)) * 1274126177u;
-        h ^= h >> 16;
-        return (h & 0xFFFFFF) / (float)0x1000000; // 0..1
-    }
-
-    private static float ValueNoise(float x, float z, float wavelength, int salt)
-    {
-        var fx = x / wavelength;
-        var fz = z / wavelength;
-        var x0 = (int)MathF.Floor(fx);
-        var z0 = (int)MathF.Floor(fz);
-        var tx = fx - x0;
-        var tz = fz - z0;
-        tx = tx * tx * (3f - 2f * tx); // smoothstep the lattice lerp
-        tz = tz * tz * (3f - 2f * tz);
-        var n = float.Lerp(float.Lerp(Hash(x0, z0, salt), Hash(x0 + 1, z0, salt), tx),
-                           float.Lerp(Hash(x0, z0 + 1, salt), Hash(x0 + 1, z0 + 1, salt), tx), tz);
-        return n * 2f - 1f; // -1..1
-    }
-
-    private static float Fractal(float x, float z, float wavelength, int octaves, int salt)
-    {
-        float sum = 0f, amp = 1f, norm = 0f;
-        for (var o = 0; o < octaves; o++)
-        {
-            sum += ValueNoise(x, z, wavelength, salt + o * 131) * amp;
-            norm += amp;
-            wavelength *= 0.5f;
-            amp *= 0.5f;
-        }
-        return sum / norm; // -1..1
-    }
-
-    // ------------------------------------------------------------- the land
-    // A plate is a smooth-blended playable area: a capsule (A→B) or disc
-    // (A==B) whose height runs Ha→Hb along its axis, fading over Blend.
-
-    private static readonly (Vector2 A, Vector2 B, float R, float Ha, float Hb, float Blend)[] Plates =
-    {
-        // The Glen — the spawn meadow, ringed by crags.
-        (new(700, 700), new(700, 700), 420f, 0f, 0f, 80f),
-        // The dale east: a narrowing walk toward the gorge.
-        (new(1000, 700), new(2200, 900), 140f, 0f, 25f, 70f),
-        (new(2450, 1000), new(2450, 1000), 260f, 30f, 30f, 70f),
-        (new(2650, 1050), new(3050, 1100), 130f, 30f, 40f, 60f),
-        // Gorge rims: flat landings either side of the bridge.
-        (new(2980, 1100), new(2980, 1100), 200f, 40f, 40f, 60f),
-        (new(3700, 1100), new(3700, 1100), 220f, 40f, 40f, 60f),
-        // The scree ramp out of the gorge floor, and the pocket it climbs into.
-        (new(3350, 700), new(2700, 550), 130f, -140f, 5f, 60f),
-        (new(2500, 600), new(2500, 600), 170f, 10f, 10f, 60f),
-        (new(2500, 600), new(2250, 750), 120f, 10f, 15f, 60f),
-        // The switchbacks: two climbing legs and their turns.
-        (new(3700, 1100), new(4600, 1250), 120f, 40f, 95f, 60f),
-        (new(4750, 1350), new(4750, 1350), 150f, 98f, 98f, 60f),
-        (new(4750, 1350), new(3900, 1650), 120f, 98f, 150f, 60f),
-        (new(3750, 1750), new(3750, 1750), 160f, 150f, 150f, 60f),
-        // A moor tongue over the switchbacks: a one-way jump-down shortcut.
-        (new(3850, 1450), new(3850, 1450), 120f, 150f, 150f, 30f),
-        // The Moor — a broad rolling plateau.
-        (new(3750, 1750), new(3900, 2500), 200f, 150f, 152f, 70f),
-        (new(3900, 2500), new(3900, 2500), 700f, 152f, 152f, 90f),
-        (new(4800, 2900), new(4800, 2900), 560f, 155f, 155f, 90f),
-        (new(3200, 3100), new(3200, 3100), 500f, 150f, 150f, 90f),
-        (new(4300, 2700), new(4300, 2700), 240f, 154f, 154f, 60f), // the stone circle's floor
-        // The overlook spur: a scenic mage nest on a dead-end ledge.
-        (new(3000, 2800), new(2500, 2100), 130f, 150f, 180f, 60f),
-        (new(2450, 1950), new(2450, 1950), 160f, 185f, 185f, 60f),
-        // The summit shoulder: the last climb.
-        (new(4800, 3200), new(5300, 3700), 130f, 155f, 205f, 60f),
-        (new(5350, 3850), new(5350, 3850), 150f, 208f, 208f, 60f),
-        (new(5350, 3850), new(4700, 4300), 130f, 208f, 258f, 60f),
-        (new(4600, 4250), new(4600, 4250), 180f, 260f, 260f, 60f),
-        (new(4460, 4400), new(4460, 4400), 120f, 261f, 261f, 60f), // the gate mouth
-        // The Crag summit court — the boss's walled ring.
-        (new(4200, 4750), new(4200, 4750), 380f, 262f, 262f, 60f),
+        AlbedoColor = colour,
+        Roughness = 0.95f,
     };
 
-    // The gorge is carved AFTER the plates, so it cuts whatever it crosses.
-    private static readonly (Vector2 A, Vector2 B, float R, float Floor, float Blend) Gorge =
-        (new(3350, 500), new(3150, 2900), 170f, -140f, 90f);
-
-    private static (float H, float Weight) EvalPlate(Vector2 p, Vector2 a, Vector2 b, float r, float ha, float hb, float blend)
+    /// <summary>A terrace-edge parapet wherever the drop would land on nothing.</summary>
+    private static void Perimeter(RealmScene scene, Material material)
     {
-        var ab = b - a;
-        var t = ab.LengthSquared() < 1f ? 0f : Math.Clamp(Vector2.Dot(p - a, ab) / ab.LengthSquared(), 0f, 1f);
-        var d = Vector2.Distance(p, a + ab * t);
-        var h = ha + (hb - ha) * t;
-        if (d <= r)
-            return (h, 1f);
-        if (d >= r + blend)
-            return (h, 0f);
-        var s = (d - r) / blend;
-        return (h, 1f - s * s * (3f - 2f * s));
+        // The gate court's outer rim.
+        scene.AddStructure(Box(200, Court, 1400, 1200, Court + 44, 1412), material, "RimGateN");
+        scene.AddStructure(Box(200, Court, 2588, 1200, Court + 44, 2600), material, "RimGateS");
+        scene.AddStructure(Box(200, Court, 1400, 212, Court + 44, 2600), material, "RimGateW");
+        // The processional's flanks.
+        scene.AddStructure(Box(1500, Processional, 1600, 2700, Processional + 44, 1612), material, "RimProcN");
+        scene.AddStructure(Box(1500, Processional, 2388, 2700, Processional + 44, 2400), material, "RimProcS");
+        // The high ward's outer flanks.
+        scene.AddStructure(Box(3000, HighWard, 1200, 3800, HighWard + 44, 1212), material, "RimWardN");
+        scene.AddStructure(Box(3000, HighWard, 2788, 3238, HighWard + 44, 2800), material, "RimWardS1");
+        scene.AddStructure(Box(3562, HighWard, 2788, 3800, HighWard + 44, 2800), material, "RimWardS2");
+        scene.AddStructure(Box(3788, HighWard, 1200, 3800, HighWard + 44, 2800), material, "RimWardE");
+        // The boss court's rim, broken only where the causeway enters.
+        scene.AddStructure(Box(2900, HighWard, 3200, 3238, HighWard + 44, 3212), material, "RimCourtN1");
+        scene.AddStructure(Box(3562, HighWard, 3200, 3900, HighWard + 44, 3212), material, "RimCourtN2");
+        scene.AddStructure(Box(2900, HighWard, 3988, 3900, HighWard + 44, 4000), material, "RimCourtS");
+        scene.AddStructure(Box(2900, HighWard, 3200, 2912, HighWard + 44, 4000), material, "RimCourtW");
+        scene.AddStructure(Box(3888, HighWard, 3200, 3900, HighWard + 44, 4000), material, "RimCourtE");
     }
 
-    private static float HeightAt(float x, float z)
+    /// <summary>A ring of standing stones around a point on the floor.</summary>
+    private static void StoneRing(RealmScene scene, Material material, float cx, float cz, float radius, int count)
     {
-        var p = new Vector2(x, z);
-
-        // The wild highland: high crags with broad ridge noise.
-        var wild = 330f + Fractal(x, z, 900f, 4, 7) * 55f;
-
-        // The playable plates, weight-blended where they overlap.
-        float hSum = 0f, wSum = 0f, wMax = 0f;
-        foreach (var (a, b, r, ha, hb, blend) in Plates)
+        for (var i = 0; i < count; i++)
         {
-            var (h, w) = EvalPlate(p, a, b, r, ha, hb, blend);
-            if (w <= 0f)
-                continue;
-            hSum += h * w;
-            wSum += w;
-            wMax = MathF.Max(wMax, w);
+            var angle = Mathf.Tau * i / count;
+            var x = cx + Mathf.Cos(angle) * radius;
+            var z = cz + Mathf.Sin(angle) * radius;
+            var y = scene.FloorAt(x, z);
+            scene.AddStructure(Box(x - 14, y, z - 10, x + 14, y + 110 + 14 * (i % 3), z + 10), material);
         }
-        var height = wSum > 0f ? float.Lerp(wild, hSum / wSum, wMax) : wild;
-
-        // Carve the gorge through whatever stood there.
-        var (gh, gw) = EvalPlate(p, Gorge.A, Gorge.B, Gorge.R, Gorge.Floor, Gorge.Floor, Gorge.Blend);
-        height = float.Lerp(height, gh, gw);
-        var inPlay = MathF.Max(wMax, gw);
-
-        // Organic detail: a broad gentle swell everywhere (what kills the tile
-        // feel), plus rougher grain that fades on the walked ground.
-        height += Fractal(x, z, 1500f, 2, 23) * 6f;
-        height += Fractal(x, z, 260f, 3, 41) * 8f * (1f - 0.75f * inPlay);
-
-        // The border band rises into an unclimbable rim — the realm is sealed.
-        // The grade must exceed the worst-case per-cell step (RealmValidator's
-        // inching slope), or the flood fill rightly reports a leak.
-        var edge = MathF.Min(MathF.Min(x, 6000f - x), MathF.Min(z, 6400f - z));
-        if (edge < 160f)
-            height += (160f - edge) * 5f;
-
-        return height;
     }
 
-    /// <summary>Evaluate the layout math over the sample grid — the heightfield
-    /// this realm's terrain mesh is built from. (Deliberately NOT called a bake:
-    /// in this project "the bake" means the later step that samples the finished
-    /// .tscn into server geometry. This runs before any scene exists.) Heights
-    /// are rounded to 3 decimals so design, mesh, and bake all carry the
-    /// identical value.</summary>
-    private static HeightField BuildHeightField()
+    /// <summary>One tall sentinel stone.</summary>
+    private static void Sentinel(RealmScene scene, Material material, float x, float z)
     {
-        var heights = new float[W * D];
-        for (var j = 0; j < D; j++)
-            for (var i = 0; i < W; i++)
-                heights[j * W + i] = MathF.Round(HeightAt(i * Cell, j * Cell), 3);
-        return new HeightField(0f, 0f, Cell, W, D, heights);
+        var y = scene.FloorAt(x, z);
+        scene.AddStructure(Box(x - 18, y, z - 14, x + 18, y + 170, z + 14), material);
     }
 
-    // ------------------------------------------------------------- solids
-
-    private static List<Aabb> Solids(HeightField field)
+    /// <summary>A small camp: two of a kind flanking a stretch of floor.</summary>
+    private static void Camp(RealmScene scene, EnemyType type, float x0, float z0, float x1, float z1)
     {
-        var solids = new List<Aabb>
-        {
-            // The gorge bridge: a stone deck with parapets. The deck top matches
-            // the rims (40); the parapets rise 22 — too tall to walk over, low
-            // enough that eye-height bolts fly across the gorge unimpeded.
-            new(new Vector3(3040, 26, 1050), new Vector3(3640, 40, 1150)),  // deck
-            new(new Vector3(3060, 40, 1050), new Vector3(3620, 62, 1062)),  // north parapet
-            new(new Vector3(3060, 40, 1138), new Vector3(3620, 62, 1150)),  // south parapet
-        };
-
-        // The summit ramparts: a walled ring with one southern gate, on court
-        // ground (~262). Wall tops at 352 — far beyond any step.
-        const float wallBase = 252f, wallTop = 352f;
-        solids.Add(new Aabb(new Vector3(3820, wallBase, 4370), new Vector3(4380, wallTop, 4410)));  // south, west of gate
-        solids.Add(new Aabb(new Vector3(4540, wallBase, 4370), new Vector3(4580, wallTop, 4410)));  // south, east of gate
-        solids.Add(new Aabb(new Vector3(3820, wallBase, 5090), new Vector3(4580, wallTop, 5130)));  // north
-        solids.Add(new Aabb(new Vector3(3820, wallBase, 4410), new Vector3(3860, wallTop, 5090)));  // west
-        solids.Add(new Aabb(new Vector3(4540, wallBase, 4410), new Vector3(4580, wallTop, 5090)));  // east
-
-        // The standing stones on the moor: a ring of eight monoliths.
-        var circle = new Vector2(4300, 2700);
-        for (var k = 0; k < 8; k++)
-        {
-            var ang = k * MathF.Tau / 8f + 0.2f;
-            var cx = circle.X + MathF.Cos(ang) * 180f;
-            var cz = circle.Y + MathF.Sin(ang) * 180f;
-            var ground = field.Sample(cx, cz);
-            var half = 16f + (k % 3) * 3f; // slightly irregular monoliths
-            solids.Add(new Aabb(new Vector3(cx - half, ground - 10f, cz - half),
-                                new Vector3(cx + half, ground + 78f + (k % 2) * 10f, cz + half)));
-        }
-        return solids;
+        scene.AddEnemy(type, scene.OnFloor(x0, z0));
+        scene.AddEnemy(type, scene.OnFloor(x1, z1));
     }
 
-    // ------------------------------------------------------------- the cast
-
-    private static readonly (EnemyType Type, float X, float Z)[] Enemies =
+    private static void Skies(RealmScene scene)
     {
-        // The glen and dale: minions guard the first walk.
-        (EnemyType.Minion, 1500, 750), (EnemyType.Minion, 1900, 850), (EnemyType.Minion, 2350, 950),
-        (EnemyType.Rogue, 2500, 1100),
-        // The gorge floor: a rogue ambush for anyone who falls (or dares climb down).
-        (EnemyType.Rogue, 3300, 1300), (EnemyType.Rogue, 3280, 1800), (EnemyType.Rogue, 3320, 2300),
-        // The east landing and switchbacks: the bridgehead watch.
-        (EnemyType.Minion, 3750, 1180), (EnemyType.Minion, 3850, 1100), (EnemyType.Mage, 3950, 1250),
-        (EnemyType.Minion, 4400, 1220), (EnemyType.Minion, 4500, 1400),
-        (EnemyType.Rogue, 4100, 1560), (EnemyType.Minion, 3850, 1700),
-        // The moor: scattered packs across the rolling top.
-        (EnemyType.Minion, 3850, 2150), (EnemyType.Minion, 4050, 2350), (EnemyType.Rogue, 3500, 2800),
-        (EnemyType.Minion, 4600, 2600), (EnemyType.Rogue, 5000, 2950),
-        // The stone circle: a warded camp.
-        (EnemyType.Minion, 4200, 2600), (EnemyType.Minion, 4400, 2600),
-        (EnemyType.Mage, 4300, 2820), (EnemyType.Mage, 4180, 2760),
-        // The overlook spur: mages with the high ground.
-        (EnemyType.Mage, 2520, 2050), (EnemyType.Mage, 2400, 1900), (EnemyType.Rogue, 2600, 2200),
-        // The summit shoulder and the court's honor guard.
-        (EnemyType.Minion, 5100, 3500), (EnemyType.Mage, 5320, 3750), (EnemyType.Minion, 5000, 4050),
-        (EnemyType.Mage, 4050, 4600), (EnemyType.Mage, 4350, 4600),
-        (EnemyType.Rogue, 4100, 4900), (EnemyType.Rogue, 4300, 4900),
-    };
-
-    private static readonly (float X, float Z)[] BrazierSpots =
-    {
-        (640, 640), (760, 640),                    // the spawn gate
-        (900, 700), (1500, 780), (2100, 880), (2500, 1020), (2900, 1090),
-        (3080, 1040), (3600, 1040),                // the bridge ends
-        (3800, 1140), (4300, 1210), (4700, 1300), (4300, 1520), (3950, 1630),
-        (3780, 1830), (3850, 2200),                // onto the moor
-        (4130, 2530), (4470, 2530), (4130, 2870), (4470, 2870), // the stone circle
-        (2450, 1950),                              // the overlook
-        (2500, 600),                               // the gorge pocket
-        (4900, 3300), (5250, 3600), (5150, 4000), (4800, 4200), // the summit climb
-        (4420, 4440), (4500, 4440),                // inside the gate
-        (3950, 4550), (4450, 4550), (3950, 4950), (4450, 4950), // the court ring
-        (4100, 4820), (4300, 4820),                // flanking the throne
-    };
-
-    private static readonly (float X, float Z) PlayerSpawn = (700, 700);
-    private static readonly (float X, float Z) BossSpawn = (4200, 4820);
-
-    // ------------------------------------------------------------- scenery
-    // Pure dressing — the whole point of building the scene FIRST: nothing
-    // below exists in the served geometry at all. Add whatever reads well.
-
-    /// <summary>Deterministic boulder scatter for the crag faces: position,
-    /// overall size, yaw, and which rock variant. Rocks favour steep, wild
-    /// ground (the slopes nobody walks), never the gorge depths or the rim.</summary>
-    private static IEnumerable<(Vector3 Position, float Size, float Yaw, int Variant)> Boulders()
-    {
-        for (var gz = 200; gz < 6200; gz += 120)
+        scene.Add(new WorldEnvironment
         {
-            for (var gx = 200; gx < 5800; gx += 120)
+            Environment = new Godot.Environment
             {
-                var x = gx + Hash(gx, gz, 611) * 90f - 45f;
-                var z = gz + Hash(gx, gz, 613) * 90f - 45f;
-                var h = HeightAt(x, z);
-                if (h is < -100f or > 470f)
-                    continue; // not in the gorge dark, not on the border rim
-
-                // Slope from central differences: boulders live on rocky faces.
-                var slopeX = (HeightAt(x + 25f, z) - HeightAt(x - 25f, z)) / 50f;
-                var slopeZ = (HeightAt(x, z + 25f) - HeightAt(x, z - 25f)) / 50f;
-                var slope = MathF.Sqrt(slopeX * slopeX + slopeZ * slopeZ);
-                if (slope < 0.65f || Hash(gx, gz, 617) > 0.42f)
-                    continue;
-
-                var size = 9f + Hash(gx, gz, 619) * 21f;
-                yield return (new Vector3(x, h - size * 0.25f, z),
-                              size, Hash(gx, gz, 621) * MathF.Tau, (int)(Hash(gx, gz, 623) * 3f));
-            }
-        }
+                BackgroundMode = Godot.Environment.BGMode.Sky,
+                Sky = new Sky
+                {
+                    SkyMaterial = new ProceduralSkyMaterial
+                    {
+                        SkyTopColor = new Color(0.25f, 0.32f, 0.45f),
+                        SkyHorizonColor = new Color(0.55f, 0.52f, 0.50f),
+                        GroundBottomColor = new Color(0.12f, 0.13f, 0.16f),
+                        GroundHorizonColor = new Color(0.45f, 0.43f, 0.42f),
+                    },
+                },
+                AmbientLightSource = Godot.Environment.AmbientSource.Sky,
+                AmbientLightEnergy = 0.8f,
+                FogEnabled = true,
+                FogLightColor = new Color(0.55f, 0.58f, 0.65f),
+                FogDensity = 0.0002f,
+            },
+        }, "Sky");
+        var sun = new DirectionalLight3D
+        {
+            LightColor = new Color(1.0f, 0.95f, 0.85f),
+            LightEnergy = 1.1f,
+            ShadowEnabled = true,
+        };
+        sun.RotationDegrees = new Vector3(-40, -60, 0);
+        scene.Add(sun, "Sun");
     }
 }

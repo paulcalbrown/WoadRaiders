@@ -5,7 +5,7 @@ namespace WoadRaiders.Shared;
 
 /// <summary>
 /// Projects a <see cref="DungeonGeometry"/> into the <see cref="DungeonGeometryPacket"/>
-/// sent to a client on join, and rebuilds one from it on the receiving side. The
+/// sent to a client on join, and rebuilds the realm from it on the receiving side. The
 /// dungeon is immutable once loaded, so the server builds the packet once and
 /// reuses it for every connection. Lives in Shared — the wire-protocol seam —
 /// alongside <see cref="WorldSnapshot"/>, so both world↔packet projections sit
@@ -13,69 +13,57 @@ namespace WoadRaiders.Shared;
 /// </summary>
 public static class DungeonSnapshot
 {
-    public static DungeonGeometryPacket From(DungeonGeometry dungeon)
+    public static DungeonGeometryPacket From(DungeonGeometry dungeon, byte[]? navMesh = null)
     {
-        var boxes = new float[dungeon.Solids.Count * 6];
-        for (var i = 0; i < dungeon.Solids.Count; i++)
-        {
-            var s = dungeon.Solids[i];
-            boxes[i * 6 + 0] = s.Min.X;
-            boxes[i * 6 + 1] = s.Min.Y;
-            boxes[i * 6 + 2] = s.Min.Z;
-            boxes[i * 6 + 3] = s.Max.X;
-            boxes[i * 6 + 4] = s.Max.Y;
-            boxes[i * 6 + 5] = s.Max.Z;
-        }
-
         var packet = new DungeonGeometryPacket
         {
             SpawnX = dungeon.SpawnPoint.X,
             SpawnY = dungeon.SpawnPoint.Y,
             SpawnZ = dungeon.SpawnPoint.Z,
             ScenePath = dungeon.ScenePath ?? "",
-            Boxes = boxes,
+            NavMesh = navMesh ?? Array.Empty<byte>(),
         };
-
-        if (dungeon.Terrain is { } t)
+        if (dungeon.Soup is { } soup)
         {
-            packet.HasTerrain = true;
-            packet.TerrainOriginX = t.OriginX;
-            packet.TerrainOriginZ = t.OriginZ;
-            packet.TerrainCellSize = t.CellSize;
-            packet.TerrainWidth = t.Width;
-            packet.TerrainDepth = t.Depth;
-            packet.TerrainHeights = t.Heights.ToArray();
+            packet.SoupVertices = soup.Vertices;
+            packet.SoupTriangles = soup.Triangles;
+            packet.FloorTriangleCount = soup.FloorTriangleCount;
         }
-
         return packet;
     }
 
     /// <summary>
-    /// Rebuilds a <see cref="DungeonGeometry"/> from the packet — the client-side
-    /// inverse of <see cref="From"/>, so prediction collides against exactly what
-    /// the server does (the terrain floats cross the wire bit-exact). Enemy
+    /// Rebuilds the realm's DATA from the packet — the client-side inverse of
+    /// <see cref="From"/> (the soup floats cross the wire bit-exact). Enemy
     /// spawns are server-only and never on the wire, so the rebuilt geometry
     /// carries none.
     /// </summary>
     public static DungeonGeometry ToGeometry(DungeonGeometryPacket packet)
     {
-        var solids = new List<Aabb>(packet.Boxes.Length / 6);
-        for (var i = 0; i + 5 < packet.Boxes.Length; i += 6)
-            solids.Add(new Aabb(
-                new Vector3(packet.Boxes[i], packet.Boxes[i + 1], packet.Boxes[i + 2]),
-                new Vector3(packet.Boxes[i + 3], packet.Boxes[i + 4], packet.Boxes[i + 5])));
-
-        var terrain = packet.HasTerrain
-            ? new HeightField(packet.TerrainOriginX, packet.TerrainOriginZ, packet.TerrainCellSize,
-                              packet.TerrainWidth, packet.TerrainDepth, packet.TerrainHeights)
+        var soup = packet.SoupTriangles.Length > 0
+            ? new TriangleSoup(packet.SoupVertices, packet.SoupTriangles, packet.FloorTriangleCount)
             : null;
-
         return new DungeonGeometry(
             new Vector3(packet.SpawnX, packet.SpawnY, packet.SpawnZ),
-            solids, Array.Empty<EnemySpawnPoint>(), terrain)
+            soup, Array.Empty<EnemySpawnPoint>())
         {
             ScenePath = string.IsNullOrEmpty(packet.ScenePath) ? null : packet.ScenePath,
         };
+    }
+
+    /// <summary>
+    /// The geometry a peer MOVES on: the navmesh the server baked (identical
+    /// bytes for every peer) over the soup rebuilt from this same packet — so
+    /// prediction clamps to exactly the polygons the server does. Null when
+    /// the packet ships no geometry (the flat test arena): the world falls
+    /// back to its open-arena clamp rules, on both ends alike.
+    /// </summary>
+    public static IDungeonGeometry? ToMovementGeometry(DungeonGeometryPacket packet)
+    {
+        var realm = ToGeometry(packet);
+        if (realm.Soup is not { } soup || packet.NavMesh.Length == 0)
+            return null;
+        return new NavMeshGeometry(NavMeshBuilder.Deserialize(packet.NavMesh), soup, realm.SpawnPoint);
     }
 
     /// <summary>
@@ -92,19 +80,12 @@ public static class DungeonSnapshot
         hash.Add(packet.SpawnY);
         hash.Add(packet.SpawnZ);
         hash.Add(packet.ScenePath);
-        foreach (var f in packet.Boxes)
-            hash.Add(f);
-        hash.Add(packet.HasTerrain);
-        if (packet.HasTerrain)
-        {
-            hash.Add(packet.TerrainOriginX);
-            hash.Add(packet.TerrainOriginZ);
-            hash.Add(packet.TerrainCellSize);
-            hash.Add(packet.TerrainWidth);
-            hash.Add(packet.TerrainDepth);
-            foreach (var h in packet.TerrainHeights)
-                hash.Add(h);
-        }
+        foreach (var v in packet.SoupVertices)
+            hash.Add(v);
+        foreach (var t in packet.SoupTriangles)
+            hash.Add(t);
+        hash.Add(packet.FloorTriangleCount);
+        hash.AddBytes(packet.NavMesh);
         return hash.ToHashCode();
     }
 }

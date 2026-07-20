@@ -16,10 +16,13 @@ internal sealed class GameSession
     private readonly SpawnDirector _director;
     private readonly Dictionary<int, ServerInputBuffer> _inputBuffers = new();
 
-    public GameSession(DungeonGeometry dungeon, Random rng)
+    public GameSession(DungeonGeometry dungeon, Random rng, IDungeonGeometry? movement = null)
     {
         _dungeon = dungeon;
-        _world = new GameWorld { Geometry = dungeon };
+        // The realm's DATA (spawn markers, bounds, the boss post) is the loaded
+        // dungeon; what the world MOVES on is its baked navmesh — or nothing,
+        // for the flat test arenas, which keep the open-arena clamp rules.
+        _world = new GameWorld { Geometry = movement };
         _director = new SpawnDirector(_world, dungeon, rng);
 
         // The session owns the wording of match events so the transport layer never has

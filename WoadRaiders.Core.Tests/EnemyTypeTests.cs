@@ -71,11 +71,8 @@ public class EnemyTypeTests
     [Fact]
     public void Bolt_dodged_by_stepping_aside_misses_and_fizzles()
     {
-        // Empty geometry = open, but no arena clamp (so the dodge sticks) and clear LOS.
-        var world = new GameWorld
-        {
-            Geometry = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<EnemySpawnPoint>()),
-        };
+        // Open slab floor = no arena clamp (so the dodge sticks) and clear LOS.
+        var world = new GameWorld { Geometry = TestRealms.Open() };
         var player = world.AddPlayer(1, "A"); // origin
         world.SpawnEnemy(new Vector3(160, 0, 0), EnemyType.Mage);
 
@@ -98,10 +95,9 @@ public class EnemyTypeTests
     {
         // Wall BEYOND the player, so the mage has a clear shot to fire, but the bolt
         // (which flies on past its target) runs into the wall.
-        var wall = new Aabb(new Vector3(150, 0, -200), new Vector3(170, 80, 200));
         var world = new GameWorld
         {
-            Geometry = new DungeonGeometry(Vector3.Zero, new[] { wall }, Array.Empty<EnemySpawnPoint>()),
+            Geometry = TestRealms.WithWalls(new Aabb(new Vector3(150, 0, -200), new Vector3(170, 80, 200))),
         };
         var mage = world.SpawnEnemy(Vector3.Zero, EnemyType.Mage);
         var player = world.AddPlayer(1, "A");
@@ -139,7 +135,7 @@ public class EnemyTypeTests
     {
         var geometry = new DungeonGeometry(
             new Vector3(1, 0, 2),
-            new[] { new Aabb(Vector3.Zero, Vector3.One) },
+            TestRealms.Flat(50f),
             new[]
             {
                 new EnemySpawnPoint(new Vector3(10, 0, 0), EnemyType.Minion),
@@ -154,16 +150,18 @@ public class EnemyTypeTests
 
         Assert.Equal(geometry.EnemySpawns, parsed.EnemySpawns);
         Assert.Equal(geometry.BossSpawn, parsed.BossSpawn);
+        Assert.Equal(geometry.Soup!.Vertices, parsed.Soup!.Vertices);
+        Assert.Equal(geometry.Soup.Triangles, parsed.Soup.Triangles);
+        Assert.Equal(geometry.Soup.FloorTriangleCount, parsed.Soup.FloorTriangleCount);
     }
 
     [Fact]
     public void Enemy_cannot_see_or_strike_through_a_wall()
     {
-        // A wall between a mage and a player: solid x in [70,90], full height, wide in z.
-        var wall = new Aabb(new Vector3(70, 0, -200), new Vector3(90, 80, 200));
+        // A wall between a mage and a player: structure x in [70,90], full height, wide in z.
         var world = new GameWorld
         {
-            Geometry = new DungeonGeometry(Vector3.Zero, new[] { wall }, Array.Empty<EnemySpawnPoint>()),
+            Geometry = TestRealms.WithWalls(new Aabb(new Vector3(70, 0, -200), new Vector3(90, 80, 200))),
         };
         var player = world.AddPlayer(1, "A"); // at the origin, west of the wall
         var standoff = EnemyArchetypes.Of(EnemyType.Mage).AttackRange - 20f;
@@ -206,12 +204,21 @@ public class EnemyTypeTests
     [Fact]
     public void Boss_collides_with_its_wider_radius()
     {
-        var wall = new Aabb(new Vector3(100, 0, -200), new Vector3(120, 80, 200));
-        var geo = new DungeonGeometry(Vector3.Zero, new[] { wall }, Array.Empty<EnemySpawnPoint>());
-        var nearWall = new Vector3(100 - 20f, 0, 0); // 20 units from the wall face
+        var geo = TestRealms.WithWalls(new Aabb(new Vector3(100, 0, -200), new Vector3(120, 80, 200)));
+        var step = new Vector3(SimConstants.PlayerMoveSpeed * SimConstants.TickDelta, 0, 0);
 
-        Assert.False(geo.IsBlocked(nearWall));                                       // fine for a regular character (radius 14)
-        Assert.True(geo.IsBlocked(nearWall, EnemyArchetypes.Of(EnemyType.Boss).Radius)); // too close for the boss (radius 30)
+        var character = new Vector3(20, 0, 0);
+        var boss = new Vector3(20, 0, 0);
+        for (var i = 0; i < 30; i++)
+        {
+            character = geo.Move(character, step);
+            boss = geo.Move(boss, step, EnemyArchetypes.Of(EnemyType.Boss).Radius);
+        }
+
+        // Both stall at the wall — the boss a body-width earlier than the character.
+        Assert.True(character.X < 100f, $"the wall must stop a character, got X={character.X}");
+        Assert.True(boss.X < character.X - 8f,
+            $"the boss (radius 30) must stall earlier than the character (radius 14): boss X={boss.X}, character X={character.X}");
     }
 
     [Fact]

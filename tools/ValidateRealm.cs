@@ -6,10 +6,10 @@
 //
 //   dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.tscn
 //
-// Realm maps (with terrain) get the full Core.RealmValidator treatment:
-// every camp and the boss comfortably reachable from the spawn, borders
-// sealed even against slope-inching, no stranding pits. Flat dungeon maps
-// pass trivially (their geometry has no terrain to leak or strand).
+// Built realms (with a geometry soup) get the full Core.RealmValidator
+// treatment on their baked navmesh: every camp and the boss reachable from
+// the spawn by a complete route, nowhere reachable stranded. Flat test maps
+// pass trivially (no geometry to leak or strand).
 //
 // It can also prove two maps carry the same simulation geometry (formats may
 // differ — e.g. a baked JSON against the scene it came from):
@@ -32,14 +32,14 @@ if (args.Length is not (1 or 3) || (args.Length == 3 && args[1] != "--compare"))
 
 var map = MapLoader.Load(args[0]);
 Console.WriteLine($"[{Path.GetFileName(args[0])}] scene={map.ScenePath ?? "(none)"}, " +
-                  $"{(map.Terrain is { } t ? $"terrain {t.Width}x{t.Depth} @ {t.CellSize}" : "no terrain")}, " +
-                  $"{map.Solids.Count} solids, {map.EnemySpawns.Count} enemy spawns" +
+                  $"{(map.Soup is { } t ? $"{t.Triangles.Length / 3} triangles ({t.FloorTriangleCount} floor)" : "no geometry")}, " +
+                  $"{map.EnemySpawns.Count} enemy spawns" +
                   $"{(map.BossSpawn is not null ? " + boss" : "")}");
 
 var ok = true;
-if (map.Terrain is null)
+if (map.Soup is null)
 {
-    Console.WriteLine("no terrain — a flat dungeon map; realm checks don't apply.");
+    Console.WriteLine("no geometry — a flat test map; realm checks don't apply.");
 }
 else
 {
@@ -67,34 +67,37 @@ if (args.Length == 3)
     Check("boss", map.BossSpawn is null == other.BossSpawn is null
                   && (map.BossSpawn is not { } b || Vector3.Distance(b, other.BossSpawn!.Value) < 0.01f));
 
-    if (map.Terrain is { } mine && other.Terrain is { } theirs)
+    if (map.Soup is { } mine && other.Soup is { } theirs)
     {
-        var dims = mine.Width == theirs.Width && mine.Depth == theirs.Depth
-                   && MathF.Abs(mine.CellSize - theirs.CellSize) < 0.001f
-                   && MathF.Abs(mine.OriginX - theirs.OriginX) < 0.001f
-                   && MathF.Abs(mine.OriginZ - theirs.OriginZ) < 0.001f;
-        Check("terrain grid", dims,
-            $"{mine.Width}x{mine.Depth}@{mine.CellSize} vs {theirs.Width}x{theirs.Depth}@{theirs.CellSize}");
-        if (dims)
+        var shape = mine.Triangles.Length == theirs.Triangles.Length
+                    && mine.FloorTriangleCount == theirs.FloorTriangleCount;
+        Check("soup shape", shape,
+            $"{mine.Triangles.Length / 3} tris ({mine.FloorTriangleCount} floor) vs " +
+            $"{theirs.Triangles.Length / 3} ({theirs.FloorTriangleCount})");
+        if (shape)
         {
-            var worst = 0f;
-            for (var i = 0; i < mine.Heights.Count; i++)
-                worst = MathF.Max(worst, MathF.Abs(mine.Heights[i] - theirs.Heights[i]));
-            Check("terrain heights", worst < 0.002f, $"largest sample difference {worst}");
+            // Triangles compare as sets: tree order vs generator order may
+            // differ, but every stone must be the same stone.
+            string TriKey(TriangleSoup soup, int t)
+            {
+                var keys = new string[3];
+                for (var k = 0; k < 3; k++)
+                {
+                    var v = soup.Triangles[t * 3 + k] * 3;
+                    keys[k] = $"{soup.Vertices[v]:0.##},{soup.Vertices[v + 1]:0.##},{soup.Vertices[v + 2]:0.##}";
+                }
+                Array.Sort(keys);
+                return string.Join(";", keys);
+            }
+            var myTris = Enumerable.Range(0, mine.Triangles.Length / 3).Select(t => TriKey(mine, t)).OrderBy(k => k);
+            var otherTris = Enumerable.Range(0, theirs.Triangles.Length / 3).Select(t => TriKey(theirs, t)).OrderBy(k => k);
+            Check("soup triangles", myTris.SequenceEqual(otherTris));
         }
     }
     else
     {
-        Check("terrain presence", map.Terrain is null == other.Terrain is null);
+        Check("soup presence", map.Soup is null == other.Soup is null);
     }
-
-    // Solids compare as sets (tree order vs generator order may differ).
-    string SolidKey(Aabb s) =>
-        $"{s.Min.X:0.##},{s.Min.Y:0.##},{s.Min.Z:0.##}:{s.Max.X:0.##},{s.Max.Y:0.##},{s.Max.Z:0.##}";
-    var mySolids = map.Solids.Select(SolidKey).OrderBy(k => k).ToArray();
-    var otherSolids = other.Solids.Select(SolidKey).OrderBy(k => k).ToArray();
-    Check("solids", mySolids.SequenceEqual(otherSolids),
-        $"{map.Solids.Count} vs {other.Solids.Count}");
 
     string SpawnKey(EnemySpawnPoint e) =>
         $"{e.Type}:{e.Position.X:0.##},{e.Position.Y:0.##},{e.Position.Z:0.##}";

@@ -41,7 +41,7 @@ public partial class CameraRig : Camera3D
     public static Vector3 LiveGroundForward { get; private set; } = new(1f, 0f, 0f);
 
     /// <summary>The realm's geometry, once known — lets the boom stay above the terrain.</summary>
-    public DungeonGeometry? Geometry { get; set; }
+    public IDungeonGeometry? Geometry { get; set; }
 
     private Vector3 _target;
     private Vector3 _smoothVel;
