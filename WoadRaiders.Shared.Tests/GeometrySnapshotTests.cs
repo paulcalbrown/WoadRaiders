@@ -16,8 +16,8 @@ public class GeometrySnapshotTests
     private static RealmDefinition Realm()
     {
         var soup = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(-80, -20, -120), new Vector3(80, 0, 40)), floor: true)
-            .AddBox(new Aabb(new Vector3(0, 0, 0), new Vector3(40, 40, 40)), floor: false)
+            .AddBox(new Aabb(new Vector3(-80, -20, -120), new Vector3(80, 0, 40)))
+            .AddBox(new Aabb(new Vector3(0, 0, 0), new Vector3(40, 40, 40)))
             .Build();
         return new RealmDefinition(new Vector3(10, 0, 20), soup, Array.Empty<EnemySpawnPoint>())
         {
@@ -43,10 +43,9 @@ public class GeometrySnapshotTests
 
         Assert.Equal(realm.Soup!.Vertices, rebuilt.Soup!.Vertices);
         Assert.Equal(realm.Soup.Triangles, rebuilt.Soup.Triangles);
-        Assert.Equal(realm.Soup.FloorTriangleCount, rebuilt.Soup.FloorTriangleCount);
         Assert.Equal("realm:crag", rebuilt.ScenePath);
         Assert.Equal(realm.SpawnPoint, rebuilt.SpawnPoint);
-        Assert.Equal(realm.Soup.FloorHeightAt(10f, -100f), rebuilt.Soup.FloorHeightAt(10f, -100f));
+        Assert.Equal(realm.Soup.TopSurfaceAt(10f, -100f), rebuilt.Soup.TopSurfaceAt(10f, -100f));
     }
 
     [Fact]
@@ -121,7 +120,6 @@ public class GeometrySnapshotTests
         evilNavMesh.Put("");
         evilNavMesh.Put(0);            // no vertices
         evilNavMesh.Put(0);            // no triangles
-        evilNavMesh.Put(0);            // no floor triangles
         evilNavMesh.Put(int.MaxValue); // an absurd navmesh
         Assert.ThrowsAny<Exception>(() =>
             new RealmGeometryPacket().Deserialize(new NetDataReader(evilNavMesh.Data, 0, evilNavMesh.Length)));

@@ -270,14 +270,15 @@ core loop earns it.
       `dotnet run --project WoadRaiders.Server -- --map maps/YourRealm.json`.
       `maps/TestArena.tscn` is a working example of the conventions. **The game only ever
       consumes map files** — runtime procedural generation stays out by design; the shipping
-      maps are hand-crafted or generated *offline* into the same formats. **Open realms are
-      authored the same way** (see the open-realms entry above): give the scene terrain —
-      ANY meshes in the `terrain` group (sculpt in Blender, use CSG, or edit the generated
-      realm's Terrain mesh), which the bake tool samples from above onto a heightfield grid
-      (`terrain_cell_size` metadata on the root overrides the 40-unit default; put big
-      ground meshes in `no_fade` too; the sampling math is the unit-tested
-      `Core.TerrainSampler`). Scenery — braziers, banners, anything — needs no convention
-      at all: the bake walks past whatever it doesn't recognise. Then check
+      maps are hand-crafted or generated *offline* into the same formats. **Authors tag
+      nothing**: every mesh you MODEL in the scene is collision, whatever it is and wherever
+      it sits — no groups, no naming, no privileged mesh type (instanced kit props are
+      dressing and are skipped whole). What holds a raider up, what blocks them, and what is
+      too small to matter are all derived: a surface's own normal separates ground from wall
+      (`TriangleSoup.WallNormalY`, ~87° — deliberately *not* the navmesh's 67.8° walkable
+      cutoff, so steep ground stays descendable), and Recast's voxels plus agent-radius
+      erosion discard sub-agent detail unaided — 8,000 candle-scale props leave a navmesh
+      100% intact. Then check
       the baked JSON with `dotnet run tools/ValidateRealm.cs` (camps reachable, borders
       sealed, no stranding pits — the same bar the generated realm passes). Every client
       renders the scene as authored; one that lacks it refuses the raid (see below) rather

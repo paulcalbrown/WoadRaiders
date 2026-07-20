@@ -159,7 +159,7 @@ else
 
 var span = definition.Bounds;
 var soupSummary = definition.Soup is { } builtSoup
-    ? $"{builtSoup.Triangles.Length / 3} triangles ({builtSoup.FloorTriangleCount} floor) over " +
+    ? $"{builtSoup.Triangles.Length / 3} triangles over " +
       $"{span.Max.X - span.Min.X:0}x{span.Max.Z - span.Min.Z:0} units (heights {span.Min.Y:0}..{span.Max.Y:0})"
     : "no geometry";
 Console.WriteLine($"Wrote {realm}.tscn (the design) and {realm}.json (baked from it, validated): " +

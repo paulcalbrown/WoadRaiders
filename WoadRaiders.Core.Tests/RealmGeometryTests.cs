@@ -18,29 +18,29 @@ public class RealmGeometryTests
 
     // A flat stone floor over [0,400]², top face at y=0.
     private static TriangleSoup Flat() => new SoupBuilder()
-        .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)), floor: true)
+        .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)))
         .Build();
 
     // The west half flat at 0, then a ramp rising 50 over the east 200 —
     // grade 0.25, gentle walking.
     private static TriangleSoup Ramp() => new SoupBuilder()
-        .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(200, 0, 400)), floor: true)
+        .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(200, 0, 400)))
         .AddQuad(new Vector3(200, 0, 0), new Vector3(400, 50, 0),
-                 new Vector3(400, 50, 400), new Vector3(200, 0, 400), floor: true)
+                 new Vector3(400, 50, 400), new Vector3(200, 0, 400))
         .Build();
 
     // A low floor and a high plateau meeting at a sheer face at x=200 —
     // unclimbable up, one leap down.
     private static TriangleSoup Cliff() => new SoupBuilder()
-        .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(200, 0, 400)), floor: true)
-        .AddBox(new Aabb(new Vector3(200, -20, 0), new Vector3(400, 300, 400)), floor: true)
+        .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(200, 0, 400)))
+        .AddBox(new Aabb(new Vector3(200, -20, 0), new Vector3(400, 300, 400)))
         .Build();
 
     // A pit floor at y=-400 with a bridge deck slabbed across it at y=0 —
     // two walkable levels sharing an XZ, the shape the Crypt's chasm has.
     private static TriangleSoup DeckOverPit() => new SoupBuilder()
-        .AddBox(new Aabb(new Vector3(0, -420, 0), new Vector3(400, -400, 400)), floor: true)
-        .AddBox(new Aabb(new Vector3(0, -20, 150), new Vector3(400, 0, 250)), floor: true)
+        .AddBox(new Aabb(new Vector3(0, -420, 0), new Vector3(400, -400, 400)))
+        .AddBox(new Aabb(new Vector3(0, -20, 150), new Vector3(400, 0, 250)))
         .Build();
 
     private static float RampHeight(float x) => x <= 200f ? 0f : (x - 200f) * 0.25f;
@@ -159,9 +159,9 @@ public class RealmGeometryTests
     {
         // A deck low enough to step onto (top 15 ≤ StepHeight) and a wall.
         var soup = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)), floor: true)
-            .AddBox(new Aabb(new Vector3(150, 0, 150), new Vector3(250, 15, 250)), floor: true)
-            .AddBox(new Aabb(new Vector3(300, 0, 100), new Vector3(340, 50, 300)), floor: false)
+            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)))
+            .AddBox(new Aabb(new Vector3(150, 0, 150), new Vector3(250, 15, 250)))
+            .AddBox(new Aabb(new Vector3(300, 0, 100), new Vector3(340, 50, 300)))
             .Build();
         var geo = Geo(soup);
         var pos = new Vector3(50, 0, 200);
@@ -212,8 +212,8 @@ public class RealmGeometryTests
         // A long wall with one gap at its southern end. Sliding along it never
         // finds the gap; the path planner must.
         var soup = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)), floor: true)
-            .AddBox(new Aabb(new Vector3(200, 0, 0), new Vector3(220, 50, 300)), floor: false)
+            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)))
+            .AddBox(new Aabb(new Vector3(200, 0, 0), new Vector3(220, 50, 300)))
             .Build();
         var geo = Geo(soup);
         var start = new Vector3(100, 0, 150);
@@ -237,9 +237,9 @@ public class RealmGeometryTests
         // A 55-unit doorway: room for a character (radius 14), not for the
         // boss (radius 30). One realm, two baked agent classes.
         var soup = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)), floor: true)
-            .AddBox(new Aabb(new Vector3(200, 0, 0), new Vector3(220, 60, 172.5f)), floor: false)
-            .AddBox(new Aabb(new Vector3(200, 0, 227.5f), new Vector3(220, 60, 400)), floor: false)
+            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)))
+            .AddBox(new Aabb(new Vector3(200, 0, 0), new Vector3(220, 60, 172.5f)))
+            .AddBox(new Aabb(new Vector3(200, 0, 227.5f), new Vector3(220, 60, 400)))
             .Build();
         var geo = new RealmGeometry(soup, new Vector3(50, 0, 200),
             (SimConstants.CharacterRadius, NavMeshBuilder.Build(soup)),
@@ -269,8 +269,8 @@ public class RealmGeometryTests
         // stands across the wall, the straight line is blocked, and the hunt
         // must thread the gap on its cached route.
         var soup = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)), floor: true)
-            .AddBox(new Aabb(new Vector3(200, 0, 0), new Vector3(220, 50, 300)), floor: false)
+            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)))
+            .AddBox(new Aabb(new Vector3(200, 0, 0), new Vector3(220, 50, 300)))
             .Build();
         var world = new GameWorld { Geometry = Geo(soup) };
         var player = world.AddPlayer(1, "Prey");

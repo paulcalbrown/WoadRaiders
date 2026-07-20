@@ -32,7 +32,7 @@ if (args.Length is not (1 or 3) || (args.Length == 3 && args[1] != "--compare"))
 
 var map = MapLoader.Load(args[0]);
 Console.WriteLine($"[{Path.GetFileName(args[0])}] scene={map.ScenePath ?? "(none)"}, " +
-                  $"{(map.Soup is { } t ? $"{t.Triangles.Length / 3} triangles ({t.FloorTriangleCount} floor)" : "no geometry")}, " +
+                  $"{(map.Soup is { } t ? $"{t.Triangles.Length / 3} triangles" : "no geometry")}, " +
                   $"{map.EnemySpawns.Count} enemy spawns" +
                   $"{(map.BossSpawn is not null ? " + boss" : "")}");
 
@@ -69,11 +69,10 @@ if (args.Length == 3)
 
     if (map.Soup is { } mine && other.Soup is { } theirs)
     {
-        var shape = mine.Triangles.Length == theirs.Triangles.Length
-                    && mine.FloorTriangleCount == theirs.FloorTriangleCount;
+        var shape = mine.Triangles.Length == theirs.Triangles.Length;
+
         Check("soup shape", shape,
-            $"{mine.Triangles.Length / 3} tris ({mine.FloorTriangleCount} floor) vs " +
-            $"{theirs.Triangles.Length / 3} ({theirs.FloorTriangleCount})");
+            $"{mine.Triangles.Length / 3} tris vs {theirs.Triangles.Length / 3}");
         if (shape)
         {
             // Triangles compare as sets: tree order vs generator order may

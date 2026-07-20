@@ -11,13 +11,14 @@ namespace WoadRaiders.Core;
 /// scenes are the AUTHORING format, not the serving one.)
 ///
 /// Authoring conventions it reads (any scene built in the Godot editor):
-///   - Geometry:     MeshInstance3D SLABS (a built-in BoxMesh, any transform)
-///                   in group "ground" (floors — terraces, ramps, stairs; what
-///                   feet ride) or "structure" (walls, roofs, monuments; what
-///                   blocks). BoxMesh slabs parse straight from the scene
-///                   text; any OTHER mesh in those groups needs the in-Godot
-///                   bake tool, which samples real triangles and hands the
-///                   whole soup in via <paramref name="sampledSoup"/>.
+///   - Geometry:     every MeshInstance3D in the scene, whatever it is and
+///                   wherever it sits. Nothing is tagged and nothing is
+///                   named: which surfaces hold a raider up, which block, and
+///                   which are too small to matter are all read back off the
+///                   geometry by the soup and the navmesh bake. BoxMesh slabs
+///                   parse straight from the scene text; any OTHER mesh needs
+///                   the in-Godot bake tool, which samples real triangles and
+///                   hands the whole soup in via <paramref name="sampledSoup"/>.
 ///   - Player spawn: a Marker3D named exactly "PlayerSpawn" (required).
 ///   - Enemy spawns: Marker3D nodes named "EnemySpawn*" — type from the name:
 ///                   contains "Rogue" → Rogue, "Mage" → Mage, else Minion.
@@ -64,21 +65,19 @@ public static class RealmSceneFile
             var world = parentXf.Compose(local);
             transforms[path] = world;
 
-            var groups = Groups(node);
             var type = node.AttributeString("type");
 
-            if (type == "MeshInstance3D" && (groups.Contains("ground") || groups.Contains("structure")))
+            if (type == "MeshInstance3D")
             {
-                var floor = groups.Contains("ground");
                 if (sampledSoup is not null)
                 {
-                    // The engine bake sampled every group mesh — slabs included.
+                    // The engine bake sampled every mesh in the scene already.
                 }
                 else if (TryReadBoxMeshSize(doc, node, out var size))
                 {
                     for (var k = 0; k < 8; k++)
                         corners[k] = world.Apply(SoupBuilder.LocalCorner(k, size * 0.5f));
-                    builder.AddBoxCorners(corners, floor);
+                    builder.AddBoxCorners(corners);
                     slabs++;
                 }
                 else
@@ -99,8 +98,9 @@ public static class RealmSceneFile
 
         if (sampledSoup is null && unsampledMeshes > 0)
             throw new InvalidDataException(
-                $"{unsampledMeshes} mesh(es) in the 'ground'/'structure' groups are not BoxMesh slabs — sample them " +
-                "with the in-Godot bake tool (WoadRaiders.Client/tools/bake_realm.gd)");
+                $"{unsampledMeshes} mesh(es) in this scene are not BoxMesh slabs — this engine-free reader can only " +
+                "measure boxes from scene text; sample them with the in-Godot bake tool " +
+                "(WoadRaiders.Client/tools/bake_realm.gd)");
         if (spawn is null)
             throw new InvalidDataException("the scene has no Marker3D named 'PlayerSpawn'");
 

@@ -59,20 +59,21 @@ realm has a route). Reshape a realm by editing its design and rerunning; add
 one with a design class + a line in `RealmDesigns`. Hand-edits to the .tscn
 are equally fine — re-bake + ValidateRealm afterwards (steps 2–3 below).
 The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
-  1. Terrain: ANY meshes in group `terrain` (the natural way — sculpt in
-     Blender, CSG, or edit the generated Terrain mesh; put big ground meshes
-     in `no_fade` too). A `RealmTerrain` node or `metadata/terrain_*` on the
-     root also work (bake reads them without sampling). Collision:
-     axis-aligned `BoxShape3D` CollisionShape3Ds. Markers: `PlayerSpawn`
-     (required), `EnemySpawnN[_Rogue|_Mage]`, `BossSpawn`. Scenery (braziers,
-     banners, rocks) needs NO convention — the bake ignores what it doesn't
-     recognise, so place whatever you like.
+  1. Geometry: just BUILD the realm. Every mesh you model in the scene is
+     collision — no groups, no naming, no privileged mesh type. What holds a
+     raider up, what blocks them, and what is too small to matter are read
+     back off the geometry: a surface's own normal decides ground vs wall
+     (`TriangleSoup.WallNormalY`, ~87° — deliberately NOT the navmesh's 67.8°
+     walkable cutoff, so steep ground stays descendable), and Recast's voxels
+     plus agent-radius erosion discard sub-agent detail on their own.
+     Instanced sub-scenes (kit props, braziers, bone piles) are DRESSING and
+     are skipped whole — you model the architecture, you drop in the props.
+     Markers: `PlayerSpawn` (required), `EnemySpawnN[_Rogue|_Mage]`,
+     `BossSpawn`. `no_fade` is a render hint for the occlusion fader only.
   2. Bake to server geometry: `dotnet build WoadRaiders.Client`, then
      `godot-mono --headless --path WoadRaiders.Client -s
      res://tools/bake_realm.gd -- res://maps/MyRealm.tscn
-     res://maps/MyRealm.json` (sampling cell 40; root metadata
-     `terrain_cell_size` overrides; the sampling math is unit-tested
-     Core.TerrainSampler).
+     res://maps/MyRealm.json`.
   3. `dotnet run tools/ValidateRealm.cs WoadRaiders.Client/maps/MyRealm.json`
      — Core.RealmValidator proves camps reachable, borders sealed, no
      stranding pits. `--compare` proves two maps carry identical sim geometry.

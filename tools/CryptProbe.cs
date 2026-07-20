@@ -65,7 +65,6 @@ listener.NetworkReceiveEvent += (peer, reader, channel, delivery) =>
             realm = RealmSnapshot.ToDefinition(geometryPacket);
             movement = RealmSnapshot.ToMovementGeometry(geometryPacket);
             Console.WriteLine($"[probe] geometry: {geometryPacket.SoupTriangles.Length / 3} triangles " +
-                              $"({geometryPacket.FloorTriangleCount} floor), " +
                               $"{geometryPacket.NavMesh.Length / 1024} KB navmesh");
             break;
 
@@ -120,7 +119,7 @@ net.Stop();
 
 var terrainOk = geometryPacket is { } gp && gp.SoupTriangles.Length > 0 && realm?.Soup is not null;
 var spawnGroundY = movement is not null && realm is not null
-    ? movement.GroundHeight(realm.SpawnPoint.X, realm.SpawnPoint.Z)
+    ? movement.GroundHeight(realm.SpawnPoint)
     : float.NaN;
 var spawnOk = spawnY is { } sy && MathF.Abs(sy - spawnGroundY) < 2f;
 var sank = spawnY is { } s && floorY < s - 100f;

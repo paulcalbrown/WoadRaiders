@@ -6,10 +6,15 @@ namespace WoadRaiders.Core;
 /// A realm's geometry as raw triangles with a coarse XZ grid index — the
 /// exact-surface half of the mesh-based realm. The navmesh answers "where can
 /// feet go"; the soup answers the rest: line-of-sight segments, cursor rays,
-/// and the floor height under a point. FLOOR triangles (surfaces authored to
-/// be walked and ridden — terraces, room floors, ramps) come first in the
-/// array; the rest is STRUCTURE (walls, roofs, monuments — they block and
-/// occlude but are never ridden), so floor-only queries filter by index alone.
+/// and the surface under a point.
+///
+/// The soup is UNTYPED: nothing here knows which triangles an author thought
+/// of as floor and which as wall. It does not need to. Whether a surface can
+/// be rested on, and whether it blocks a body, are properties of its own
+/// normal (see <see cref="WallNormalY"/>) — and whether it can be WALKED is
+/// the navmesh's answer, computed from slope, clearance and step height. Both
+/// were once carried by a hand-maintained floor/structure split that authors
+/// had to keep honest; both are geometry, so both are now derived.
 ///
 /// Not thread-safe: query scratch state is reused, one instance per
 /// simulation — the same discipline the sim itself already lives by.
@@ -19,11 +24,8 @@ public sealed class TriangleSoup
     /// <summary>Vertex positions, xyz triples.</summary>
     public float[] Vertices { get; }
 
-    /// <summary>Vertex indices, one triangle per triple. Floor triangles first.</summary>
+    /// <summary>Vertex indices, one triangle per triple.</summary>
     public int[] Triangles { get; }
-
-    /// <summary>Triangles [0, count) are floor; the rest are structure.</summary>
-    public int FloorTriangleCount { get; }
 
     public Vector3 BoundsMin { get; }
     public Vector3 BoundsMax { get; }
@@ -44,14 +46,12 @@ public sealed class TriangleSoup
     private readonly List<int> _found = new();
     private int _queryId;
 
-    public TriangleSoup(float[] vertices, int[] triangles, int floorTriangleCount)
+    public TriangleSoup(float[] vertices, int[] triangles)
     {
         if (vertices.Length < 9 || vertices.Length % 3 != 0)
             throw new ArgumentException($"vertices must be xyz triples for at least one triangle (got {vertices.Length} floats)");
         if (triangles.Length < 3 || triangles.Length % 3 != 0)
             throw new ArgumentException($"triangles must be index triples (got {triangles.Length} indices)");
-        if (floorTriangleCount < 0 || floorTriangleCount * 3 > triangles.Length)
-            throw new ArgumentException($"terrain triangle count {floorTriangleCount} exceeds the {triangles.Length / 3} triangles");
         foreach (var i in triangles)
             if (i < 0 || i * 3 >= vertices.Length)
                 throw new ArgumentException($"triangle index {i} is outside the vertex array");
@@ -61,7 +61,6 @@ public sealed class TriangleSoup
 
         Vertices = vertices;
         Triangles = triangles;
-        FloorTriangleCount = floorTriangleCount;
 
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
@@ -97,16 +96,17 @@ public sealed class TriangleSoup
 
     /// <summary>
     /// Does anything cut the open segment between the points? With
-    /// <paramref name="structureOnly"/> the floors are ignored — the test a
-    /// body clearance probe wants, where the ground itself is never a wall.
+    /// <paramref name="blockersOnly"/> only near-vertical faces count — the
+    /// test a body's clearance probe wants, where ground of any grade is
+    /// something to walk on rather than something to walk into.
     /// </summary>
-    public bool SegmentHits(Vector3 from, Vector3 to, bool structureOnly = false)
+    public bool SegmentHits(Vector3 from, Vector3 to, bool blockersOnly = false)
     {
         var d = to - from;
         foreach (var t in Gather(MathF.Min(from.X, to.X), MathF.Min(from.Z, to.Z),
                                  MathF.Max(from.X, to.X), MathF.Max(from.Z, to.Z)))
         {
-            if (structureOnly && t < FloorTriangleCount)
+            if (blockersOnly && MathF.Abs(_normalY[t]) > WallNormalY)
                 continue;
             // Open interval: touching a surface at either endpoint is not occlusion.
             if (RayTriangle(from, d, t, out var hit) && hit is > 1e-4f and < 1f - 1e-4f)
@@ -136,19 +136,12 @@ public sealed class TriangleSoup
     }
 
     /// <summary>
-    /// The floor height at a world XZ point (structure ignored) — the highest
-    /// floor surface there, the ground a projectile hugs. Null when the point
-    /// lies outside every floor triangle (the void beyond the realm).
+    /// The topmost surface at a world XZ, whatever its height — for callers
+    /// with no vantage of their own to resolve a stack from (a top-down map,
+    /// a sweep looking for anywhere to stand).
     /// </summary>
-    public float? FloorHeightAt(float x, float z)
-    {
-        float? best = null;
-        var (i, j) = CellOf(x, z);
-        foreach (var t in _cells[j * _cellsX + i] ?? (IEnumerable<int>)Array.Empty<int>())
-            if (t < FloorTriangleCount && HeightOfTriangleAt(t, x, z) is { } y && (best is null || y > best))
-                best = y;
-        return best;
-    }
+    public float? TopSurfaceAt(float x, float z) =>
+        GroundBelow(x, z, float.PositiveInfinity, 0f);
 
     /// <summary>
     /// How far a face must lean off vertical before it stops being a WALL and

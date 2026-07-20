@@ -540,11 +540,8 @@ public sealed class RealmGeometryPacket : INetSerializable
     /// <summary>Soup vertex positions, xyz triples; empty on flat maps.</summary>
     public float[] SoupVertices = System.Array.Empty<float>();
 
-    /// <summary>Soup vertex indices, one triangle per triple, floors first.</summary>
+    /// <summary>Soup vertex indices, one triangle per triple. Untyped: order carries no meaning.</summary>
     public int[] SoupTriangles = System.Array.Empty<int>();
-
-    /// <summary>How many leading triangles are floor (the rest are structure).</summary>
-    public int FloorTriangleCount;
 
     /// <summary>
     /// The realm's baked navmesh (serialized Detour tile bytes) for the standard
@@ -567,7 +564,6 @@ public sealed class RealmGeometryPacket : INetSerializable
         w.Put(SoupTriangles.Length);
         foreach (var t in SoupTriangles)
             w.Put(t);
-        w.Put(FloorTriangleCount);
 
         w.Put(NavMesh.Length);
         w.Put(NavMesh);
@@ -595,10 +591,6 @@ public sealed class RealmGeometryPacket : INetSerializable
         SoupTriangles = new int[triangleInts];
         for (var i = 0; i < SoupTriangles.Length; i++)
             SoupTriangles[i] = r.GetInt();
-
-        FloorTriangleCount = r.GetInt();
-        if (FloorTriangleCount < 0 || FloorTriangleCount * 3 > SoupTriangles.Length)
-            throw new System.IO.InvalidDataException($"unreasonable floor triangle count {FloorTriangleCount}");
 
         var navMeshLength = r.GetInt();
         if (navMeshLength is < 0 or > 16_000_000)

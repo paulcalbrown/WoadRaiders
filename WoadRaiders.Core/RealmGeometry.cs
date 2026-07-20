@@ -149,7 +149,7 @@ public sealed class RealmGeometry : IRealmGeometry
         if (px * px + pz * pz > reach * reach)
             return false; // beyond any footprint's touch
         var clearance = from.Y + SimConstants.StepHeight + 0.5f;
-        if (_soup.SegmentHits(new Vector3(from.X, clearance, from.Z), new Vector3(pt.X, clearance, pt.Z), structureOnly: true))
+        if (_soup.SegmentHits(new Vector3(from.X, clearance, from.Z), new Vector3(pt.X, clearance, pt.Z), blockersOnly: true))
             return false; // a wall stands between — reaching over it is not boarding
         landing = new Vector3(pt.X, SurfaceY(pt.X, pt.Z, pt.Y), pt.Z);
         return true;
@@ -186,7 +186,7 @@ public sealed class RealmGeometry : IRealmGeometry
             var sz = ox * rail;
             if (_soup.SegmentHits(new Vector3(from.X + sx, clearance, from.Z + sz),
                                   new Vector3(targetX + ox + sx, clearance, targetZ + oz + sz),
-                                  structureOnly: true))
+                                  blockersOnly: true))
                 return false;
         }
         landing = new Vector3(targetX, ground, targetZ);

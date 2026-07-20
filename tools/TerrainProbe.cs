@@ -64,7 +64,6 @@ listener.NetworkReceiveEvent += (peer, reader, channel, delivery) =>
             realm = RealmSnapshot.ToDefinition(geometryPacket);
             movement = RealmSnapshot.ToMovementGeometry(geometryPacket);
             Console.WriteLine($"[probe] geometry: {geometryPacket.SoupTriangles.Length / 3} triangles " +
-                              $"({geometryPacket.FloorTriangleCount} floor), " +
                               $"{geometryPacket.NavMesh.Length / 1024} KB navmesh");
             break;
 
@@ -113,7 +112,7 @@ net.Stop();
 
 var terrainOk = geometryPacket is { } gp && gp.SoupTriangles.Length > 0 && realm?.Soup is not null;
 var spawnGroundY = movement is not null && realm is not null
-    ? movement.GroundHeight(realm.SpawnPoint.X, realm.SpawnPoint.Z)
+    ? movement.GroundHeight(realm.SpawnPoint)
     : float.NaN;
 var spawnOk = spawnY is { } sy && MathF.Abs(sy - spawnGroundY) < 2f;
 var climbed = spawnY is { } s && peakY > s + 15f;
@@ -133,7 +132,7 @@ if (realm is not null && movement is not null && latestPos is { } serverPos && s
     // the server's sim rides.
     replayOk = pos.X >= serverPos.X - 1f
                && MathF.Abs(pos.Z - serverPos.Z) < 1f
-               && MathF.Abs(movement.GroundHeight(serverPos.X, serverPos.Z) - serverPos.Y) < 2f;
+               && MathF.Abs(movement.GroundHeight(serverPos) - serverPos.Y) < 2f;
     Console.WriteLine($"[probe] server pos ({serverPos.X:0.0}, {serverPos.Y:0.0}, {serverPos.Z:0.0}), " +
                       $"replay pos ({pos.X:0.0}, {pos.Y:0.0}, {pos.Z:0.0})");
 }

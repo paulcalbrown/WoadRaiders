@@ -8,10 +8,11 @@ namespace WoadRaiders.Core.Tests;
 
 /// <summary>
 /// The scene-to-geometry pipeline, engine-free: Godot .tscn text goes in,
-/// realm data comes out — markers, and BoxMesh SLABS in the "ground" and
-/// "structure" groups (with composed and rotated transforms) triangulated
-/// straight from the scene text. This is what the tools run when they read a
-/// realm scene, tested directly.
+/// realm data comes out — markers, and every BoxMesh slab in the scene (with
+/// composed and rotated transforms) triangulated straight from the scene
+/// text. No groups, no naming, no privileged mesh: an author builds a scene
+/// and the pipeline reads what is there. This is what the tools run when they
+/// read a realm scene, tested directly.
 /// </summary>
 public class RealmSceneFileTests
 {
@@ -72,12 +73,43 @@ public class RealmSceneFileTests
             geometry.EnemySpawns.Select(s => s.Type).ToArray());
         Assert.Equal(new Vector3(30, 0, 40), geometry.EnemySpawns[0].Position);
 
-        // Three slabs, 12 triangles each; the un-grouped "Scenery" mesh is
-        // ignored — scenery needs no convention.
+        // FOUR slabs, 12 triangles each — including "Scenery", which sits in
+        // no group at all. Authors tag nothing: every mesh in the scene is
+        // geometry, and what it MEANS is read back off its shape afterwards.
         var soup = geometry.Soup;
         Assert.NotNull(soup);
-        Assert.Equal(36, soup!.Triangles.Length / 3);
-        Assert.Equal(12, soup.FloorTriangleCount); // one ground slab, first in the soup
+        Assert.Equal(48, soup!.Triangles.Length / 3);
+    }
+
+    [Fact]
+    public void A_mesh_in_no_group_is_geometry_like_any_other()
+    {
+        // The scene's only mesh is untagged and unnamed — the case that used
+        // to bake to nothing at all and refuse to load.
+        var soup = RealmSceneFile.Parse("""
+            [gd_scene load_steps=2 format=3]
+
+            [sub_resource type="BoxMesh" id="slab"]
+            size = Vector3(100, 20, 100)
+
+            [node name="Realm" type="Node3D"]
+
+            [node name="AnyOldMesh" type="MeshInstance3D" parent="."]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 30, 0)
+            mesh = SubResource("slab")
+
+            [node name="PlayerSpawn" type="Marker3D" parent="."]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
+            """).Soup;
+
+        Assert.NotNull(soup);
+        // Its top face holds a raider up, and its side blocks a body — both
+        // read from the triangles' own normals, neither declared anywhere.
+        Assert.Equal(40f, soup!.TopSurfaceAt(0f, 0f) ?? float.NaN, 3);
+        Assert.True(soup.SegmentHits(new Vector3(-80, 30, 0), new Vector3(80, 30, 0), blockersOnly: true),
+            "the slab's sheer side should block a body's clearance probe");
+        Assert.False(soup.SegmentHits(new Vector3(-20, 45, 0), new Vector3(20, 45, 0), blockersOnly: true),
+            "nothing sheer stands above the slab's top face");
     }
 
     [Fact]
@@ -87,8 +119,8 @@ public class RealmSceneFileTests
 
         // Floor: parent (10,0,20) + own (5,30,0), size (100,20,60) → top face
         // at y=40 over x∈[-35,65], z∈[-10,50].
-        Assert.Equal(40f, soup.FloorHeightAt(15f, 20f) ?? float.NaN, 3);
-        Assert.Null(soup.FloorHeightAt(200f, 200f)); // no floor out there
+        Assert.Equal(40f, soup.TopSurfaceAt(15f, 20f) ?? float.NaN, 3);
+        Assert.Null(soup.TopSurfaceAt(200f, 200f)); // no floor out there
 
         // Turned: the same slab yawed 90° under the parent — its footprint
         // swaps, so its long side now runs along z. As structure it never
@@ -112,7 +144,7 @@ public class RealmSceneFileTests
 
         // The bake tool samples the meshes and hands the whole soup in — then it parses.
         var sampled = new SoupBuilder()
-            .AddBox(new Aabb(Vector3.Zero, new Vector3(10, 1, 10)), floor: true)
+            .AddBox(new Aabb(Vector3.Zero, new Vector3(10, 1, 10)))
             .Build();
         var geometry = RealmSceneFile.Parse(text, sampledSoup: sampled);
         Assert.Same(sampled, geometry.Soup);

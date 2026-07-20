@@ -11,8 +11,8 @@ public class RealmSnapshotTests
     private static RealmDefinition SampleRealm() => new(
         new Vector3(1, 0, 3),
         new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(-50, -20, -50), new Vector3(50, 0, 50)), floor: true)
-            .AddBox(new Aabb(new Vector3(-5, 0, -5), new Vector3(5, 8, 5)), floor: false)
+            .AddBox(new Aabb(new Vector3(-50, -20, -50), new Vector3(50, 0, 50)))
+            .AddBox(new Aabb(new Vector3(-5, 0, -5), new Vector3(5, 8, 5)))
             .Build(),
         new[] { new EnemySpawnPoint(new Vector3(100, 0, 0), EnemyType.Minion) })
     {
@@ -32,7 +32,6 @@ public class RealmSnapshotTests
         Assert.Equal("res://maps/Barrow.tscn", packet.ScenePath);
         Assert.Equal(realm.Soup!.Vertices, packet.SoupVertices);
         Assert.Equal(realm.Soup.Triangles, packet.SoupTriangles);
-        Assert.Equal(realm.Soup.FloorTriangleCount, packet.FloorTriangleCount);
     }
 
     [Fact]
@@ -121,6 +120,5 @@ public class RealmSnapshotTests
         Assert.Equal(packet.ScenePath, back.ScenePath);
         Assert.Equal(packet.SoupVertices, back.SoupVertices);
         Assert.Equal(packet.SoupTriangles, back.SoupTriangles);
-        Assert.Equal(packet.FloorTriangleCount, back.FloorTriangleCount);
     }
 }

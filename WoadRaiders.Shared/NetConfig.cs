@@ -74,9 +74,13 @@ public static class NetConfig
     /// v17 = the heightfield and terrain concept removed outright: the packet
     ///       ships the realm's triangle soup (floors first) + navmesh; the
     ///       terrain grid and solid boxes are gone. Realms are BUILT — slabs,
-    ///       not landscape.
+    ///       not landscape,
+    /// v18 = the soup loses its floor/structure split (no FloorTriangleCount;
+    ///       triangle order carries no meaning). What can be stood on and what
+    ///       blocks are read from each triangle's normal, and what can be
+    ///       WALKED is the navmesh's answer — so authors tag nothing.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v17";
+    public const string ConnectionKey = "WoadRaiders.v18";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";

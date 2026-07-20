@@ -96,7 +96,10 @@ public partial class DungeonMapView : Control
             {
                 for (var x = bounds.Min.X; x < bounds.Max.X; x += swatch)
                 {
-                    if (g.Soup.FloorHeightAt(x + swatch * 0.5f, z + swatch * 0.5f) is not { } h)
+                    // Sample from the top of the playable band DOWNWARD, so an
+                    // indoor realm draws the halls its raiders walk rather than
+                    // the rock roofing them over.
+                    if (g.Soup.GroundBelow(x + swatch * 0.5f, z + swatch * 0.5f, wildBand, 0f) is not { } h)
                         continue;
                     var color = h < deepBand ? gorgeDark
                         : h > wildBand ? crag

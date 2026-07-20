@@ -14,8 +14,7 @@ namespace WoadRaiders.Core;
 ///   "spawn": [x, y, z],
 ///   "soup": {                                     (optional — a soupless map is the flat test arena)
 ///     "vertices": [x,y,z, x,y,z, ...],
-///     "triangles": [a,b,c, a,b,c, ...],           (floor triangles first)
-///     "floorTriangleCount": n
+///     "triangles": [a,b,c, a,b,c, ...]            (untyped: order carries no meaning)
 ///   },
 ///   "enemySpawns": [ [x,y,z], ... ],
 ///   "enemySpawnTypes": [ 0, 1, 2, ... ],         (optional — parallel to enemySpawns;
@@ -73,7 +72,9 @@ public static class RealmDefinitionFile
         if (doc.Vertices is null || doc.Triangles is null)
             throw new InvalidDataException("'soup.vertices' and 'soup.triangles' are required when 'soup' is present");
         // The TriangleSoup constructor validates lengths, indices, and finiteness.
-        return new TriangleSoup(doc.Vertices, doc.Triangles, doc.FloorTriangleCount);
+        // A 'floorTriangleCount' from an older bake is read and ignored: the
+        // split it recorded is now derived from the geometry itself.
+        return new TriangleSoup(doc.Vertices, doc.Triangles);
     }
 
     public static string ToJson(RealmDefinition g)
@@ -87,7 +88,6 @@ public static class RealmDefinitionFile
                 {
                     Vertices = soup.Vertices,
                     Triangles = soup.Triangles,
-                    FloorTriangleCount = soup.FloorTriangleCount,
                 }
                 : null,
             EnemySpawns = g.EnemySpawns.Select(s => new[] { s.Position.X, s.Position.Y, s.Position.Z }).ToArray(),
@@ -116,6 +116,5 @@ public static class RealmDefinitionFile
     {
         public float[]? Vertices { get; set; }
         public int[]? Triangles { get; set; }
-        public int FloorTriangleCount { get; set; }
     }
 }

@@ -14,8 +14,7 @@ public static class TestRealms
 {
     /// <summary>A flat floor slab centred on the origin, top face at y = 0.</summary>
     public static TriangleSoup Flat(float halfExtent = 600f) => new SoupBuilder()
-        .AddBox(new Aabb(new Vector3(-halfExtent, -20, -halfExtent), new Vector3(halfExtent, 0, halfExtent)),
-                floor: true)
+        .AddBox(new Aabb(new Vector3(-halfExtent, -20, -halfExtent), new Vector3(halfExtent, 0, halfExtent)))
         .Build();
 
     /// <summary>Movement geometry over a soup, baked for both agent widths.</summary>
@@ -32,9 +31,9 @@ public static class TestRealms
     public static RealmGeometry WithWalls(params Aabb[] walls)
     {
         var builder = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(-600, -20, -600), new Vector3(600, 0, 600)), floor: true);
+            .AddBox(new Aabb(new Vector3(-600, -20, -600), new Vector3(600, 0, 600)));
         foreach (var wall in walls)
-            builder.AddBox(wall, floor: false);
+            builder.AddBox(wall);
         return Geo(builder.Build());
     }
 }

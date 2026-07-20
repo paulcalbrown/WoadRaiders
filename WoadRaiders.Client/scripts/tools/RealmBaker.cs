@@ -46,19 +46,16 @@ public partial class RealmBaker : RefCounted
         }
         var root = packed.Instantiate();
         var builder = new SoupBuilder();
-        var floors = new List<float>();
-        var structures = new List<float>();
-        CollectGroupTriangles(root, Transform3D.Identity, floors, structures);
+        var triangles = new List<float>();
+        CollectTriangles(root, Transform3D.Identity, triangles);
         root.Free();
 
         TriangleSoup? soup = null;
-        if (floors.Count + structures.Count > 0)
+        if (triangles.Count > 0)
         {
-            builder.AddTriangles(floors.ToArray(), SequentialIndices(floors.Count / 9), floor: true);
-            builder.AddTriangles(structures.ToArray(), SequentialIndices(structures.Count / 9), floor: false);
+            builder.AddTriangles(triangles.ToArray(), SequentialIndices(triangles.Count / 9));
             soup = builder.Build();
-            GD.Print($"sampled {soup.Triangles.Length / 3} triangles " +
-                     $"({soup.FloorTriangleCount} floor, {soup.Triangles.Length / 3 - soup.FloorTriangleCount} structure)");
+            GD.Print($"sampled {soup.Triangles.Length / 3} triangles");
         }
 
         // Everything else is the shared engine-free pipeline.
@@ -80,37 +77,50 @@ public partial class RealmBaker : RefCounted
         return 0;
     }
 
-    private static void CollectGroupTriangles(Node node, Transform3D parentXf,
-                                              List<float> floors, List<float> structures)
+    /// <summary>
+    /// Every mesh the realm itself is BUILT from, in world space — whatever
+    /// the mesh is, wherever it sits, in no group and under no naming rule.
+    /// What holds a raider up and what blocks them are decided afterwards
+    /// from the geometry: by each triangle's normal, and by whether a surface
+    /// survives Recast's voxels and agent-radius erosion.
+    ///
+    /// Instanced sub-scenes — a kit sarcophagus, a brazier, a bone pile —
+    /// are dressing, and are skipped whole. That line is drawn where authors
+    /// already draw it (you MODEL the architecture and you DROP IN the props)
+    /// rather than by anything they must remember to tag. It is provisional:
+    /// sweeping the kits in as well is measured and understood — it leaves
+    /// the navmesh almost untouched (+17%), because sub-agent detail cannot
+    /// survive erosion — but it puts 131k triangles and 6.4 MB on the join
+    /// wire, and a prop standing in the Crypt's chasm route seals the way to
+    /// its boss. Both are answered by a simplified collision proxy, not by
+    /// asking authors to label things again.
+    /// </summary>
+    private static void CollectTriangles(Node node, Transform3D parentXf, List<float> triangles, bool isSceneRoot = true)
     {
         var xf = node is Node3D spatial ? parentXf * spatial.Transform : parentXf;
+        if (!isSceneRoot && !string.IsNullOrEmpty(node.SceneFilePath))
+            return; // an instanced asset: dressing, not fabric
 
-        if (node is MeshInstance3D { Mesh: { } mesh } instance)
+        if (node is MeshInstance3D { Mesh: { } mesh })
         {
-            var target = instance.IsInGroup("ground") ? floors
-                : instance.IsInGroup("structure") ? structures
-                : null;
-            if (target is not null)
+            // Godot winds front faces CLOCKWISE; the soup (and Recast's slope
+            // filter) want counter-clockwise, or every upward face reads as an
+            // overhang. Swap two corners per triangle.
+            var faces = mesh.GetFaces();
+            for (var i = 0; i + 2 < faces.Length; i += 3)
             {
-                // Godot winds front faces CLOCKWISE; the soup (and Recast's
-                // slope filter) want counter-clockwise, or every floor's top
-                // face reads as unwalkable ceiling. Swap two corners per tri.
-                var faces = mesh.GetFaces();
-                for (var i = 0; i + 2 < faces.Length; i += 3)
+                foreach (var vertex in new[] { faces[i], faces[i + 2], faces[i + 1] })
                 {
-                    foreach (var vertex in new[] { faces[i], faces[i + 2], faces[i + 1] })
-                    {
-                        var world = xf * vertex;
-                        target.Add(world.X);
-                        target.Add(world.Y);
-                        target.Add(world.Z);
-                    }
+                    var world = xf * vertex;
+                    triangles.Add(world.X);
+                    triangles.Add(world.Y);
+                    triangles.Add(world.Z);
                 }
             }
         }
 
         foreach (var child in node.GetChildren())
-            CollectGroupTriangles(child, xf, floors, structures);
+            CollectTriangles(child, xf, triangles, isSceneRoot: false);
     }
 
     private static int[] SequentialIndices(int triangles)

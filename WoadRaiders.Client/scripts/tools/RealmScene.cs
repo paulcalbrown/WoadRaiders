@@ -45,11 +45,16 @@ public sealed class RealmScene
 
     // ------------------------------------------------------------- the stones
 
-    /// <summary>A floor slab raiders walk on (group "ground").</summary>
+    // The floor/structure distinction below is the DESIGN's own bookkeeping —
+    // which branch of the scene tree a slab is filed under, what it is called,
+    // and whether the occlusion fader may dissolve it. The bake reads none of
+    // it: what holds a raider up is decided from the geometry itself.
+
+    /// <summary>A floor slab raiders walk on, filed under "Ground" and never faded.</summary>
     public MeshInstance3D AddFloor(Aabb box, Material material, string? name = null) =>
         AddSlab(box, material, floor: true, name);
 
-    /// <summary>A blocking slab — wall, roof, monument (group "structure").</summary>
+    /// <summary>A blocking slab — wall, roof, monument — filed under "Structure".</summary>
     public MeshInstance3D AddStructure(Aabb box, Material material, string? name = null) =>
         AddSlab(box, material, floor: false, name);
 
@@ -72,7 +77,6 @@ public sealed class RealmScene
             Transform = xform,
             Mesh = new BoxMesh { Size = size, Material = material },
         };
-        node.AddToGroup(floor ? "ground" : "structure", persistent: true);
         if (floor)
             node.AddToGroup("no_fade", persistent: true); // the fader never eats the floor underfoot
         parent.AddChild(node);
@@ -86,7 +90,7 @@ public sealed class RealmScene
             var world = xform * new Vector3(local.X, local.Y, local.Z);
             corners[k] = new System.Numerics.Vector3(world.X, world.Y, world.Z);
         }
-        _soup.AddBoxCorners(corners, floor);
+        _soup.AddBoxCorners(corners);
         _built = null;
         return node;
     }
@@ -142,7 +146,7 @@ public sealed class RealmScene
     public float FloorAt(float x, float z)
     {
         _built ??= SlabCount > 0 ? _soup.Build() : null;
-        return _built?.FloorHeightAt(x, z) ?? 0f;
+        return _built?.TopSurfaceAt(x, z) ?? 0f;
     }
 
     /// <summary>A point set on the floor, from plan-view (x, z) coordinates.</summary>

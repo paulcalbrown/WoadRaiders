@@ -20,7 +20,7 @@ public class RealmValidatorTests
     public void A_sound_realm_passes()
     {
         var soup = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(800, 0, 800)), floor: true)
+            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(800, 0, 800)))
             .Build();
         var realm = Realm(soup, new Vector3(100, 0, 400), new Vector3(700, 0, 400),
             new EnemySpawnPoint(new Vector3(400, 0, 200), EnemyType.Minion),
@@ -34,8 +34,8 @@ public class RealmValidatorTests
     {
         // A camp on a 100-high pedestal no route can climb.
         var soup = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(800, 0, 800)), floor: true)
-            .AddBox(new Aabb(new Vector3(500, 0, 600), new Vector3(700, 100, 800)), floor: true)
+            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(800, 0, 800)))
+            .AddBox(new Aabb(new Vector3(500, 0, 600), new Vector3(700, 100, 800)))
             .Build();
         var realm = Realm(soup, new Vector3(100, 0, 400), new Vector3(700, 0, 100),
             new EnemySpawnPoint(new Vector3(600, 100, 700), EnemyType.Rogue));
@@ -50,8 +50,8 @@ public class RealmValidatorTests
         // A lower yard you can drop into off the main floor's edge — but its
         // 100-unit walls have no stair back up, and the boss stands above.
         var soup = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(0, 80, 0), new Vector3(400, 100, 800)), floor: true)
-            .AddBox(new Aabb(new Vector3(400, -20, 0), new Vector3(800, 0, 800)), floor: true)
+            .AddBox(new Aabb(new Vector3(0, 80, 0), new Vector3(400, 100, 800)))
+            .AddBox(new Aabb(new Vector3(400, -20, 0), new Vector3(800, 0, 800)))
             .Build();
         var realm = Realm(soup, new Vector3(100, 100, 400), new Vector3(300, 100, 400));
 
@@ -65,10 +65,10 @@ public class RealmValidatorTests
         // The same two-level build, but a ramp climbs back to the upper floor:
         // the drop is a detour, not a grave.
         var soup = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(0, 80, 0), new Vector3(400, 100, 800)), floor: true)
-            .AddBox(new Aabb(new Vector3(400, -20, 0), new Vector3(800, 0, 800)), floor: true)
+            .AddBox(new Aabb(new Vector3(0, 80, 0), new Vector3(400, 100, 800)))
+            .AddBox(new Aabb(new Vector3(400, -20, 0), new Vector3(800, 0, 800)))
             .AddQuad(new Vector3(500, 0, 0), new Vector3(500, 0, 200),
-                     new Vector3(400, 100, 200), new Vector3(400, 100, 0), floor: true)
+                     new Vector3(400, 100, 200), new Vector3(400, 100, 0))
             .Build();
         var realm = Realm(soup, new Vector3(100, 100, 500), new Vector3(300, 100, 500));
 
@@ -79,7 +79,7 @@ public class RealmValidatorTests
     public void A_soupless_or_bossless_map_fails_outright()
     {
         var flat = new SoupBuilder()
-            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)), floor: true)
+            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(400, 0, 400)))
             .Build();
 
         Assert.Contains(RealmValidator.Validate(Realm(null, Vector3.Zero, Vector3.Zero)),

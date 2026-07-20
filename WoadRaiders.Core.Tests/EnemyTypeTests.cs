@@ -152,7 +152,6 @@ public class EnemyTypeTests
         Assert.Equal(realm.BossSpawn, parsed.BossSpawn);
         Assert.Equal(realm.Soup!.Vertices, parsed.Soup!.Vertices);
         Assert.Equal(realm.Soup.Triangles, parsed.Soup.Triangles);
-        Assert.Equal(realm.Soup.FloorTriangleCount, parsed.Soup.FloorTriangleCount);
     }
 
     [Fact]

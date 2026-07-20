@@ -1,11 +1,13 @@
-﻿# Bakes a hand-made realm scene into server geometry JSON â€” needed ONLY when
-# the scene's terrain is sculpted meshes (group "terrain"): extracting their
-# triangles requires the engine. Scenes that use a RealmTerrain node skip this
-# entirely â€” the server loads their .tscn directly (Core.RealmSceneFile).
+# Bakes a realm scene into the server geometry JSON it is played from.
+# Every mesh MODELLED in the scene becomes collision, whatever it is and
+# wherever it sits: no groups, no naming, no privileged mesh type. Instanced
+# sub-scenes (kit props) are dressing and are skipped whole. What holds a
+# raider up and what blocks them are read afterwards off the geometry —
+# each triangle's normal, and what survives Recast's voxels and erosion.
 #
-# All the real logic lives in C# (scripts/tools/RealmBaker.cs + the unit-tested
-# Core.TerrainSampler / Core.RealmSceneFile); this shim exists because Godot
-# cannot run a C# script from the command line.
+# All the real logic lives in C# (scripts/tools/RealmBaker.cs + the
+# unit-tested Core.RealmSceneFile); this shim exists because Godot cannot
+# run a C# script from the command line.
 #
 # Build first (dotnet build WoadRaiders.Client), then:
 #   godot-mono --headless --path WoadRaiders.Client -s res://tools/bake_realm.gd -- <scene.tscn> <out.json>

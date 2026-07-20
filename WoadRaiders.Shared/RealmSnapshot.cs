@@ -27,7 +27,6 @@ public static class RealmSnapshot
         {
             packet.SoupVertices = soup.Vertices;
             packet.SoupTriangles = soup.Triangles;
-            packet.FloorTriangleCount = soup.FloorTriangleCount;
         }
         return packet;
     }
@@ -41,7 +40,7 @@ public static class RealmSnapshot
     public static RealmDefinition ToDefinition(RealmGeometryPacket packet)
     {
         var soup = packet.SoupTriangles.Length > 0
-            ? new TriangleSoup(packet.SoupVertices, packet.SoupTriangles, packet.FloorTriangleCount)
+            ? new TriangleSoup(packet.SoupVertices, packet.SoupTriangles)
             : null;
         return new RealmDefinition(
             new Vector3(packet.SpawnX, packet.SpawnY, packet.SpawnZ),
@@ -84,7 +83,6 @@ public static class RealmSnapshot
             hash.Add(v);
         foreach (var t in packet.SoupTriangles)
             hash.Add(t);
-        hash.Add(packet.FloorTriangleCount);
         hash.AddBytes(packet.NavMesh);
         return hash.ToHashCode();
     }

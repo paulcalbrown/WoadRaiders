@@ -62,7 +62,7 @@ public static class RealmValidator
         for (var x = soup.BoundsMin.X; x <= soup.BoundsMax.X; x += StrandingSampleSpacing)
             for (var z = soup.BoundsMin.Z; z <= soup.BoundsMax.Z; z += StrandingSampleSpacing)
             {
-                if (soup.FloorHeightAt(x, z) is not { } y)
+                if (soup.TopSurfaceAt(x, z) is not { } y)
                     continue;
 
                 // Judge where a raider would ACTUALLY end up walking at this
