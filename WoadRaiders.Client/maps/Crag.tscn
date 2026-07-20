@@ -258,225 +258,225 @@ fog_density = 0.0002
 
 [node name="Ground" type="Node3D" parent="."]
 
-[node name="GateCourt" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="GateCourt" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 700, -30, 2000)
 mesh = SubResource("BoxMesh_1")
 
-[node name="Processional" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Processional" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2100, 30, 2000)
 mesh = SubResource("BoxMesh_2")
 
-[node name="HighWard" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="HighWard" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3400, 90, 2000)
 mesh = SubResource("BoxMesh_3")
 
-[node name="Causeway" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Causeway" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3400, 228, 3000)
 mesh = SubResource("BoxMesh_4")
 
-[node name="BossCourt" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="BossCourt" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3400, 90, 3600)
 mesh = SubResource("BoxMesh_5")
 
-[node name="Dais" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Dais" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3400, 248, 3650)
 mesh = SubResource("BoxMesh_6")
 
-[node name="Floor_6" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_6" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1218.75, 2.5, 2000)
 mesh = SubResource("BoxMesh_7")
 
-[node name="Floor_7" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_7" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1256.25, 17.5, 2000)
 mesh = SubResource("BoxMesh_8")
 
-[node name="Floor_8" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_8" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1293.75, 32.5, 2000)
 mesh = SubResource("BoxMesh_9")
 
-[node name="Floor_9" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_9" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1331.25, 47.5, 2000)
 mesh = SubResource("BoxMesh_10")
 
-[node name="Floor_10" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_10" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1368.75, 62.5, 2000)
 mesh = SubResource("BoxMesh_11")
 
-[node name="Floor_11" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_11" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1406.25, 77.5, 2000)
 mesh = SubResource("BoxMesh_12")
 
-[node name="Floor_12" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_12" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1443.75, 92.5, 2000)
 mesh = SubResource("BoxMesh_13")
 
-[node name="Floor_13" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_13" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1481.25, 107.5, 2000)
 mesh = SubResource("BoxMesh_14")
 
-[node name="Floor_14" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_14" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2718.75, 122.5, 2000)
 mesh = SubResource("BoxMesh_15")
 
-[node name="Floor_15" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_15" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2756.25, 137.5, 2000)
 mesh = SubResource("BoxMesh_16")
 
-[node name="Floor_16" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_16" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2793.75, 152.5, 2000)
 mesh = SubResource("BoxMesh_17")
 
-[node name="Floor_17" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_17" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2831.25, 167.5, 2000)
 mesh = SubResource("BoxMesh_18")
 
-[node name="Floor_18" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_18" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2868.75, 182.5, 2000)
 mesh = SubResource("BoxMesh_19")
 
-[node name="Floor_19" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_19" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2906.25, 197.5, 2000)
 mesh = SubResource("BoxMesh_20")
 
-[node name="Floor_20" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_20" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2943.75, 212.5, 2000)
 mesh = SubResource("BoxMesh_21")
 
-[node name="Floor_21" type="MeshInstance3D" parent="Ground" groups=["ground", "no_fade"]]
+[node name="Floor_21" type="MeshInstance3D" parent="Ground" groups=["no_fade"]]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2981.25, 227.5, 2000)
 mesh = SubResource("BoxMesh_22")
 
 [node name="Structure" type="Node3D" parent="."]
 
-[node name="CausewayRailW" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="CausewayRailW" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3256, 262, 3000)
 mesh = SubResource("BoxMesh_23")
 
-[node name="CausewayRailE" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="CausewayRailE" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3544, 262, 3000)
 mesh = SubResource("BoxMesh_24")
 
-[node name="RimGateN" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimGateN" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 700, 22, 1406)
 mesh = SubResource("BoxMesh_25")
 
-[node name="RimGateS" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimGateS" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 700, 22, 2594)
 mesh = SubResource("BoxMesh_26")
 
-[node name="RimGateW" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimGateW" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 206, 22, 2000)
 mesh = SubResource("BoxMesh_27")
 
-[node name="RimProcN" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimProcN" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2100, 142, 1606)
 mesh = SubResource("BoxMesh_28")
 
-[node name="RimProcS" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimProcS" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2100, 142, 2394)
 mesh = SubResource("BoxMesh_29")
 
-[node name="RimWardN" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimWardN" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3400, 262, 1206)
 mesh = SubResource("BoxMesh_30")
 
-[node name="RimWardS1" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimWardS1" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3119, 262, 2794)
 mesh = SubResource("BoxMesh_31")
 
-[node name="RimWardS2" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimWardS2" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3681, 262, 2794)
 mesh = SubResource("BoxMesh_32")
 
-[node name="RimWardE" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimWardE" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3794, 262, 2000)
 mesh = SubResource("BoxMesh_33")
 
-[node name="RimCourtN1" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimCourtN1" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3069, 262, 3206)
 mesh = SubResource("BoxMesh_34")
 
-[node name="RimCourtN2" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimCourtN2" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3731, 262, 3206)
 mesh = SubResource("BoxMesh_35")
 
-[node name="RimCourtS" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimCourtS" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3400, 262, 3994)
 mesh = SubResource("BoxMesh_36")
 
-[node name="RimCourtW" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimCourtW" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2906, 262, 3600)
 mesh = SubResource("BoxMesh_37")
 
-[node name="RimCourtE" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="RimCourtE" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3894, 262, 3600)
 mesh = SubResource("BoxMesh_38")
 
-[node name="Structure_38" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_38" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 880, 55, 1700)
 mesh = SubResource("BoxMesh_39")
 
-[node name="Structure_39" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_39" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 790, 62, 1855.8845)
 mesh = SubResource("BoxMesh_40")
 
-[node name="Structure_40" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_40" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 610, 69, 1855.8845)
 mesh = SubResource("BoxMesh_41")
 
-[node name="Structure_41" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_41" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 520, 55, 1700)
 mesh = SubResource("BoxMesh_42")
 
-[node name="Structure_42" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_42" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 610, 62, 1544.1155)
 mesh = SubResource("BoxMesh_43")
 
-[node name="Structure_43" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_43" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 790.00006, 69, 1544.1155)
 mesh = SubResource("BoxMesh_44")
 
-[node name="Structure_44" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_44" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2400, 175, 2220)
 mesh = SubResource("BoxMesh_45")
 
-[node name="Structure_45" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_45" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2330.9016, 182, 2315.1057)
 mesh = SubResource("BoxMesh_46")
 
-[node name="Structure_46" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_46" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2219.0984, 189, 2278.7786)
 mesh = SubResource("BoxMesh_47")
 
-[node name="Structure_47" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_47" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2219.0984, 175, 2161.2214)
 mesh = SubResource("BoxMesh_48")
 
-[node name="Structure_48" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_48" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2330.9016, 182, 2124.8943)
 mesh = SubResource("BoxMesh_49")
 
-[node name="Structure_49" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_49" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3060, 325, 1300)
 mesh = SubResource("BoxMesh_50")
 
-[node name="Structure_50" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_50" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3740, 325, 1300)
 mesh = SubResource("BoxMesh_51")
 
-[node name="Structure_51" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_51" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3060, 325, 2700)
 mesh = SubResource("BoxMesh_52")
 
-[node name="Structure_52" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_52" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3740, 325, 2700)
 mesh = SubResource("BoxMesh_53")
 
-[node name="Structure_53" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_53" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2960, 325, 3260)
 mesh = SubResource("BoxMesh_54")
 
-[node name="Structure_54" type="MeshInstance3D" parent="Structure" groups=["structure"]]
+[node name="Structure_54" type="MeshInstance3D" parent="Structure"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3840, 325, 3260)
 mesh = SubResource("BoxMesh_55")
 

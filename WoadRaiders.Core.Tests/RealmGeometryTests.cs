@@ -43,6 +43,89 @@ public class RealmGeometryTests
         .AddBox(new Aabb(new Vector3(0, -20, 150), new Vector3(400, 0, 250)))
         .Build();
 
+    // A floor running east into a face pitched at the given angle. Both
+    // shipping realms are built from axis-aligned boxes — every triangle in
+    // them is level or sheer — so tilted ground is exercised only here.
+    private static TriangleSoup Pitched(float degrees)
+    {
+        var run = 300f;
+        var rise = run * MathF.Tan(degrees * MathF.PI / 180f);
+        return new SoupBuilder()
+            .AddBox(new Aabb(new Vector3(-300, -20, 0), new Vector3(0, 0, 400)))
+            .AddQuad(new Vector3(0, 0, 0), new Vector3(run, rise, 0),
+                     new Vector3(run, rise, 400), new Vector3(0, 0, 400))
+            .Build();
+    }
+
+    [Theory]
+    [InlineData(60f)]
+    [InlineData(70f)]
+    [InlineData(80f)]
+    [InlineData(89f)]
+    public void Ground_steeper_than_the_navmesh_allows_is_still_ground_to_descend(float degrees)
+    {
+        // The threshold that separates ground from wall is near-vertical
+        // (~87°), NOT the navmesh's 67.8° walkable cutoff. The sim lets a
+        // mover ride DOWN a floor of any grade, so a 70° or 80° face has to
+        // keep answering as a surface even though the bake refuses to make
+        // walkable polygons out of it. Unify the two and long descents that
+        // the rules allow quietly become walls.
+        var soup = Pitched(degrees);
+        var expected = 150f * MathF.Tan(degrees * MathF.PI / 180f);
+
+        var surface = soup.TopSurfaceAt(150f, 200f);
+        if (degrees < 87f)
+        {
+            Assert.NotNull(surface);
+            Assert.Equal(expected, surface!.Value, 1);
+            Assert.False(soup.SegmentHits(new Vector3(140, expected + 30, 200),
+                                          new Vector3(160, expected + 30, 200), blockersOnly: true),
+                $"a {degrees}° face is ground to ride, not a wall to stop at");
+        }
+        else
+        {
+            // Effectively sheer: a wall, and it blocks a body's clearance probe.
+            Assert.True(soup.SegmentHits(new Vector3(-40, 40, 200), new Vector3(40, 40, 200), blockersOnly: true),
+                $"a {degrees}° face should stop a body");
+        }
+    }
+
+    [Fact]
+    public void A_walker_gets_down_a_face_the_bake_calls_unwalkable()
+    {
+        // 75° is far past the navmesh's 67.8° limit, so the mesh ends at the
+        // lip and the sim's own fallbacks have to carry the walker down. This
+        // pins the OUTCOME — a steep face is a way down, not a trap — rather
+        // than which fallback does it; unify the wall threshold with the
+        // bake's slope limit and the walker stalls at the lip forever.
+        var rise = 300f * MathF.Tan(75f * MathF.PI / 180f);
+        var soup = new SoupBuilder()
+            .AddBox(new Aabb(new Vector3(-400, -20, 0), new Vector3(0, 0, 400)))        // floor below
+            .AddQuad(new Vector3(0, 0, 0), new Vector3(300, rise, 0),
+                     new Vector3(300, rise, 400), new Vector3(0, 0, 400))               // the face
+            .AddBox(new Aabb(new Vector3(300, rise - 20, 0), new Vector3(700, rise, 400))) // plateau above
+            .Build();
+        var geo = new RealmGeometry(NavMeshBuilder.Build(soup), soup, new Vector3(500, rise, 200));
+
+        var pos = new Vector3(500, rise, 200);
+        for (var i = 0; i < 200; i++)
+            pos = geo.Move(pos, new Vector3(-TickStep, 0, 0));
+
+        Assert.True(pos.X < 300f, $"the walker never left the plateau — the face read as a wall (X={pos.X})");
+        Assert.True(pos.Y < rise - 50f, $"the face should have taken height off the walker, got Y={pos.Y} of {rise:0}");
+
+        // Where it STOPS is a separate limit, and a real one: Move snaps to the
+        // navmesh before doing anything, so a walker who lands beyond the snap
+        // extents of any polygon has no legal move left and stands there. A
+        // face longer than that reach is therefore a one-way shelf, not a
+        // slide to the bottom. Both shipping realms avoid it by construction —
+        // their drops land back on mesh — but a designer tilting a long slab
+        // would meet it, so it is pinned here rather than left as folklore.
+        Assert.True(pos.X > 0f,
+            $"unexpected: the walker rode the whole face to the floor (X={pos.X}). If Move learned to " +
+            "carry a mover across off-mesh ground, this test should become the stronger assertion.");
+    }
+
     private static float RampHeight(float x) => x <= 200f ? 0f : (x - 200f) * 0.25f;
 
     private static RealmGeometry Geo(TriangleSoup soup) =>

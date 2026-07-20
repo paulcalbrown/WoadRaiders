@@ -30,10 +30,16 @@ public sealed class RealmScene
     private Node3D? _ground;
     private Node3D? _structure;
 
-    // A design-time mirror of every slab, so markers can be seated on floors
-    // (OnFloor) with exactly the geometry the bake will serve.
-    private readonly SoupBuilder _soup = new();
+    // A design-time mirror of the slabs the design laid as FLOOR, so it can
+    // seat markers and scenery on them (OnFloor). Deliberately not every slab:
+    // a design knows perfectly well which stones it meant as ground, and the
+    // roofs it lays over a crypt are up-facing surfaces too — seat a boss by
+    // "the topmost surface here" and he stands on the roof of his own court.
+    // This is the design's own intent, not a convention the bake reads: what
+    // is served as collision is still every mesh in the finished scene.
+    private readonly SoupBuilder _floors = new();
     private TriangleSoup? _built;
+    private int _floorCount;
 
     /// <summary>The scene root. Add anything Godot can express.</summary>
     public Node3D Root { get; } = new();
@@ -82,7 +88,10 @@ public sealed class RealmScene
         parent.AddChild(node);
         SlabCount++;
 
-        // Mirror the slab into the design-time soup for OnFloor.
+        if (!floor)
+            return node;
+
+        // Mirror floor slabs into the design-time soup that OnFloor seats on.
         Span<System.Numerics.Vector3> corners = stackalloc System.Numerics.Vector3[8];
         for (var k = 0; k < 8; k++)
         {
@@ -90,7 +99,8 @@ public sealed class RealmScene
             var world = xform * new Vector3(local.X, local.Y, local.Z);
             corners[k] = new System.Numerics.Vector3(world.X, world.Y, world.Z);
         }
-        _soup.AddBoxCorners(corners);
+        _floors.AddBoxCorners(corners);
+        _floorCount++;
         _built = null;
         return node;
     }
@@ -141,11 +151,12 @@ public sealed class RealmScene
         }
     }
 
-    /// <summary>The floor height under a point, per the slabs laid so far — how a
-    /// design seats markers and scenery on what it just built. 0 with no floors.</summary>
+    /// <summary>The floor height under a point, per the FLOOR slabs laid so far
+    /// — how a design seats markers and scenery on what it just built. 0 before
+    /// any floor exists.</summary>
     public float FloorAt(float x, float z)
     {
-        _built ??= SlabCount > 0 ? _soup.Build() : null;
+        _built ??= _floorCount > 0 ? _floors.Build() : null;
         return _built?.TopSurfaceAt(x, z) ?? 0f;
     }
 
