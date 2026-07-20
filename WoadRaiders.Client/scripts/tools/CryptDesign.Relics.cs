@@ -66,8 +66,6 @@ public sealed partial class CryptDesign
         var skullCandle = Kit.Load("assets/crypt/kaykit_halloween/skull_candle.gltf");
         var smallSkull = Kit.Load("assets/crypt/polypizza/skull_quaternius.glb");
         var boneA = Kit.Load("assets/crypt/kaykit_halloween/bone_A.gltf");
-        var boneB = Kit.Load("assets/crypt/kaykit_halloween/bone_B.gltf");
-        var boneC = Kit.Load("assets/crypt/kaykit_halloween/bone_C.gltf");
         var ribcage = Kit.Load("assets/crypt/kaykit_halloween/ribcage.gltf");
         var greatBone = Kit.Load("assets/crypt/polypizza/bone_large_quaternius.glb");
         var standingBones = Kit.Load("assets/crypt/polypizza/skeleton_quaternius.glb");
@@ -150,25 +148,6 @@ public sealed partial class CryptDesign
                 var (kit, scale) = pick(i);
                 var p = OnWall(c, side, along, inset);
                 Place(kit, p.X, p.Z, scale, Facing(side) + (Hash(i, salt, 71) - 0.5f) * 0.3f);
-            }
-        }
-
-        // A little heap of the dead — two or three remains, chosen and turned
-        // by hash so every pile reads differently.
-        void BonePile(float cx, float cz, int salt)
-        {
-            for (var k = 0; k < 3; k++)
-            {
-                var x = cx + (Hash(k, salt, 883) - 0.5f) * 44f;
-                var z = cz + (Hash(k, salt, 887) - 0.5f) * 44f;
-                var yaw = Hash(k, salt, 907) * Mathf.Tau;
-                switch ((int)(Hash(k, salt, 911) * 4f))
-                {
-                    case 0: Place(skull, x, z, 8f, yaw, lift: 1f); break;
-                    case 1: Place(ribcage, x, z, 12f, yaw, lift: 10f); break;
-                    case 2: Place(boneB, x, z, 16f, yaw, lift: 2f); break;
-                    default: Place(boneC, x, z, 13f, yaw, lift: 2f); break;
-                }
             }
         }
 
