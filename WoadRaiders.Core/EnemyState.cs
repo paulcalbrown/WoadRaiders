@@ -14,6 +14,20 @@ public sealed class EnemyState : Combatant
     /// <summary>True while this enemy is actively pursuing a player.</summary>
     public bool Aggroed;
 
+    // --- Pursuit routing (server-side AI scratch; never serialized) ---
+
+    /// <summary>The planned route this enemy is following, when it has one.</summary>
+    public readonly List<Vector3> Route = new();
+
+    /// <summary>The next waypoint to reach in <see cref="Route"/>.</summary>
+    public int RouteIndex;
+
+    /// <summary>Where the route was planned to; a drifted destination forces a replan.</summary>
+    public Vector3 RouteTarget;
+
+    /// <summary>Seconds until this enemy may plan a route again.</summary>
+    public float RepathCooldown;
+
     public EnemyState(int id, EnemyType type = EnemyType.Minion)
         : base(id, EnemyArchetypes.Of(type).MaxHealth)
     {

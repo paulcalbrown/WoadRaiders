@@ -521,11 +521,12 @@ public sealed class EquipmentUpdatePacket : INetSerializable
 }
 
 /// <summary>
-/// Server → client. The realm's 3D geometry — spawn, solid boxes, an optional
-/// smooth heightfield terrain, and cosmetic props — sent once on join (reliable,
-/// so LiteNetLib fragments the terrain freely). The client rebuilds a
-/// <c>DungeonGeometry</c> from it so prediction collides against exactly what
-/// the server does, and renders the realm from the same data.
+/// Server → client. The realm's geometry — spawn, the triangle soup (floors
+/// first, then structure), and its baked navmesh — sent once on join
+/// (reliable, so LiteNetLib fragments it freely). The client rebuilds the
+/// realm's data and movement geometry from it, so prediction clamps to
+/// exactly the polygons the server moves on. A map with no soup is the flat
+/// test arena; it ships neither soup nor navmesh.
 /// </summary>
 public sealed class DungeonGeometryPacket : INetSerializable
 {
@@ -533,22 +534,25 @@ public sealed class DungeonGeometryPacket : INetSerializable
     public float SpawnY;
     public float SpawnZ;
 
-    /// <summary>Visual identity of the map ("" = none; terrain realms render from the geometry).</summary>
+    /// <summary>Visual identity of the map ("" = none).</summary>
     public string ScenePath = "";
 
-    /// <summary>Flattened boxes: 6 floats each (minX minY minZ maxX maxY maxZ).</summary>
-    public float[] Boxes = System.Array.Empty<float>();
+    /// <summary>Soup vertex positions, xyz triples; empty on flat maps.</summary>
+    public float[] SoupVertices = System.Array.Empty<float>();
 
-    /// <summary>True when the terrain fields below carry a heightfield.</summary>
-    public bool HasTerrain;
-    public float TerrainOriginX;
-    public float TerrainOriginZ;
-    public float TerrainCellSize;
-    public int TerrainWidth;
-    public int TerrainDepth;
+    /// <summary>Soup vertex indices, one triangle per triple, floors first.</summary>
+    public int[] SoupTriangles = System.Array.Empty<int>();
 
-    /// <summary>Row-major height samples ([z * width + x]); empty without terrain.</summary>
-    public float[] TerrainHeights = System.Array.Empty<float>();
+    /// <summary>How many leading triangles are floor (the rest are structure).</summary>
+    public int FloorTriangleCount;
+
+    /// <summary>
+    /// The realm's baked navmesh (serialized Detour tile bytes) for the standard
+    /// character radius — baked ONCE by the server at map load and shipped
+    /// verbatim, so every peer's movement clamps to identical polygons. The
+    /// boss-width mesh never ships: only the server moves the boss.
+    /// </summary>
+    public byte[] NavMesh = System.Array.Empty<byte>();
 
     public void Serialize(NetDataWriter w)
     {
@@ -556,21 +560,17 @@ public sealed class DungeonGeometryPacket : INetSerializable
         w.Put(SpawnY);
         w.Put(SpawnZ);
         w.Put(ScenePath);
-        w.Put((ushort)(Boxes.Length / 6));
-        foreach (var f in Boxes)
-            w.Put(f);
 
-        w.Put(HasTerrain);
-        if (HasTerrain)
-        {
-            w.Put(TerrainOriginX);
-            w.Put(TerrainOriginZ);
-            w.Put(TerrainCellSize);
-            w.Put(TerrainWidth);
-            w.Put(TerrainDepth);
-            foreach (var h in TerrainHeights)
-                w.Put(h);
-        }
+        w.Put(SoupVertices.Length);
+        foreach (var v in SoupVertices)
+            w.Put(v);
+        w.Put(SoupTriangles.Length);
+        foreach (var t in SoupTriangles)
+            w.Put(t);
+        w.Put(FloorTriangleCount);
+
+        w.Put(NavMesh.Length);
+        w.Put(NavMesh);
     }
 
     public void Deserialize(NetDataReader r)
@@ -579,32 +579,33 @@ public sealed class DungeonGeometryPacket : INetSerializable
         SpawnY = r.GetFloat();
         SpawnZ = r.GetFloat();
         ScenePath = r.GetString();
-        int count = r.GetUShort();
-        Boxes = new float[count * 6];
-        for (var i = 0; i < Boxes.Length; i++)
-            Boxes[i] = r.GetFloat();
 
-        HasTerrain = r.GetBool();
-        if (HasTerrain)
-        {
-            TerrainOriginX = r.GetFloat();
-            TerrainOriginZ = r.GetFloat();
-            TerrainCellSize = r.GetFloat();
-            TerrainWidth = r.GetInt();
-            TerrainDepth = r.GetInt();
-            // The dimensions come off a hostile wire: bound the allocation before
-            // trusting the product (the server's handler disconnects on a throw).
-            long samples = (long)TerrainWidth * TerrainDepth;
-            if (TerrainWidth < 2 || TerrainDepth < 2 || samples > 4_000_000)
-                throw new System.IO.InvalidDataException($"unreasonable terrain dimensions {TerrainWidth}x{TerrainDepth}");
-            TerrainHeights = new float[samples];
-            for (var i = 0; i < TerrainHeights.Length; i++)
-                TerrainHeights[i] = r.GetFloat();
-        }
-        else
-        {
-            TerrainHeights = System.Array.Empty<float>();
-        }
+        // Every length comes off a hostile wire: bound each allocation before
+        // trusting it (the server's handler disconnects on a throw).
+        var vertexFloats = r.GetInt();
+        if (vertexFloats is < 0 or > 12_000_000 || vertexFloats % 3 != 0)
+            throw new System.IO.InvalidDataException($"unreasonable soup vertex count {vertexFloats}");
+        SoupVertices = new float[vertexFloats];
+        for (var i = 0; i < SoupVertices.Length; i++)
+            SoupVertices[i] = r.GetFloat();
+
+        var triangleInts = r.GetInt();
+        if (triangleInts is < 0 or > 16_000_000 || triangleInts % 3 != 0)
+            throw new System.IO.InvalidDataException($"unreasonable soup triangle count {triangleInts}");
+        SoupTriangles = new int[triangleInts];
+        for (var i = 0; i < SoupTriangles.Length; i++)
+            SoupTriangles[i] = r.GetInt();
+
+        FloorTriangleCount = r.GetInt();
+        if (FloorTriangleCount < 0 || FloorTriangleCount * 3 > SoupTriangles.Length)
+            throw new System.IO.InvalidDataException($"unreasonable floor triangle count {FloorTriangleCount}");
+
+        var navMeshLength = r.GetInt();
+        if (navMeshLength is < 0 or > 16_000_000)
+            throw new System.IO.InvalidDataException($"unreasonable navmesh size {navMeshLength}");
+        NavMesh = new byte[navMeshLength];
+        if (navMeshLength > 0)
+            r.GetBytes(NavMesh, navMeshLength);
     }
 }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Numerics;
 using LiteNetLib.Utils;
@@ -55,7 +55,7 @@ public class ClassProtocolTests
         // A mage player mid-cast: the world holds a classed player and their bolt.
         var world = new GameWorld
         {
-            Geometry = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<EnemySpawnPoint>()),
+            Geometry = null, // the open arena
         };
         world.AddPlayer(1, "M", CharacterClass.Mage);
         world.SetInput(1, new PlayerInput { Attack = true, AimX = 1f });

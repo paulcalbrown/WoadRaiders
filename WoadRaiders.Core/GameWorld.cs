@@ -368,9 +368,7 @@ public sealed class GameWorld
             }
             else
             {
-                var dir = distance > 0.0001f ? toTarget / distance : Vector3.Zero;
-                enemy.Velocity = dir * arch.MoveSpeed;
-                enemy.Position = ResolveMove(enemy.Position, enemy.Velocity * dt, arch.Radius);
+                Pursue(enemy, arch, target.Position, dt);
             }
         }
     }
@@ -378,17 +376,67 @@ public sealed class GameWorld
     /// <summary>Walk an un-aggroed enemy back to its post, then stand guard.</summary>
     private void ReturnHome(EnemyState enemy, in EnemyArchetype arch, float dt)
     {
-        var toHome = enemy.HomePosition - enemy.Position;
-        var distance = toHome.Length();
-        if (distance <= SimConstants.EnemyHomeEpsilon)
+        if ((enemy.HomePosition - enemy.Position).Length() <= SimConstants.EnemyHomeEpsilon)
+        {
+            enemy.Velocity = Vector3.Zero;
+            enemy.Route.Clear();
+            return;
+        }
+        Pursue(enemy, arch, enemy.HomePosition, dt);
+    }
+
+    /// <summary>
+    /// Steer an enemy toward a destination along a planned route. On open
+    /// ground the plan IS the straight line (the geometry default), so the
+    /// common case stays the old direct chase; mesh realms route around walls,
+    /// through doorways, and over drop links. Routes are cached per enemy and
+    /// replanned only when the destination drifts, the route runs out, or a
+    /// step stalls — planning every tick would dwarf the simulation.
+    /// </summary>
+    private void Pursue(EnemyState enemy, in EnemyArchetype arch, Vector3 destination, float dt)
+    {
+        enemy.RepathCooldown -= dt;
+        var stale = enemy.Route.Count == 0
+            || enemy.RouteIndex >= enemy.Route.Count
+            || Vector3.DistanceSquared(destination, enemy.RouteTarget)
+               > SimConstants.EnemyRepathDrift * SimConstants.EnemyRepathDrift;
+        if (stale && enemy.RepathCooldown <= 0f && Geometry is not null)
+        {
+            enemy.RepathCooldown = SimConstants.EnemyRepathInterval;
+            enemy.RouteIndex = 0;
+            enemy.RouteTarget = destination;
+            if (!Geometry.TryFindPath(enemy.Position, destination, enemy.Route, arch.Radius))
+                enemy.Route.Clear(); // nowhere near the mesh — fall back to heading straight
+        }
+
+        // The current waypoint, skipping any already passed; the destination
+        // itself when no route is held.
+        var goal = destination;
+        while (enemy.RouteIndex < enemy.Route.Count)
+        {
+            var wp = enemy.Route[enemy.RouteIndex];
+            var dx = wp.X - enemy.Position.X;
+            var dz = wp.Z - enemy.Position.Z;
+            if (dx * dx + dz * dz > SimConstants.EnemyWaypointReach * SimConstants.EnemyWaypointReach)
+            {
+                goal = wp;
+                break;
+            }
+            enemy.RouteIndex++;
+        }
+
+        var toGoal = new Vector3(goal.X - enemy.Position.X, 0f, goal.Z - enemy.Position.Z);
+        var distance = toGoal.Length();
+        if (distance < 0.0001f)
         {
             enemy.Velocity = Vector3.Zero;
             return;
         }
-
-        var dir = toHome / distance;
-        enemy.Velocity = dir * arch.MoveSpeed;
-        enemy.Position = ResolveMove(enemy.Position, enemy.Velocity * dt, arch.Radius);
+        enemy.Velocity = toGoal / distance * arch.MoveSpeed;
+        var next = ResolveMove(enemy.Position, enemy.Velocity * dt, arch.Radius);
+        if (Vector3.DistanceSquared(next, enemy.Position) < 0.01f)
+            enemy.Route.Clear(); // stalled — the route is stale; plan afresh when the cooldown allows
+        enemy.Position = next;
     }
 
     /// <summary>Sight line between two combatants, traced at eye height.</summary>

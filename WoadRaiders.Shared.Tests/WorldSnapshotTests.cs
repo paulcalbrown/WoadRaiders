@@ -13,10 +13,7 @@ public class WorldSnapshotTests
     // (a typed mage among them), a ground item, and — after one step — a mage bolt.
     private static GameWorld PopulatedWorld(out PlayerState player, out EnemyState mage, out GroundItem drop)
     {
-        var world = new GameWorld
-        {
-            Geometry = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<EnemySpawnPoint>()),
-        };
+        var world = new GameWorld(); // no geometry: the open arena, everything visible
         player = world.AddPlayer(1, "Chief");
         player.Position = new Vector3(10, 0, 20);
 

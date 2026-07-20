@@ -10,7 +10,7 @@ public class SpawnDirectorTests
     // Five markers spread well away from the origin player spawn, plus a boss chamber.
     private static DungeonGeometry MakeDungeon() => new(
         Vector3.Zero,
-        Array.Empty<Aabb>(),
+        null,
         new[]
         {
             new EnemySpawnPoint(new Vector3(400, 0, 0), EnemyType.Minion),
@@ -47,7 +47,7 @@ public class SpawnDirectorTests
     [Fact]
     public void Target_count_is_clamped_up_for_sparse_maps()
     {
-        var sparse = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(),
+        var sparse = new DungeonGeometry(Vector3.Zero, null,
             new[] { new EnemySpawnPoint(new Vector3(400, 0, 0), EnemyType.Minion) }); // 1 marker
         var director = new SpawnDirector(new GameWorld(), sparse, new Random(1));
 
@@ -125,7 +125,7 @@ public class SpawnDirectorTests
     {
         // Four markers: three hugging the spawn, one far. The initial spawn uses all
         // four (authored), but a random respawn must avoid the near ones.
-        var dungeon = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), new[]
+        var dungeon = new DungeonGeometry(Vector3.Zero, null, new[]
         {
             new EnemySpawnPoint(new Vector3(30, 0, 0), EnemyType.Minion),   // < 200 from spawn
             new EnemySpawnPoint(new Vector3(0, 0, 30), EnemyType.Minion),   // < 200

@@ -8,44 +8,39 @@ namespace WoadRaiders.Core.Tests;
 
 /// <summary>
 /// The scene-to-geometry pipeline, engine-free: Godot .tscn text goes in,
-/// simulation geometry comes out — markers, box collision (with composed and
-/// rotated transforms), brazier props, and the RealmTerrain heightfield. This
-/// is what the server runs when it loads a realm scene, tested directly.
+/// realm data comes out — markers, and BoxMesh SLABS in the "ground" and
+/// "structure" groups (with composed and rotated transforms) triangulated
+/// straight from the scene text. This is what the tools run when they read a
+/// realm scene, tested directly.
 /// </summary>
 public class DungeonSceneFileTests
 {
     private const string Realm = """
         [gd_scene load_steps=3 format=3]
 
-        [ext_resource type="Script" path="res://scripts/world/RealmTerrain.cs" id="1_terrain"]
+        [sub_resource type="BoxMesh" id="slab"]
+        size = Vector3(100, 20, 60)
 
-        [sub_resource type="BoxShape3D" id="wall"]
-        size = Vector3(100, 60, 20)
-
-        [sub_resource type="BoxShape3D" id="unit"]
+        [sub_resource type="BoxMesh" id="unit"]
 
         [node name="Realm" type="Node3D"]
 
-        [node name="Terrain" type="Node3D" parent="." groups=["no_fade", "realm_terrain"]]
-        script = ExtResource("1_terrain")
-        CellSize = 50.0
-        TerrainWidth = 3
-        TerrainDepth = 2
-        Heights = PackedFloat32Array(1, 2, 3, 4, 5, 6)
-
-        [node name="Static" type="StaticBody3D" parent="."]
+        [node name="Terraces" type="Node3D" parent="."]
         transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, 20)
 
-        [node name="Wall" type="CollisionShape3D" parent="Static"]
+        [node name="Floor" type="MeshInstance3D" parent="Terraces" groups=["ground"]]
         transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 30, 0)
-        shape = SubResource("wall")
+        mesh = SubResource("slab")
 
-        [node name="Turned" type="CollisionShape3D" parent="Static"]
+        [node name="Turned" type="MeshInstance3D" parent="Terraces" groups=["structure"]]
         transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
-        shape = SubResource("wall")
+        mesh = SubResource("slab")
 
-        [node name="Tiny" type="CollisionShape3D" parent="."]
-        shape = SubResource("unit")
+        [node name="Tiny" type="MeshInstance3D" parent="." groups=["structure"]]
+        mesh = SubResource("unit")
+
+        [node name="Scenery" type="MeshInstance3D" parent="."]
+        mesh = SubResource("slab")
 
         [node name="PlayerSpawn" type="Marker3D" parent="."]
         transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 1, 200)
@@ -61,16 +56,10 @@ public class DungeonSceneFileTests
 
         [node name="BossSpawn" type="Marker3D" parent="."]
         transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 400, 9, 500)
-
-        [node name="Braziers" type="Node3D" parent="."]
-        transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 2)
-
-        [node name="Brazier0" type="Node3D" parent="Braziers" groups=["brazier"]]
-        transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 8, 7)
         """;
 
     [Fact]
-    public void A_realm_scene_parses_into_full_geometry()
+    public void A_realm_scene_parses_into_markers_and_a_slab_soup()
     {
         var geometry = DungeonSceneFile.Parse(Realm, "res://maps/Realm.tscn");
 
@@ -78,143 +67,66 @@ public class DungeonSceneFileTests
         Assert.Equal(new Vector3(400, 9, 500), geometry.BossSpawn);
         Assert.Equal("res://maps/Realm.tscn", geometry.ScenePath);
 
-        var terrain = Assert.IsType<HeightField>(geometry.Terrain);
-        Assert.Equal(50f, terrain.CellSize);
-        Assert.Equal(3, terrain.Width);
-        Assert.Equal(2, terrain.Depth);
-        Assert.Equal(0f, terrain.OriginX); // omitted in the file → the RealmTerrain default
-        Assert.Equal(new[] { 1f, 2f, 3f, 4f, 5f, 6f }, terrain.Heights);
-
         Assert.Equal(
             new[] { EnemyType.Rogue, EnemyType.Mage, EnemyType.Minion },
             geometry.EnemySpawns.Select(s => s.Type).ToArray());
         Assert.Equal(new Vector3(30, 0, 40), geometry.EnemySpawns[0].Position);
 
-        // The fixture still carries a node in the old "brazier" group ON PURPOSE:
-        // props were removed from the format, so that group means nothing now.
-        // The parser must walk straight past it — which the exact solid, spawn,
-        // and marker counts asserted above prove it does.
+        // Three slabs, 12 triangles each; the un-grouped "Scenery" mesh is
+        // ignored — scenery needs no convention.
+        var soup = geometry.Soup;
+        Assert.NotNull(soup);
+        Assert.Equal(36, soup!.Triangles.Length / 3);
+        Assert.Equal(12, soup.FloorTriangleCount); // one ground slab, first in the soup
     }
 
     [Fact]
-    public void Collision_boxes_compose_transforms_and_rotate_into_world_aabbs()
+    public void Slabs_compose_transforms_and_ride_where_they_stand()
     {
-        var solids = DungeonSceneFile.Parse(Realm).Solids;
-        Assert.Equal(3, solids.Count);
+        var soup = DungeonSceneFile.Parse(Realm).Soup!;
 
-        // Wall: parent origin (10,0,20) + own (5,30,0), half-extents (50,30,10).
-        Assert.Contains(new Aabb(new Vector3(-35, 0, 10), new Vector3(65, 60, 30)), solids);
+        // Floor: parent (10,0,20) + own (5,30,0), size (100,20,60) → top face
+        // at y=40 over x∈[-35,65], z∈[-10,50].
+        Assert.Equal(40f, soup.FloorHeightAt(15f, 20f) ?? float.NaN, 3);
+        Assert.Null(soup.FloorHeightAt(200f, 200f)); // no floor out there
 
-        // Turned: the same shape yawed 90° under the parent — footprint swaps.
-        Assert.Contains(new Aabb(new Vector3(0, -30, -30), new Vector3(20, 30, 70)), solids);
-
-        // Tiny: no transform, no size property — Godot's 1x1x1 BoxShape3D default.
-        Assert.Contains(new Aabb(new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(0.5f, 0.5f, 0.5f)), solids);
+        // Turned: the same slab yawed 90° under the parent — its footprint
+        // swaps, so its long side now runs along z. As structure it never
+        // answers floor queries, but it blocks sight straight through it.
+        Assert.True(soup.SegmentHits(new Vector3(-30, 5, 20), new Vector3(50, 5, 20)));
     }
 
     [Fact]
-    public void Metadata_terrain_on_the_root_is_the_pure_built_in_form()
-    {
-        // No scripts anywhere: the heightfield rides as root metadata (how the
-        // generated realms carry it) and beats any other terrain source.
-        var geometry = DungeonSceneFile.Parse("""
-            [gd_scene format=3]
-            [node name="R" type="Node3D"]
-            metadata/terrain_cell_size = 50.0
-            metadata/terrain_width = 3
-            metadata/terrain_depth = 2
-            metadata/terrain_heights = PackedFloat32Array(1, 2, 3, 4, 5, 6)
-            [node name="PlayerSpawn" type="Marker3D" parent="."]
-            """);
-        var terrain = Assert.IsType<HeightField>(geometry.Terrain);
-        Assert.Equal(50f, terrain.CellSize);
-        Assert.Equal(0f, terrain.OriginX); // omitted → the documented default
-        Assert.Equal(3, terrain.Width);
-        Assert.Equal(new[] { 1f, 2f, 3f, 4f, 5f, 6f }, terrain.Heights);
-    }
-
-    [Fact]
-    public void Inconsistent_metadata_terrain_is_refused()
-    {
-        Assert.Throws<InvalidDataException>(() => DungeonSceneFile.Parse("""
-            [gd_scene format=3]
-            [node name="R" type="Node3D"]
-            metadata/terrain_width = 3
-            metadata/terrain_depth = 3
-            metadata/terrain_heights = PackedFloat32Array(1, 2)
-            [node name="PlayerSpawn" type="Marker3D" parent="."]
-            """));
-    }
-
-    [Fact]
-    public void RealmTerrain_is_recognized_by_script_alone()
-    {
-        // No groups on the node — only the script reference marks it.
-        var geometry = DungeonSceneFile.Parse("""
-            [gd_scene format=3]
-            [ext_resource type="Script" path="res://scripts/world/RealmTerrain.cs" id="1"]
-            [node name="R" type="Node3D"]
-            [node name="T" type="Node3D" parent="."]
-            script = ExtResource("1")
-            TerrainWidth = 2
-            TerrainDepth = 2
-            Heights = PackedFloat32Array(0, 0, 0, 0)
-            [node name="PlayerSpawn" type="Marker3D" parent="."]
-            """);
-        Assert.NotNull(geometry.Terrain);
-        Assert.Equal(40f, geometry.Terrain!.CellSize); // the RealmTerrain default
-    }
-
-    [Fact]
-    public void A_transformed_RealmTerrain_is_refused()
-    {
-        var text = """
-            [gd_scene format=3]
-            [node name="R" type="Node3D"]
-            [node name="T" type="Node3D" parent="." groups=["realm_terrain"]]
-            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 0, 0)
-            TerrainWidth = 2
-            TerrainDepth = 2
-            Heights = PackedFloat32Array(0, 0, 0, 0)
-            [node name="PlayerSpawn" type="Marker3D" parent="."]
-            """;
-        var e = Assert.Throws<InvalidDataException>(() => DungeonSceneFile.Parse(text));
-        Assert.Contains("transformed", e.Message);
-    }
-
-    [Fact]
-    public void Inconsistent_terrain_dimensions_are_refused()
-    {
-        var text = """
-            [gd_scene format=3]
-            [node name="R" type="Node3D"]
-            [node name="T" type="Node3D" parent="." groups=["realm_terrain"]]
-            TerrainWidth = 3
-            TerrainDepth = 3
-            Heights = PackedFloat32Array(1, 2, 3)
-            [node name="PlayerSpawn" type="Marker3D" parent="."]
-            """;
-        Assert.Throws<InvalidDataException>(() => DungeonSceneFile.Parse(text));
-    }
-
-    [Fact]
-    public void Mesh_terrain_needs_the_bake_tool_or_a_sampled_field()
+    public void A_non_slab_mesh_in_the_groups_needs_the_bake_tool()
     {
         var text = """
             [gd_scene format=3]
             [sub_resource type="PlaneMesh" id="p"]
             [node name="R" type="Node3D"]
-            [node name="Ground" type="MeshInstance3D" parent="." groups=["terrain"]]
+            [node name="Ground" type="MeshInstance3D" parent="." groups=["ground"]]
             mesh = SubResource("p")
             [node name="PlayerSpawn" type="Marker3D" parent="."]
             """;
         var e = Assert.Throws<InvalidDataException>(() => DungeonSceneFile.Parse(text));
         Assert.Contains("bake", e.Message);
 
-        // The bake tool samples the meshes and hands the result in — then it parses.
-        var sampled = new HeightField(0, 0, 40, 2, 2, new float[4]);
-        var geometry = DungeonSceneFile.Parse(text, sampledTerrain: sampled);
-        Assert.Same(sampled, geometry.Terrain);
+        // The bake tool samples the meshes and hands the whole soup in — then it parses.
+        var sampled = new SoupBuilder()
+            .AddBox(new Aabb(Vector3.Zero, new Vector3(10, 1, 10)), floor: true)
+            .Build();
+        var geometry = DungeonSceneFile.Parse(text, sampledSoup: sampled);
+        Assert.Same(sampled, geometry.Soup);
+    }
+
+    [Fact]
+    public void A_scene_of_markers_alone_is_a_flat_map()
+    {
+        var geometry = DungeonSceneFile.Parse("""
+            [gd_scene format=3]
+            [node name="R" type="Node3D"]
+            [node name="PlayerSpawn" type="Marker3D" parent="."]
+            """);
+        Assert.Null(geometry.Soup);
     }
 
     [Fact]

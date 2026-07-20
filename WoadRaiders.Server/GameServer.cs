@@ -26,7 +26,8 @@ public sealed class GameServer
     private static readonly TimeSpan EmptyLinger = TimeSpan.FromSeconds(60);
 
     /// <summary>One loaded map: its display name, parsed geometry, and the immutable packet sent on join.</summary>
-    private sealed record LoadedMap(string Name, DungeonGeometry Geometry, DungeonGeometryPacket Packet);
+    private sealed record LoadedMap(string Name, DungeonGeometry Geometry, IDungeonGeometry? Movement,
+                                    DungeonGeometryPacket Packet);
 
     /// <summary>One live raid: a player-forged run of a dungeon with its own world.</summary>
     private sealed class Instance(
@@ -97,9 +98,25 @@ public sealed class GameServer
             foreach (var (id, mapPath) in _mapPaths)
             {
                 DungeonGeometry dungeon;
+                IDungeonGeometry? movement = null;
+                byte[]? navMesh = null;
                 try
                 {
                     dungeon = DungeonGeometryFile.Load(mapPath);
+                    // Built realms get their navmesh baked HERE, once — the sim
+                    // moves on it and every client receives these exact bytes, so
+                    // no peer ever bakes its own (identical polygons everywhere).
+                    // The boss-width mesh stays server-side: only the server
+                    // moves the boss. Soupless maps keep the flat-arena rules.
+                    if (dungeon.Soup is { } soup)
+                    {
+                        var characters = NavMeshBuilder.BuildMeshData(soup);
+                        var boss = NavMeshBuilder.BuildMeshData(soup, EnemyArchetypes.Of(EnemyType.Boss).Radius);
+                        navMesh = NavMeshBuilder.Serialize(characters);
+                        movement = new NavMeshGeometry(soup, dungeon.SpawnPoint,
+                            (SimConstants.CharacterRadius, NavMeshBuilder.ToNavMesh(characters)),
+                            (EnemyArchetypes.Of(EnemyType.Boss).Radius, NavMeshBuilder.ToNavMesh(boss)));
+                    }
                 }
                 catch (Exception e)
                 {
@@ -108,9 +125,11 @@ public sealed class GameServer
                 }
 
                 var name = Path.GetFileNameWithoutExtension(mapPath);
-                _maps[id] = new LoadedMap(name, dungeon, DungeonSnapshot.From(dungeon));
+                _maps[id] = new LoadedMap(name, dungeon, movement, DungeonSnapshot.From(dungeon, navMesh));
                 _log.Info($"[map] Loaded '{mapPath}' " +
-                          $"({dungeon.Solids.Count} solids, {dungeon.EnemySpawns.Count} spawn markers).");
+                          $"({(dungeon.Soup is { } s ? $"{s.Triangles.Length / 3} triangles" : "flat arena")}, " +
+                          $"{dungeon.EnemySpawns.Count} spawn markers" +
+                          $"{(navMesh is null ? "" : $", {navMesh.Length / 1024} KB navmesh")}).");
             }
 
             // Only now, with every map loaded, open the socket — so a joining peer
@@ -324,7 +343,7 @@ public sealed class GameServer
             (requested, map) = _maps.First(); // a custom --map run hosts one map; every forge uses it
 
         var id = _nextInstanceId++;
-        var session = new GameSession(map.Geometry, new Random());
+        var session = new GameSession(map.Geometry, new Random(), map.Movement);
         session.Notice += e => _log.Info($"[{map.Name}#{id}] {e.Message}"); // relay match events; no domain knowledge here
         var spawned = session.SpawnInitial();
 

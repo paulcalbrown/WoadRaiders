@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Numerics;
 using WoadRaiders.Core;
@@ -20,7 +20,7 @@ public class PortalRunTests
         var markers = Enumerable.Range(0, 4)
             .Select(i => new EnemySpawnPoint(new Vector3(3000 + 100 * i, 0, 3000), EnemyType.Minion))
             .ToArray();
-        return new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), markers) { BossSpawn = BossPost };
+        return new DungeonGeometry(Vector3.Zero, null, markers) { BossSpawn = BossPost };
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class PortalRunTests
         Assert.Equal(BossPost.X, snap.PortalX);
         Assert.Equal(BossPost.Z, snap.PortalZ);
 
-        // The knight stands at the boss's corpse — walk the last stretch into the mouth.
+        // The knight stands at the boss's corpse â€” walk the last stretch into the mouth.
         RunReport? report = null;
         for (var tick = 0; tick < 300 && report is null; tick++)
         {
@@ -87,6 +87,6 @@ public class PortalRunTests
         Assert.Equal("Bran", report.Value.PlayerName);
         Assert.True(report.Value.FoesSlain >= 1, "the boss itself counts toward the tally");
         Assert.True(report.Value.DurationSeconds > 0, "the fight takes real seconds");
-        Assert.Empty(snap.Players); // out of the world — no snapshot carries them again
+        Assert.Empty(snap.Players); // out of the world â€” no snapshot carries them again
     }
 }

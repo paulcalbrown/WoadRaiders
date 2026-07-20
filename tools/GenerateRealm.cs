@@ -83,27 +83,41 @@ if (issues.Count > 0)
 // Crypt's descent must lose it. Realms with no route here skip the walk —
 // RealmValidator's reachability proof stands on its own, so a new realm owes
 // this only if it has an intended path.
+// The Crypt is DRAWN in plan units and BUILT 3.16x larger (CryptDesign.Scale —
+// keep the two in step; if they drift, the walk below misses the realm and
+// fails loudly rather than silently proving nothing).
+const float CryptScale = 3.16f;
+static Vector2[] Scaled(float k, Vector2[] plan)
+{
+    var world = new Vector2[plan.Length];
+    for (var i = 0; i < plan.Length; i++)
+        world[i] = plan[i] * k;
+    return world;
+}
+
 var routes = new Dictionary<string, (Vector2[] Path, float MinFinalHeight, float MaxFinalHeight)>(StringComparer.OrdinalIgnoreCase)
 {
+    // The Crag: gate court → stairs → the processional → stairs → the high
+    // ward → the causeway → the boss court and its dais. Ends HIGH or the
+    // ascent is broken.
     ["Crag"] = ([
-    new(700, 700), new(1000, 700), new(1600, 800), new(2200, 900), new(2450, 1000),
-    new(2650, 1050), new(3000, 1100), new(3340, 1100), new(3620, 1100), new(3700, 1100),
-    new(4100, 1170), new(4600, 1250), new(4750, 1350), new(4300, 1500), new(3900, 1650),
-    new(3750, 1750), new(3800, 2000), new(3900, 2500), new(4300, 2700), new(4800, 2900),
-    new(4800, 3200), new(5300, 3700), new(5350, 3850), new(5000, 4100), new(4700, 4300),
-    new(4560, 4300), new(4460, 4340), new(4460, 4450), new(4200, 4750), new(4200, 4820),
+    new(700, 2000), new(1150, 2000), new(1600, 2000), new(2100, 2000),
+    new(2650, 2000), new(3100, 2000), new(3400, 2000), new(3400, 2600),
+    new(3400, 3000), new(3400, 3400), new(3400, 3650),
     ], 250f, float.MaxValue),
 
-    // The Crypt: undercroft → stair → hub → processional → the span → the maze
-    // → deep stair → antechamber → the Mausoleum. Ends DEEP or the descent is
-    // broken.
-    ["Crypt"] = ([
-    new(480, 1800), new(760, 1800), new(1180, 1800), new(1450, 1800),
-    new(1750, 1800), new(2100, 1800), new(2380, 1800), new(2650, 1800),
-    new(2820, 1800), new(3060, 1800), new(3360, 1800), new(3660, 1800),
-    new(3660, 2160), new(3660, 2500), new(3660, 2760), new(3260, 2980),
-    new(3000, 3060), new(2760, 3140), new(2620, 3180), new(2320, 3260),
-    ], float.MinValue, -230f),
+    // The Crypt: undercroft → descent stair → the hall of the dead →
+    // processional stair → the span → the east landing → the deep stair →
+    // the catacombs → the low gallery → the Mausoleum. Ends DEEP or the
+    // descent is broken. Stated in the design's PLAN units and multiplied out
+    // by the same 3.16 CryptDesign builds with, so the route follows the realm
+    // when the plan is rescaled instead of pointing at where it used to be.
+    ["Crypt"] = (Scaled(CryptScale, [
+    new(600, 1800), new(1200, 1800), new(1800, 1800), new(2400, 1800),
+    new(2800, 1800), new(3300, 1800), new(3600, 1800), new(3800, 1800),
+    new(3800, 2400), new(3800, 2650), new(3550, 3000), new(3000, 3000),
+    new(2600, 3000), new(2200, 3000),
+    ]), float.MinValue, -230f * CryptScale),
 };
 if (!routes.TryGetValue(realm, out var route))
 {
@@ -111,6 +125,11 @@ if (!routes.TryGetValue(realm, out var route))
 }
 else
 {
+    // The walk runs on the very movement geometry the SERVER will bake and
+    // move on — the realm's navmesh over its baked soup.
+    if (geometry.Soup is not { } soup)
+        throw new InvalidOperationException("the baked realm has no geometry soup — nothing to walk on");
+    var movement = new NavMeshGeometry(NavMeshBuilder.Build(soup), soup, geometry.SpawnPoint);
     var pos = geometry.SpawnPoint;
     var step = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
     foreach (var target in route.Path)
@@ -120,7 +139,7 @@ else
         while (Vector2.Distance(new Vector2(pos.X, pos.Z), target) > 30f)
         {
             var dir = Vector2.Normalize(target - new Vector2(pos.X, pos.Z));
-            var next = geometry.Move(pos, new Vector3(dir.X, 0f, dir.Y) * step);
+            var next = movement.Move(pos, new Vector3(dir.X, 0f, dir.Y) * step);
             stall = Vector3.Distance(next, pos) < 0.5f ? stall + 1 : 0;
             pos = next;
             if (stall > 30)
@@ -139,13 +158,12 @@ else
 }
 
 var span = geometry.Bounds;
-var terrainSummary = geometry.Terrain is { } terrain
-    ? $"{terrain.Width}x{terrain.Depth} terrain over {(terrain.Width - 1) * terrain.CellSize:0}x" +
-      $"{(terrain.Depth - 1) * terrain.CellSize:0} units (heights {span.Min.Y:0}..{span.Max.Y:0})"
-    : "no terrain";
+var soupSummary = geometry.Soup is { } builtSoup
+    ? $"{builtSoup.Triangles.Length / 3} triangles ({builtSoup.FloorTriangleCount} floor) over " +
+      $"{span.Max.X - span.Min.X:0}x{span.Max.Z - span.Min.Z:0} units (heights {span.Min.Y:0}..{span.Max.Y:0})"
+    : "no geometry";
 Console.WriteLine($"Wrote {realm}.tscn (the design) and {realm}.json (baked from it, validated): " +
-                  $"{terrainSummary}, {geometry.Solids.Count} solids, " +
-                  $"{geometry.EnemySpawns.Count} enemy camps" +
+                  $"{soupSummary}, {geometry.EnemySpawns.Count} enemy camps" +
                   $"{(geometry.BossSpawn is not null ? " + the boss" : "")}.");
 
 // ------------------------------------------------------------- helpers

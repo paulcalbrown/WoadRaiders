@@ -3,10 +3,10 @@ using System.Numerics;
 namespace WoadRaiders.Core;
 
 /// <summary>
-/// The seam between the simulation and whatever describes the dungeon's shape.
-/// Today the provider is a flat tile grid (<see cref="DungeonMap"/>); later it can
-/// be mesh-based geometry (glTF module kit + collision primitives / BepuPhysics)
-/// without touching any gameplay code. Coordinates are world-space, Y-up.
+/// The seam between the simulation and whatever describes the realm's shape.
+/// The shipping provider is <see cref="NavMeshGeometry"/> — a baked Detour
+/// navmesh over the realm's triangle soup. A world with no geometry at all
+/// keeps the open-arena defaults below. Coordinates are world-space, Y-up.
 /// </summary>
 public interface IDungeonGeometry
 {
@@ -36,4 +36,39 @@ public interface IDungeonGeometry
     /// of burying itself in the first rise. Flat providers keep the default: 0.
     /// </summary>
     float GroundHeight(float x, float z) => 0f;
+
+    /// <summary>
+    /// The underside of whatever roofs a world-space point — the headroom the
+    /// chase camera has before it would climb out of the chamber the raider is
+    /// standing in. Sight lines alone cannot answer this: a realm built from
+    /// slabs roofs each space at its own height, so where a low room abuts a
+    /// tall corridor the gap between their roofs is a slot a camera can see
+    /// clean through. Open sky — and providers with no geometry — have none.
+    /// </summary>
+    float CeilingHeight(Vector3 above) => float.PositiveInfinity;
+
+    /// <summary>
+    /// Where a ray first meets the walkable world — the client's cursor
+    /// picking. False when the ray escapes without landing (open-arena
+    /// providers keep the default; the caller falls back to a flat plane).
+    /// </summary>
+    bool RaycastGround(Vector3 origin, Vector3 direction, float maxDistance, out Vector3 hit)
+    {
+        hit = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Plan a walkable route between two points into <paramref name="waypoints"/>
+    /// (the destination, or the closest reachable ground, is the last entry).
+    /// Enemy pursuit follows these instead of sliding blindly along walls. The
+    /// default is the straight line — correct for open arenas and the flat
+    /// fallback; providers with real routing (the navmesh) override it.
+    /// </summary>
+    bool TryFindPath(Vector3 from, Vector3 to, IList<Vector3> waypoints, float radius = SimConstants.CharacterRadius)
+    {
+        waypoints.Clear();
+        waypoints.Add(to);
+        return true;
+    }
 }

@@ -1,524 +1,334 @@
-using System.Numerics;
+using System.Collections.Generic;
+using Godot;
 using WoadRaiders.Core;
+using Aabb = WoadRaiders.Core.Aabb;
 
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The Crypt's DESIGN — the second <see cref="IRealmDesign"/>, and an INDOOR
-/// one: a sprawling burial complex carved downward into solid rock. Where the
-/// Crag's wild default is open highland with plates carved into it, the
-/// Crypt's wild default is the unexcavated rock MASS — a dark roof-height
-/// plateau — and every room and gallery is a plate sunk into it, so walls
-/// arise from the carving itself and the realm is sealed by construction.
-/// The rock mass is not one flat slab: its top follows the rooms below (a
-/// widened "envelope" of the same plates, raised by a roof height), so the
-/// chase camera riding above it stays close to whichever hall the raider
-/// walks.
+/// The Sunken Crypt's DESIGN — a TRUE interior: rooms with flat stone floors,
+/// standing walls, linteled doorways, and real roofs overhead, sinking chamber
+/// by chamber into the earth. No landscape anywhere; the necropolis is masonry
+/// all the way down.
 ///
-/// The layout descends: entrance undercroft → a stepped stair (real treads,
-/// quantized into the heightfield) → the Hall of the Dead (hub rotunda) →
-/// north to an ossuary with a bone-crawl shortcut, south past a flooded
-/// cloister to a noble family's crypt → the Processional east, broken mid-way
-/// by a collapsed chasm (a charnel pit with its own ambush and a scree ramp
-/// out) → a catacomb maze of narrow criss-cross galleries → a candle chapel —
-/// then the deep stair, the antechamber of the kings, and the Mausoleum: the
-/// boss's pillared court at the bottom of the world. Deterministic: same
-/// numbers, same realm, every run (hash noise, no framework RNG).
+///   undercroft (0) → descent stair → hall of the dead → processional stair →
+///   the span over the chasm (a bridge, and a long stair back out of the pit)
+///   → east landing → deep stair → the catacombs → the low gallery → the
+///   Mausoleum
 ///
-/// Like CragDesign, this lives CLIENT-SIDE next to the scene builder: the
-/// simulation-relevant parts (terrain, collision, markers) follow the bake
-/// conventions, and everything else — the masonry, the dead, the candle seas —
-/// is pure scenery the bake never needs to understand.
+/// Dropping off the span into the chasm is a legal fall — the chasm stair
+/// climbs back to the landing, so the fall is a detour, never a grave.
+///
+/// THE PLAN IS DRAWN SMALL AND BUILT LARGE. Every chamber below is stated in
+/// PLAN units — the realm's original, legible floor plan — and <see cref="S"/>
+/// multiplies them out to world units, giving ten times the floor area of the
+/// first cut. Architecture (wall thickness, doors, ceilings, pillars) is stated
+/// in WORLD units instead and does NOT scale with the plan: a grander hall
+/// wants a grander door, but a wall is still a wall and a raider is still 44
+/// units tall. Wanting a different size of crypt means changing <see cref="S"/>
+/// alone — the dressing rides along, because it is laid out from the chambers
+/// this file records rather than from coordinates of its own.
 /// </summary>
 public sealed partial class CryptDesign : IRealmDesign
 {
     public string Name => "Crypt";
 
-    /// <summary>Compose the realm: the dark, then the stone, then what stands
-    /// in it, then the cast, then the dressing. Node order is scene order.</summary>
+    /// <summary>Plan units to world units. 3.16 ≈ √10, so ten times the floor area.</summary>
+    private const float Scale = 3.16f;
+
+    // Architecture, in WORLD units — deliberately not scaled with the plan.
+    private const float WallThickness = 60f;
+    private const float RoomHeight = 620f;      // chambers stand tall; the chase camera comes inside
+    private const float CorridorHeight = 380f;  // passages stay lower, and press in
+    private const float DoorWidth = 420f;
+    private const float DoorHeight = 300f;
+    private const float PillarHalf = 65f;
+    private const float PillarSpacing = 620f;
+
+    /// <summary>
+    /// How high the boss's dais stands off the Mausoleum floor. A WORLD
+    /// constant, and it MUST stay under <see cref="SimConstants.StepHeight"/>
+    /// (18): the dais is a low plate the raider walks onto, and a dais taller
+    /// than a step is a plinth that entombs the boss — nothing can climb it,
+    /// and every cell in the realm reports as stranded.
+    /// </summary>
+    private const float DaisRise = 16f;
+
+    private static readonly Color OldStone = new(0.34f, 0.34f, 0.38f);
+    private static readonly Color DarkStone = new(0.24f, 0.24f, 0.29f);
+    private static readonly Color BoneWhite = new(0.58f, 0.56f, 0.50f);
+
+    private RealmScene _scene = null!;
+    private Material _floor = null!;
+    private Material _wall = null!;
+    private Material _bone = null!;
+
+    /// <summary>
+    /// A chamber the plan laid down, in WORLD units, kept so the dressing and
+    /// the lighting can walk the rooms instead of restating their coordinates.
+    /// </summary>
+    private readonly record struct Chamber(
+        string Name, float X0, float Z0, float X1, float Z1, float FloorY, float TopY)
+    {
+        public float MidX => (X0 + X1) * 0.5f;
+        public float MidZ => (Z0 + Z1) * 0.5f;
+        public float Width => X1 - X0;
+        public float Depth => Z1 - Z0;
+    }
+
+    /// <summary>A stair corridor between chambers, likewise in WORLD units.</summary>
+    private readonly record struct Passage(
+        float X0, float Z0, float X1, float Z1, float LowY, float TopY, bool AlongZ);
+
+    private readonly List<Chamber> _chambers = new();
+    private readonly List<Passage> _passages = new();
+
+    /// <summary>The chamber the plan recorded under this name.</summary>
+    private Chamber Named(string name) => _chambers.Find(c => c.Name == name);
+
+    /// <summary>Plan units → world units.</summary>
+    private static float S(float plan) => plan * Scale;
+
     public RealmScene Build()
     {
-        var scene = new RealmScene();
+        _scene = new RealmScene();
+        _floor = StoneSurfaces.Cut(OldStone, grain: 340f, seed: 1301, roughness: 0.94f, relief: 1.1f);
+        _wall = StoneSurfaces.Cut(DarkStone, grain: 470f, seed: 1607, roughness: 0.96f, relief: 1.8f);
+        _bone = StoneSurfaces.Cut(BoneWhite, grain: 220f, seed: 1913, roughness: 0.82f, relief: 0.9f);
 
-        // The Crypt's own dark: black void, cold ambient, torch-fed fog
-        // (CryptDesign.Scenery.cs).
-        DressWithDark(scene);
+        // ------------------------------------------------------- the chambers
+        // The undercroft — the way in.
+        Room("undercroft", 200, 1500, 900, 2100, floorY: 0, doorEast: 1800);
+        // The descent stair, walled like the corridor it is.
+        Corridor(900, 1700, 1500, 1900, fromY: 0, toY: -80);
+        // The hall of the dead.
+        Room("hall", 1500, 1400, 2500, 2200, floorY: -80, doorWest: 1800, doorEast: 1800);
+        PillarRows(1700, 1600, 2300, 2000, floorY: -80);
+        // The processional stair down.
+        Corridor(2500, 1700, 3100, 1900, fromY: -80, toY: -160);
+        // The span: a chasm chamber, its bridge, and the long stair out of the
+        // pit — climbing the south air to land back ON the bridge itself.
+        Room("span", 3100, 1200, 3700, 2400, floorY: -300, wallTopY: -60,
+                doorWest: 1800, doorWestY: -160, doorEast: 1800, doorEastY: -160);
+        _scene.AddFloor(Box(S(3100), S(-172), S(1740), S(3700), S(-160), S(1860)), _bone, "Span");
+        _scene.AddStairs(new Vector3(S(3250), S(-300), S(2300)), new Vector3(S(3550), S(-160), S(1850)),
+                         S(120), _floor);
+        // The east landing beyond the span.
+        Room("landing", 3700, 1500, 3900, 2100, floorY: -160, doorWest: 1800, doorSouth: 3800);
+        // The deep stair south.
+        Corridor(3700, 2100, 3900, 2700, fromY: -160, toY: -240, alongZ: true);
+        // The catacombs — a pillared maze.
+        Room("catacombs", 3200, 2700, 3900, 3300, floorY: -240, doorNorth: 3800, doorWest: 3000);
+        PillarRows(3280, 2800, 3840, 3220, floorY: -240, spacing: 400f); // a maze wants them close
+        // The low gallery westward, easing down the last twenty. Its ends are
+        // stated to MATCH the floors it joins — west is the Mausoleum (-260),
+        // east the catacombs (-240) — so the walk is flush at both mouths
+        // rather than a drop the raider cannot climb back up.
+        Corridor(2600, 2900, 3200, 3100, fromY: -260, toY: -240);
+        // The Mausoleum — the boss's tall chamber.
+        Room("mausoleum", 1800, 2600, 2600, 3400, floorY: -260, wallTopY: -40, doorEast: 3000);
+        var dais = Named("mausoleum");
+        _scene.AddFloor(Box(dais.MidX - 474f, dais.FloorY, dais.MidZ - 474f,
+                            dais.MidX + 474f, dais.FloorY + DaisRise, dais.MidZ + 474f), _bone, "BossDais");
 
-        var field = BuildHeightField();
-        // Crypt colours are region-aware (ossuary bone-dust, cloister moss,
-        // mausoleum cold), so the palette reads position as well as height.
-        scene.AddTerrain(field, CryptColour, CryptSurface());
-        scene.AddSolids(Solids(field), Masonry());
-
-        DressWithLights(scene);
-
-        scene.SetPlayerSpawn(scene.OnGround(PlayerSpawn.X, PlayerSpawn.Z));
-        foreach (var enemy in Enemies)
-            scene.AddEnemy(enemy.Type, scene.OnGround(enemy.X, enemy.Z));
-        scene.SetBossSpawn(scene.OnGround(BossSpawn.X, BossSpawn.Z));
-
-        // ---- pure scenery, past here: nothing the simulation ever sees. ----
-        DressWithMasonry(scene);
-        DressWithTheDead(scene);
-        DressWithRelics(scene);
-
-        return scene;
+        Cast();
+        Relics(); // the imported kit pass (CryptDesign.Relics.cs) — pure scenery
+        Gloom();
+        return _scene;
     }
 
-    private const float Cell = 40f;          // world units between height samples
-    private const int W = 107, D = 101;      // samples: the realm is 4240 x 4000 world units
-    private const int Seed = 269;
-
-    /// <summary>How far the unexcavated rock roof rises above the rooms carved
-    /// beneath it — the implied vault height of the complex.</summary>
-    private const float RoofRise = 190f;
-
-    // ------------------------------------------------------------- noise
-
-    private static float Hash(int x, int z, int salt)
+    /// <summary>
+    /// The garrison. Camps are laid out as FRACTIONS of the chamber they hold,
+    /// so widening the plan spreads them through the new floor instead of
+    /// leaving them huddled at the old coordinates. The server caps live
+    /// enemies at 40 (SpawnDirector), which is what this fills.
+    /// </summary>
+    private void Cast()
     {
-        var h = unchecked((uint)(x * 374761393 + z * 668265263 + salt * 974711 + Seed * 144665));
-        h = (h ^ (h >> 13)) * 1274126177u;
-        h ^= h >> 16;
-        return (h & 0xFFFFFF) / (float)0x1000000; // 0..1
+        _scene.SetPlayerSpawn(_scene.OnFloor(S(350), S(1800)));
+
+        // A camp at a fraction across a chamber — (0,0) its north-west corner.
+        void Camp(EnemyType type, string room, float u, float v)
+        {
+            var c = Named(room);
+            _scene.AddEnemy(type, _scene.OnFloor(c.X0 + c.Width * u, c.Z0 + c.Depth * v));
+        }
+
+        // The undercroft: a thin picket, so the way in stays survivable.
+        Camp(EnemyType.Minion, "undercroft", 0.55f, 0.25f);
+        Camp(EnemyType.Minion, "undercroft", 0.55f, 0.75f);
+        Camp(EnemyType.Minion, "undercroft", 0.80f, 0.50f);
+
+        // The hall of the dead: the realm's first real fight, spread wide
+        // between the pillar lines with casters holding the far end.
+        Camp(EnemyType.Minion, "hall", 0.20f, 0.22f);
+        Camp(EnemyType.Minion, "hall", 0.20f, 0.78f);
+        Camp(EnemyType.Minion, "hall", 0.38f, 0.50f);
+        Camp(EnemyType.Rogue, "hall", 0.55f, 0.20f);
+        Camp(EnemyType.Rogue, "hall", 0.55f, 0.80f);
+        Camp(EnemyType.Minion, "hall", 0.70f, 0.35f);
+        Camp(EnemyType.Minion, "hall", 0.70f, 0.65f);
+        Camp(EnemyType.Mage, "hall", 0.86f, 0.24f);
+        Camp(EnemyType.Mage, "hall", 0.86f, 0.76f);
+
+        // The span: sentries on the bridge, and the drowned garrison below.
+        Camp(EnemyType.Rogue, "span", 0.50f, 0.48f);
+        Camp(EnemyType.Rogue, "span", 0.72f, 0.52f);
+        Camp(EnemyType.Minion, "span", 0.30f, 0.14f);
+        Camp(EnemyType.Minion, "span", 0.70f, 0.12f);
+        Camp(EnemyType.Minion, "span", 0.35f, 0.88f);
+        Camp(EnemyType.Minion, "span", 0.68f, 0.86f);
+
+        // The east landing — a squeeze on the shelf.
+        Camp(EnemyType.Rogue, "landing", 0.50f, 0.22f);
+        Camp(EnemyType.Rogue, "landing", 0.50f, 0.78f);
+        Camp(EnemyType.Minion, "landing", 0.50f, 0.50f);
+
+        // The catacombs: the maze is the point — many, and scattered.
+        Camp(EnemyType.Minion, "catacombs", 0.18f, 0.20f);
+        Camp(EnemyType.Minion, "catacombs", 0.18f, 0.80f);
+        Camp(EnemyType.Rogue, "catacombs", 0.35f, 0.50f);
+        Camp(EnemyType.Minion, "catacombs", 0.50f, 0.18f);
+        Camp(EnemyType.Minion, "catacombs", 0.50f, 0.82f);
+        Camp(EnemyType.Rogue, "catacombs", 0.66f, 0.34f);
+        Camp(EnemyType.Rogue, "catacombs", 0.66f, 0.66f);
+        Camp(EnemyType.Mage, "catacombs", 0.84f, 0.22f);
+        Camp(EnemyType.Mage, "catacombs", 0.84f, 0.78f);
+        Camp(EnemyType.Minion, "catacombs", 0.82f, 0.50f);
+
+        // The Mausoleum: the boss's court, its honour guard drawn around the
+        // dais rather than on it.
+        Camp(EnemyType.Minion, "mausoleum", 0.22f, 0.24f);
+        Camp(EnemyType.Minion, "mausoleum", 0.22f, 0.76f);
+        Camp(EnemyType.Rogue, "mausoleum", 0.32f, 0.50f);
+        Camp(EnemyType.Mage, "mausoleum", 0.16f, 0.50f);
+        Camp(EnemyType.Mage, "mausoleum", 0.50f, 0.16f);
+        Camp(EnemyType.Mage, "mausoleum", 0.50f, 0.84f);
+        Camp(EnemyType.Rogue, "mausoleum", 0.78f, 0.28f);
+        Camp(EnemyType.Rogue, "mausoleum", 0.78f, 0.72f);
+
+        var court = Named("mausoleum");
+        _scene.SetBossSpawn(_scene.OnFloor(court.MidX, court.MidZ));
     }
 
-    private static float ValueNoise(float x, float z, float wavelength, int salt)
+    // ----------------------------------------------------------- vocabulary
+
+    private static Aabb Box(float x0, float y0, float z0, float x1, float y1, float z1) =>
+        new(new System.Numerics.Vector3(x0, y0, z0), new System.Numerics.Vector3(x1, y1, z1));
+
+    /// <summary>
+    /// A rectangular chamber, stated in PLAN units: a thick floor slab, four
+    /// walls (each with an optional linteled doorway at a given coordinate),
+    /// and a roof. Door Y defaults to the floor; a chasm chamber passes the
+    /// height its doors open at instead. Recorded in <see cref="_chambers"/>
+    /// under <paramref name="name"/> for the dressing and lighting to find.
+    /// </summary>
+    private void Room(string name, float x0, float z0, float x1, float z1, float floorY,
+                      float? wallTopY = null,
+                      float? doorNorth = null, float? doorSouth = null,
+                      float? doorWest = null, float? doorEast = null,
+                      float? doorWestY = null, float? doorEastY = null)
     {
-        var fx = x / wavelength;
-        var fz = z / wavelength;
-        var x0 = (int)MathF.Floor(fx);
-        var z0 = (int)MathF.Floor(fz);
-        var tx = fx - x0;
-        var tz = fz - z0;
-        tx = tx * tx * (3f - 2f * tx); // smoothstep the lattice lerp
-        tz = tz * tz * (3f - 2f * tz);
-        var n = float.Lerp(float.Lerp(Hash(x0, z0, salt), Hash(x0 + 1, z0, salt), tx),
-                           float.Lerp(Hash(x0, z0 + 1, salt), Hash(x0 + 1, z0 + 1, salt), tx), tz);
-        return n * 2f - 1f; // -1..1
+        float wx0 = S(x0), wz0 = S(z0), wx1 = S(x1), wz1 = S(z1), wFloor = S(floorY);
+        var top = wallTopY is { } t ? S(t) : wFloor + RoomHeight;
+
+        _scene.AddFloor(Box(wx0, wFloor - 90f, wz0, wx1, wFloor, wz1), _floor);
+        // North/south walls run along X (z fixed); west/east along Z.
+        WallX(wx0, wx1, wz0, wFloor, top, Door(doorNorth), wFloor);
+        WallX(wx0, wx1, wz1 - WallThickness, wFloor, top, Door(doorSouth), wFloor);
+        WallZ(wz0, wz1, wx0, wFloor, top, Door(doorWest), doorWestY is { } w ? S(w) : wFloor);
+        WallZ(wz0, wz1, wx1 - WallThickness, wFloor, top, Door(doorEast), doorEastY is { } e ? S(e) : wFloor);
+        _scene.AddStructure(Box(wx0, top, wz0, wx1, top + WallThickness, wz1), _wall); // the roof
+
+        _chambers.Add(new Chamber(name, wx0, wz0, wx1, wz1, wFloor, top));
     }
 
-    private static float Fractal(float x, float z, float wavelength, int octaves, int salt)
+    private static float? Door(float? planAt) => planAt is { } d ? S(d) : null;
+
+    /// <summary>A wall along X at a fixed Z, split around a doorway when one is given.</summary>
+    private void WallX(float x0, float x1, float z, float floorY, float topY, float? doorAt, float doorY)
     {
-        float sum = 0f, amp = 1f, norm = 0f;
-        for (var o = 0; o < octaves; o++)
+        if (doorAt is { } d)
         {
-            sum += ValueNoise(x, z, wavelength, salt + o * 131) * amp;
-            norm += amp;
-            wavelength *= 0.5f;
-            amp *= 0.5f;
+            _scene.AddStructure(Box(x0, floorY, z, d - DoorWidth / 2, topY, z + WallThickness), _wall);
+            _scene.AddStructure(Box(d + DoorWidth / 2, floorY, z, x1, topY, z + WallThickness), _wall);
+            _scene.AddStructure(Box(d - DoorWidth / 2, doorY + DoorHeight, z, d + DoorWidth / 2, topY,
+                                    z + WallThickness), _wall);
         }
-        return sum / norm; // -1..1
+        else
+        {
+            _scene.AddStructure(Box(x0, floorY, z, x1, topY, z + WallThickness), _wall);
+        }
     }
 
-    // ------------------------------------------------------------- the stone
-    // A plate is a carved room or gallery: a capsule (A→B) or disc (A==B)
-    // whose floor runs Ha→Hb along its axis, fading over Blend into the rock.
-    // Step > 0 quantizes the floor profile into real stair treads (each tread
-    // lands on the sample grid, so the rise per tread must stay well under
-    // SimConstants.StepHeight for the stairs to be climbable).
-
-    private readonly record struct Plate(
-        Vector2 A, Vector2 B, float R, float Ha, float Hb, float Blend, float Step = 0f);
-
-    private static readonly Plate[] Rooms =
+    /// <summary>A wall along Z at a fixed X, split around a doorway when one is given.</summary>
+    private void WallZ(float z0, float z1, float x, float floorY, float topY, float? doorAt, float doorY)
     {
-        // The Entrance Undercroft — the spawn hall, lit by the collapsed shaft.
-        new(new(400, 1800), new(640, 1800), 220f, 0f, 0f, 70f),
-        // The Descent Stair: monumental treads down into the earth.
-        new(new(760, 1800), new(1180, 1800), 110f, 0f, -72f, 60f, Step: 12f),
-        // The Hall of the Dead — the hub rotunda.
-        new(new(1450, 1800), new(1450, 1800), 290f, -72f, -72f, 70f),
-
-        // North: the burial gallery, then the Ossuary.
-        new(new(1450, 1560), new(1450, 980), 95f, -72f, -108f, 60f),
-        new(new(1450, 680), new(1450, 680), 235f, -122f, -122f, 65f),
-        // The Bone Crawl — a narrow shortcut looping from the ossuary to the
-        // Processional's midpoint, west of the chasm.
-        new(new(1660, 760), new(2000, 1150), 70f, -122f, -135f, 55f),
-        new(new(2000, 1150), new(2270, 1660), 70f, -135f, -112f, 55f),
-
-        // South: the gallery to the Flooded Cloister, and a noble family's
-        // dead-end crypt beyond it.
-        new(new(1450, 2040), new(1450, 2620), 95f, -72f, -108f, 60f),
-        new(new(1450, 2920), new(1450, 2920), 255f, -122f, -122f, 65f),
-        new(new(1230, 2980), new(1010, 3070), 75f, -122f, -123f, 55f),
-        new(new(900, 3120), new(900, 3120), 135f, -124f, -124f, 60f),
-
-        // East: the Processional — the grand pillared walk, broken mid-way.
-        new(new(1750, 1800), new(2650, 1800), 120f, -72f, -140f, 65f),
-        // The East Landing past the span.
-        new(new(2820, 1800), new(2820, 1800), 170f, -140f, -140f, 65f),
-
-        // The scree ramp out of the charnel pit, and the pocket linking it
-        // back to the cloister — falls are detours, never graves.
-        new(new(2400, 2150), new(2120, 2520), 90f, -285f, -118f, 60f),
-        new(new(2120, 2520), new(1690, 2760), 80f, -118f, -122f, 55f),
-
-        // The Catacomb Maze: narrow criss-cross galleries; the rock left
-        // between them IS the maze.
-        new(new(2960, 1440), new(3720, 1440), 80f, -156f, -160f, 55f),
-        new(new(2960, 1800), new(3720, 1800), 80f, -158f, -162f, 55f),
-        new(new(2960, 2160), new(3720, 2160), 80f, -160f, -164f, 55f),
-        new(new(3060, 1340), new(3060, 2260), 80f, -157f, -161f, 55f),
-        new(new(3360, 1340), new(3360, 2260), 80f, -159f, -163f, 55f),
-        new(new(3660, 1340), new(3660, 2260), 80f, -161f, -165f, 55f),
-
-        // The Candle Chapel north of the maze.
-        new(new(3360, 1060), new(3360, 1060), 175f, -172f, -172f, 60f),
-        new(new(3360, 1340), new(3360, 1160), 80f, -163f, -170f, 55f),
-
-        // The Deep Stair: two stepped legs with a turn.
-        new(new(3660, 2260), new(3660, 2760), 95f, -165f, -228f, 60f, Step: 12f),
-        new(new(3660, 2760), new(3260, 2980), 95f, -228f, -246f, 60f, Step: 12f),
-
-        // The Antechamber of the Kings, the gate mouth, and the Mausoleum —
-        // the boss's pillared court at the bottom of the world. The dais is
-        // TERRAIN (16 high — under StepHeight, so raiders step onto it), not a
-        // solid: the boss must stand on real ground, not inside a box.
-        new(new(3000, 3060), new(3000, 3060), 195f, -248f, -248f, 65f),
-        new(new(2760, 3140), new(2620, 3180), 95f, -252f, -252f, 55f),
-        new(new(2320, 3260), new(2320, 3260), 330f, -258f, -258f, 70f),
-        new(new(2320, 3260), new(2320, 3260), 72f, -242f, -242f, 26f),
-    };
-
-    // Carves cut AFTER the rooms, so they break whatever they cross.
-    private static readonly Plate[] Carves =
-    {
-        // The Charnel Chasm: the Processional's collapsed midpoint, a pit of
-        // the nameless dead. Its floor is a real place (rogue ambush).
-        new(new(2380, 1400), new(2380, 2200), 125f, -285f, -285f, 70f),
-        // The cloister's pool basin: a shallow sunken bath under dark water.
-        new(new(1450, 2920), new(1450, 2920), 120f, -140f, -140f, 50f),
-    };
-
-    /// <summary>Where the cloister's standing water lies — the plane the
-    /// scenery floats at, a hair above the basin floor's rim.</summary>
-    private const float PoolWaterLevel = -131f;
-
-    /// <summary>Every framed doorway: where a portal frame stands in the
-    /// scenery AND where its jambs block in the sim — one table so the stone a
-    /// raider sees is the stone the server enforces. AlongX is the walker's
-    /// direction of travel through the frame.</summary>
-    private static readonly (float X, float Z, bool AlongX, float Width)[] Doorways =
-    {
-        (700, 1800, true, 180f),    // the undercroft door
-        (1215, 1800, true, 190f),   // the stair's foot into the hub
-        (1690, 1800, true, 200f),   // the hub's east exit
-        (1450, 1510, false, 170f),  // the north gallery mouth
-        (1450, 2090, false, 170f),  // the south gallery mouth
-        (1450, 935, false, 170f),   // the ossuary door
-        (1450, 2660, false, 180f),  // the cloister door
-        (1055, 3055, true, 140f),   // the noble crypt door
-        (2900, 1800, true, 170f),   // the landing into the maze
-        (3360, 1250, false, 150f),  // the chapel walk
-        (3660, 2330, false, 170f),  // the deep stair's head
-        (2705, 3155, true, 180f),   // the mausoleum gate
-    };
-
-    private static (float H, float Weight) EvalPlate(Vector2 p, in Plate plate, float widen = 0f, float soften = 0f)
-    {
-        var (a, b, r, ha, hb, blend) = (plate.A, plate.B, plate.R + widen, plate.Ha, plate.Hb, plate.Blend + soften);
-        var ab = b - a;
-        var t = ab.LengthSquared() < 1f ? 0f : Math.Clamp(Vector2.Dot(p - a, ab) / ab.LengthSquared(), 0f, 1f);
-        var h = ha + (hb - ha) * t;
-        // Stair plates quantize the floor profile into treads. Quantizing the
-        // PROFILE (not the blended result) keeps the treads flat across the
-        // gallery's width while the ends still blend into their landings.
-        if (plate.Step > 0f)
-            h = MathF.Round(h / plate.Step) * plate.Step;
-        var d = Vector2.Distance(p, a + ab * t);
-        if (d <= r)
-            return (h, 1f);
-        if (d >= r + blend)
-            return (h, 0f);
-        var s = (d - r) / blend;
-        return (h, 1f - s * s * (3f - 2f * s));
+        if (doorAt is { } d)
+        {
+            _scene.AddStructure(Box(x, floorY, z0, x + WallThickness, topY, d - DoorWidth / 2), _wall);
+            _scene.AddStructure(Box(x, floorY, d + DoorWidth / 2, x + WallThickness, topY, z1), _wall);
+            _scene.AddStructure(Box(x, doorY + DoorHeight, d - DoorWidth / 2, x + WallThickness, topY,
+                                    d + DoorWidth / 2), _wall);
+        }
+        else
+        {
+            _scene.AddStructure(Box(x, floorY, z0, x + WallThickness, topY, z1), _wall);
+        }
     }
 
-    /// <summary>How far beyond a room's own blend its influence reaches into
-    /// the roof envelope — what keeps the rock mass low over the halls and
-    /// lets it swell between them.</summary>
-    private const float EnvelopeWiden = 30f, EnvelopeSoften = 230f;
-
-    /// <summary>How much of the point lies on PLAYED ground: 1 on a room or
-    /// carve floor, 0 in unexcavated rock, in between on the carved walls.
-    /// The palette keys the void-dark rock mass off this, so the flat roof
-    /// tops go black no matter what absolute height the descent put them at.</summary>
-    private static float PlayWeightAt(float x, float z)
+    /// <summary>A walled, roofed stair corridor between two chambers, in PLAN units.</summary>
+    private void Corridor(float x0, float z0, float x1, float z1, float fromY, float toY, bool alongZ = false)
     {
-        var p = new Vector2(x, z);
-        var w = 0f;
-        foreach (var room in Rooms)
-            w = MathF.Max(w, EvalPlate(p, room).Weight);
-        foreach (var carve in Carves)
-            w = MathF.Max(w, EvalPlate(p, carve).Weight);
-        return w;
+        float wx0 = S(x0), wz0 = S(z0), wx1 = S(x1), wz1 = S(z1), wFrom = S(fromY), wTo = S(toY);
+        var top = Mathf.Max(wFrom, wTo) + CorridorHeight;
+        var bottom = Mathf.Min(wFrom, wTo);
+        if (alongZ)
+        {
+            _scene.AddStairs(new Vector3((wx0 + wx1) / 2, wFrom, wz0), new Vector3((wx0 + wx1) / 2, wTo, wz1),
+                             wx1 - wx0, _floor);
+            _scene.AddStructure(Box(wx0 - WallThickness, bottom, wz0, wx0, top, wz1), _wall);
+            _scene.AddStructure(Box(wx1, bottom, wz0, wx1 + WallThickness, top, wz1), _wall);
+        }
+        else
+        {
+            _scene.AddStairs(new Vector3(wx0, wFrom, (wz0 + wz1) / 2), new Vector3(wx1, wTo, (wz0 + wz1) / 2),
+                             wz1 - wz0, _floor);
+            _scene.AddStructure(Box(wx0, bottom, wz0 - WallThickness, wx1, top, wz0), _wall);
+            _scene.AddStructure(Box(wx0, bottom, wz1, wx1, top, wz1 + WallThickness), _wall);
+        }
+        _scene.AddStructure(Box(wx0, top, wz0, wx1, top + WallThickness, wz1), _wall); // roofed all the way
+        _passages.Add(new Passage(wx0, wz0, wx1, wz1, bottom, top, alongZ));
     }
 
-    private static float HeightAt(float x, float z)
+    /// <summary>
+    /// Rows of square pillars holding a chamber's roof up, over a PLAN-unit
+    /// rectangle. Spacing is a WORLD constant, so a wider hall gets MORE
+    /// pillars rather than the same few stretched further apart.
+    /// </summary>
+    private void PillarRows(float x0, float z0, float x1, float z1, float floorY,
+                            float spacing = PillarSpacing)
     {
-        var p = new Vector2(x, z);
+        float wx0 = S(x0), wz0 = S(z0), wx1 = S(x1), wz1 = S(z1), wFloor = S(floorY);
+        var midX = (wx0 + wx1) * 0.5f;
+        var midZ = (wz0 + wz1) * 0.5f;
 
-        // The unexcavated rock mass. Its base is a dark plateau well above the
-        // entrance; near the complex it hugs the rooms' envelope + RoofRise,
-        // so the implied vaults stay a constant height over descending floors.
-        var plateau = 80f + Fractal(x, z, 700f, 3, 7) * 18f;
-        float envSum = 0f, envW = 0f, envMax = 0f;
-        float hSum = 0f, wSum = 0f, wMax = 0f;
-        foreach (var room in Rooms)
-        {
-            var (eh, ew) = EvalPlate(p, room, EnvelopeWiden, EnvelopeSoften);
-            if (ew > 0f)
-            {
-                envSum += eh * ew;
-                envW += ew;
-                envMax = MathF.Max(envMax, ew);
-            }
-            var (h, w) = EvalPlate(p, room);
-            if (w > 0f)
-            {
-                hSum += h * w;
-                wSum += w;
-                wMax = MathF.Max(wMax, w);
-            }
-        }
-        var rock = envW > 0f
-            ? float.Lerp(plateau, envSum / envW + RoofRise, envMax)
-            : plateau;
-
-        var height = wSum > 0f ? float.Lerp(rock, hSum / wSum, wMax) : rock;
-
-        // Carve the chasm and the pool through whatever stood there.
-        var inPlay = wMax;
-        foreach (var carve in Carves)
-        {
-            var (ch, cw) = EvalPlate(p, carve);
-            height = float.Lerp(height, ch, cw);
-            inPlay = MathF.Max(inPlay, cw);
-        }
-
-        // Organic detail: rubble-and-dust grain on the walked floors (gentle —
-        // this is dressed stone, not moorland), and rough breaks on the rock.
-        height += Fractal(x, z, 900f, 2, 23) * 3f;
-        height += Fractal(x, z, 170f, 3, 41) * 7f * (1f - 0.85f * inPlay);
-
-        // The border band rises into unbroken rock — the realm is sealed. The
-        // grade must exceed RealmValidator's inching slope.
-        var edge = MathF.Min(MathF.Min(x, 4240f - x), MathF.Min(z, 4000f - z));
-        if (edge < 160f)
-            height += (160f - edge) * 5f;
-
-        return height;
+        // Rows are laid in PAIRS either side of the chamber's middle, never on
+        // it, so the hall keeps a clear cross aisle down both centre lines.
+        // That is architecture — a pillared hall has aisles — and it is also
+        // load-bearing for the build: the intended route runs the centre line,
+        // and a pillar standing in it stalls the route walker outright.
+        var reachX = (wx1 - wx0) * 0.5f - PillarHalf;
+        var reachZ = (wz1 - wz0) * 0.5f - PillarHalf;
+        for (var i = 0; (i + 0.5f) * spacing <= reachX; i++)
+            for (var j = 0; (j + 0.5f) * spacing <= reachZ; j++)
+                foreach (var sx in new[] { -1f, 1f })
+                    foreach (var sz in new[] { -1f, 1f })
+                    {
+                        var x = midX + sx * (i + 0.5f) * spacing;
+                        var z = midZ + sz * (j + 0.5f) * spacing;
+                        _scene.AddStructure(Box(x - PillarHalf, wFloor, z - PillarHalf,
+                                                x + PillarHalf, wFloor + RoomHeight, z + PillarHalf), _wall);
+                    }
     }
-
-    /// <summary>Evaluate the layout math over the sample grid — the heightfield
-    /// this realm's terrain mesh is built from. Heights are rounded to 3
-    /// decimals so design, mesh, and bake all carry the identical value.</summary>
-    private static HeightField BuildHeightField()
-    {
-        var heights = new float[W * D];
-        for (var j = 0; j < D; j++)
-            for (var i = 0; i < W; i++)
-                heights[j * W + i] = MathF.Round(HeightAt(i * Cell, j * Cell), 3);
-        return new HeightField(0f, 0f, Cell, W, D, heights);
-    }
-
-    // ------------------------------------------------------------- solids
-
-    private static List<Aabb> Solids(HeightField field)
-    {
-        var solids = new List<Aabb>();
-
-        // A square masonry pier standing on the floor: combat cover, and the
-        // visual masonry's collision truth. Sunk 10 into the ground so detail
-        // noise never floats it.
-        void Pier(float x, float z, float half, float tall)
-        {
-            var ground = field.Sample(x, z);
-            solids.Add(new Aabb(new Vector3(x - half, ground - 10f, z - half),
-                                new Vector3(x + half, ground + tall, z + half)));
-        }
-
-        // A sarcophagus: a hip-high stone chest nobody steps over (45 tall,
-        // far over StepHeight), long axis along X or Z.
-        void Sarcophagus(float x, float z, bool alongX)
-        {
-            var ground = field.Sample(x, z);
-            var (hx, hz) = alongX ? (55f, 26f) : (26f, 55f);
-            solids.Add(new Aabb(new Vector3(x - hx, ground - 6f, z - hz),
-                                new Vector3(x + hx, ground + 45f, z + hz)));
-        }
-
-        // The Broken Span: a stone deck with parapets over the charnel chasm.
-        // The Processional DESCENDS across the span, so the deck steps down in
-        // four flights (9 per step — under StepHeight both ways) and each end
-        // meets its own rim's grade; a flat deck would leave the east remount
-        // an unclimbable 25-unit ledge. The parapets ride each step, 22 tall —
-        // chest-high walls bolts fly over.
-        var deckSteps = new (float X0, float X1, float Top)[]
-        {
-            (2210, 2310, -108), (2310, 2405, -117), (2405, 2500, -126), (2500, 2590, -135),
-        };
-        foreach (var (x0, x1, top) in deckSteps)
-        {
-            solids.Add(new Aabb(new Vector3(x0, top - 16f, 1750), new Vector3(x1, top, 1850)));      // deck
-            solids.Add(new Aabb(new Vector3(x0, top, 1750), new Vector3(x1, top + 22f, 1762)));      // north parapet
-            solids.Add(new Aabb(new Vector3(x0, top, 1838), new Vector3(x1, top + 22f, 1850)));      // south parapet
-        }
-
-        // The Hall of the Dead: a ring of eight piers under the implied dome.
-        for (var k = 0; k < 8; k++)
-        {
-            var ang = k * MathF.Tau / 8f + 0.39f;
-            Pier(1450 + MathF.Cos(ang) * 205f, 1800 + MathF.Sin(ang) * 205f, 17f, 150f);
-        }
-
-        // The Processional's colonnade: pier pairs flanking the walk, stopping
-        // short of the chasm.
-        foreach (var px in new[] { 1900f, 2080f, 2260f })
-        {
-            Pier(px, 1712, 15f, 140f);
-            Pier(px, 1888, 15f, 140f);
-        }
-        foreach (var px in new[] { 2560f, 2700f })
-        {
-            Pier(px, 1712, 15f, 140f);
-            Pier(px, 1888, 15f, 140f);
-        }
-
-        // The cloister's pool colonnade: four piers around the water.
-        foreach (var (cx, cz) in new[] { (1310f, 2780f), (1590f, 2780f), (1310f, 3060f), (1590f, 3060f) })
-            Pier(cx, cz, 15f, 130f);
-
-        // Sarcophagi: the hub's honored dead, the antechamber's kings, and the
-        // noble crypt's family.
-        Sarcophagus(1330, 1655, alongX: false);
-        Sarcophagus(1570, 1655, alongX: false);
-        Sarcophagus(1330, 1945, alongX: false);
-        Sarcophagus(1570, 1945, alongX: false);
-        Sarcophagus(2905, 2985, alongX: true);
-        Sarcophagus(2905, 3135, alongX: true);
-        Sarcophagus(3095, 2985, alongX: true);
-        Sarcophagus(3095, 3135, alongX: true);
-        Sarcophagus(860, 3050, alongX: true);
-        Sarcophagus(860, 3190, alongX: true);
-
-        // The Ossuary's bone altar — a low broad block at the room's heart.
-        var altar = field.Sample(1450, 680);
-        solids.Add(new Aabb(new Vector3(1400, altar - 6f, 640), new Vector3(1500, altar + 40f, 720)));
-
-        // Doorway jambs: the portal frames' uprights block exactly where the
-        // scenery stands them (the shared Doorways table).
-        foreach (var (x, z, alongX, width) in Doorways)
-        {
-            var half = width / 2f;
-            foreach (var side in new[] { -1f, 1f })
-            {
-                var (jx, jz) = alongX ? (x, z + side * half) : (x + side * half, z);
-                var ground = field.Sample(jx, jz);
-                solids.Add(new Aabb(new Vector3(jx - 10f, ground - 6f, jz - 10f),
-                                    new Vector3(jx + 10f, ground + 116f, jz + 10f)));
-            }
-        }
-
-        // The Mausoleum: a ring of twelve piers and gate piers at the mouth.
-        // (The boss's dais is a low terrain plate, not a solid.)
-        for (var k = 0; k < 12; k++)
-        {
-            var ang = k * MathF.Tau / 12f + 0.26f;
-            Pier(2320 + MathF.Cos(ang) * 255f, 3260 + MathF.Sin(ang) * 255f, 18f, 170f);
-        }
-        Pier(2600, 3095, 20f, 160f);
-        Pier(2640, 3265, 20f, 160f);
-
-        return solids;
-    }
-
-    // ------------------------------------------------------------- the cast
-    // Thematically the Crypt's garrison is the risen dead: minions are
-    // skeleton warriors, rogues are crypt ghouls striking from niches and
-    // pits, mages are the necromancer keepers of the deep halls.
-
-    private static readonly (EnemyType Type, float X, float Z)[] Enemies =
-    {
-        // The undercroft: the first of the dead stir at the door.
-        (EnemyType.Minion, 560, 1720), (EnemyType.Minion, 590, 1890),
-        // The stair's foot: a ghoul waits under the last tread.
-        (EnemyType.Rogue, 1230, 1830),
-        // The Hall of the Dead: the hub watch.
-        (EnemyType.Minion, 1380, 1720), (EnemyType.Minion, 1500, 1880),
-        (EnemyType.Minion, 1450, 1620), (EnemyType.Mage, 1520, 1750),
-        // The north gallery and the Ossuary.
-        (EnemyType.Minion, 1450, 1350), (EnemyType.Minion, 1430, 1080),
-        (EnemyType.Mage, 1370, 700), (EnemyType.Mage, 1540, 640), (EnemyType.Rogue, 1450, 800),
-        // The bone crawl: a ghoul in the dark of the shortcut.
-        (EnemyType.Rogue, 1950, 1090),
-        // The south gallery, the cloister, and the noble crypt.
-        (EnemyType.Minion, 1450, 2300), (EnemyType.Minion, 1470, 2550),
-        (EnemyType.Rogue, 1330, 2870), (EnemyType.Rogue, 1560, 2990), (EnemyType.Mage, 1450, 3080),
-        (EnemyType.Mage, 900, 3120), (EnemyType.Minion, 940, 3010),
-        // The Processional and the span's west approach.
-        (EnemyType.Minion, 1900, 1780), (EnemyType.Minion, 2100, 1830), (EnemyType.Mage, 2270, 1760),
-        // The charnel pit: ghouls among the nameless dead.
-        (EnemyType.Rogue, 2360, 1650), (EnemyType.Rogue, 2400, 1950),
-        // The east landing and the catacomb maze.
-        (EnemyType.Minion, 2830, 1730), (EnemyType.Minion, 2870, 1870),
-        (EnemyType.Minion, 3210, 1440), (EnemyType.Rogue, 3360, 1720), (EnemyType.Minion, 3510, 2160),
-        (EnemyType.Rogue, 3660, 1560),
-        // The candle chapel: the keepers at their vigil.
-        (EnemyType.Mage, 3300, 1020), (EnemyType.Mage, 3430, 1100),
-        // The deep stair and the antechamber's honor guard.
-        (EnemyType.Rogue, 3660, 2500),
-        (EnemyType.Minion, 3140, 3060), (EnemyType.Minion, 2980, 3200), (EnemyType.Mage, 3000, 2950),
-        // The mausoleum's threshold watch.
-        (EnemyType.Rogue, 2500, 3240), (EnemyType.Rogue, 2450, 3330),
-    };
-
-    private static readonly (float X, float Z) PlayerSpawn = (480, 1800);
-    private static readonly (float X, float Z) BossSpawn = (2320, 3260);
-
-    // ------------------------------------------------------------- lights
-    // Torch sconces line the processional routes; candles pool where the dead
-    // were tended; soulfire burns cold green where the dead tend themselves.
-
-    private static readonly (float X, float Z)[] TorchSpots =
-    {
-        (700, 1730), (700, 1870),                       // the undercroft door
-        (900, 1720), (1080, 1880),                      // the descent stair
-        (1265, 1700), (1265, 1900),                     // the hub mouth
-        (1620, 1710), (1620, 1890),                     // the hub's east exit
-        (1450, 1470), (1440, 1180), (1450, 900),        // the north gallery
-        (1450, 2130), (1460, 2420), (1450, 2700),       // the south gallery
-        (1180, 3010), (1030, 3090),                     // the noble crypt's walk
-        (1840, 1740), (2020, 1860), (2200, 1740),       // the processional
-        (2270, 1855), (2490, 1855),                     // the span's ends
-        (2740, 1720), (2900, 1870),                     // the east landing
-        (2980, 1500), (3210, 1860), (3420, 2100),       // the maze's main walk
-        (3600, 1380), (3060, 2220),                     // maze corners
-        (3360, 1230),                                   // the chapel walk
-        (3660, 2400), (3640, 2680), (3450, 2900),       // the deep stair
-        (2790, 3090), (2700, 3230),                     // the gate mouth
-    };
-
-    private static readonly (float X, float Z)[] CandleSpots =
-    {
-        (3280, 980), (3440, 1000), (3360, 1140), (3290, 1110), (3450, 1120),  // the candle chapel's sea
-        (1340, 2830), (1560, 2830), (1450, 3040),       // the cloister's rim
-        (830, 3120), (975, 3120),                       // the noble crypt
-        (1390, 1740), (1510, 1860),                     // the hub's biers
-    };
-
-    private static readonly (float X, float Z)[] SoulfireSpots =
-    {
-        (1450, 560), (1340, 760), (1560, 760),          // the ossuary's cold watch
-        (2340, 1500), (2420, 2100),                     // the charnel pit
-        (2905, 3060), (3095, 3060),                     // the antechamber kings
-        (2160, 3100), (2480, 3100), (2160, 3420), (2480, 3420),  // the mausoleum ring
-        (2320, 3475),                                   // behind the throne
-    };
-
-    /// <summary>The collapsed shaft over the entrance — where the only daylight
-    /// falls. The Scenery partial hangs the light shaft and dust here.</summary>
-    private static readonly Vector3 ShaftMouth = new(520, 150, 1800);
 }

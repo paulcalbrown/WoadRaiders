@@ -10,7 +10,7 @@ public class CharacterClassTests
     // Open, clamp-free space with clear lines of sight — combat-geometry neutral.
     private static GameWorld OpenWorld() => new()
     {
-        Geometry = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<EnemySpawnPoint>()),
+        Geometry = TestRealms.Open(),
     };
 
     [Fact]

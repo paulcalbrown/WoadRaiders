@@ -5,50 +5,44 @@ namespace WoadRaiders.Core;
 /// <summary>
 /// Builds a <see cref="DungeonGeometry"/> straight from a Godot .tscn text
 /// scene — the shared scene-to-geometry pipeline behind the map tools: the
-/// bake tool (RealmBaker) reads a scene's markers and collision
-/// through it when baking server geometry JSON, and ValidateRealm accepts
-/// scenes via it. Plain C#: unit-tested without an engine. (The server itself
-/// hosts baked JSON — scenes are the AUTHORING format, not the serving one.)
+/// bake tool (RealmBaker) reads a scene's markers and geometry through it when
+/// baking server geometry JSON, and ValidateRealm accepts scenes via it. Plain
+/// C#: unit-tested without an engine. (The server itself hosts baked JSON —
+/// scenes are the AUTHORING format, not the serving one.)
 ///
 /// Authoring conventions it reads (any scene built in the Godot editor):
-///   - Solids:       CollisionShape3D nodes with a BoxShape3D (rotated boxes
-///                   become their world AABB — keep them axis-aligned).
+///   - Geometry:     MeshInstance3D SLABS (a built-in BoxMesh, any transform)
+///                   in group "ground" (floors — terraces, ramps, stairs; what
+///                   feet ride) or "structure" (walls, roofs, monuments; what
+///                   blocks). BoxMesh slabs parse straight from the scene
+///                   text; any OTHER mesh in those groups needs the in-Godot
+///                   bake tool, which samples real triangles and hands the
+///                   whole soup in via <paramref name="sampledSoup"/>.
 ///   - Player spawn: a Marker3D named exactly "PlayerSpawn" (required).
 ///   - Enemy spawns: Marker3D nodes named "EnemySpawn*" — type from the name:
 ///                   contains "Rogue" → Rogue, "Mage" → Mage, else Minion.
 ///   - Boss:         a Marker3D named "BossSpawn" (optional).
-///   - Terrain, first match wins:
-///       1. metadata on any node (the generated realms' pure-built-in form —
-///          usually the scene root): metadata/terrain_heights (row-major
-///          PackedFloat32Array) + terrain_width/depth, with terrain_origin_x/z
-///          (default 0) and terrain_cell_size (default 40) — all world-space,
-///          independent of any node transform;
-///       2. a RealmTerrain node (group "realm_terrain" or the RealmTerrain.cs
-///          script) — its stored heightfield read verbatim;
-///       3. arbitrary meshes in the "terrain" group need the in-Godot bake
-///          tool instead (it samples the meshes and hands the result in via
-///          <paramref name="sampledTerrain"/>).
 /// </summary>
 public static class DungeonSceneFile
 {
     public static DungeonGeometry Load(string path, string? scenePath = null) =>
         Parse(File.ReadAllText(path), scenePath ?? $"res://maps/{Path.GetFileName(path)}");
 
-    public static DungeonGeometry Parse(string text, string? scenePath = null, HeightField? sampledTerrain = null)
+    public static DungeonGeometry Parse(string text, string? scenePath = null, TriangleSoup? sampledSoup = null)
     {
         var doc = TscnDocument.Parse(text);
 
         Vector3? spawn = null;
         Vector3? boss = null;
-        var solids = new List<Aabb>();
         var enemySpawns = new List<EnemySpawnPoint>();
-        HeightField? metadataTerrain = null;
-        HeightField? realmTerrain = null;
-        var terrainMeshes = 0;
+        var builder = new SoupBuilder();
+        var slabs = 0;
+        var unsampledMeshes = 0;
 
         // World transform per node path, composed root-down (nodes appear in
         // tree order, parents before children).
         var transforms = new Dictionary<string, Xf> { [""] = Xf.Identity };
+        Span<Vector3> corners = stackalloc Vector3[8];
 
         foreach (var node in doc.Nodes)
         {
@@ -73,26 +67,24 @@ public static class DungeonSceneFile
             var groups = Groups(node);
             var type = node.AttributeString("type");
 
-            // Metadata terrain is orthogonal to what the node otherwise is
-            // (it usually rides on the scene root): world-space by definition,
-            // no transform coupling.
-            if (node.Properties.ContainsKey("metadata/terrain_heights"))
-                metadataTerrain ??= ReadMetadataTerrain(node, name);
-
-            if (groups.Contains("realm_terrain") || HasRealmTerrainScript(doc, node))
+            if (type == "MeshInstance3D" && (groups.Contains("ground") || groups.Contains("structure")))
             {
-                if (!world.IsIdentity)
-                    throw new InvalidDataException(
-                        $"RealmTerrain node '{name}' is transformed — its heightfield ignores transforms; keep it at the origin");
-                realmTerrain ??= ReadRealmTerrain(node, name);
-            }
-            else if (type == "MeshInstance3D" && groups.Contains("terrain"))
-            {
-                terrainMeshes++;
-            }
-            else if (type == "CollisionShape3D" && TryReadBoxSize(doc, node, out var size))
-            {
-                solids.Add(WorldAabb(world, size * 0.5f));
+                var floor = groups.Contains("ground");
+                if (sampledSoup is not null)
+                {
+                    // The engine bake sampled every group mesh — slabs included.
+                }
+                else if (TryReadBoxMeshSize(doc, node, out var size))
+                {
+                    for (var k = 0; k < 8; k++)
+                        corners[k] = world.Apply(SoupBuilder.LocalCorner(k, size * 0.5f));
+                    builder.AddBoxCorners(corners, floor);
+                    slabs++;
+                }
+                else
+                {
+                    unsampledMeshes++;
+                }
             }
             else if (type == "Marker3D")
             {
@@ -105,15 +97,14 @@ public static class DungeonSceneFile
             }
         }
 
-        var terrain = metadataTerrain ?? realmTerrain ?? sampledTerrain;
-        if (terrain is null && terrainMeshes > 0)
+        if (sampledSoup is null && unsampledMeshes > 0)
             throw new InvalidDataException(
-                $"the scene's terrain is {terrainMeshes} mesh(es) in the 'terrain' group — sample them with the " +
-                "in-Godot bake tool (WoadRaiders.Client/tools/bake_realm.gd), or use a RealmTerrain node");
+                $"{unsampledMeshes} mesh(es) in the 'ground'/'structure' groups are not BoxMesh slabs — sample them " +
+                "with the in-Godot bake tool (WoadRaiders.Client/tools/bake_realm.gd)");
         if (spawn is null)
             throw new InvalidDataException("the scene has no Marker3D named 'PlayerSpawn'");
 
-        return new DungeonGeometry(spawn.Value, solids, enemySpawns, terrain)
+        return new DungeonGeometry(spawn.Value, sampledSoup ?? (slabs > 0 ? builder.Build() : null), enemySpawns)
         {
             ScenePath = scenePath,
             BossSpawn = boss,
@@ -130,61 +121,6 @@ public static class DungeonSceneFile
         return groups;
     }
 
-    private static bool HasRealmTerrainScript(TscnDocument doc, TscnDocument.Section node)
-    {
-        if (!node.Properties.TryGetValue("script", out var script) || script.Kind != TscnValue.ValueKind.Call
-            || script.CallName != "ExtResource" || script.Items.Count != 1)
-            return false;
-        var ext = doc.ExtResource(script.Items[0].AsString);
-        return ext?.AttributeString("path")?.EndsWith("RealmTerrain.cs", StringComparison.Ordinal) == true;
-    }
-
-    /// <summary>Read the metadata heightfield convention — plain built-in node
-    /// metadata, as the generated realms carry (usually on the scene root).</summary>
-    private static HeightField ReadMetadataTerrain(TscnDocument.Section node, string name)
-    {
-        float Prop(string key, float fallback) =>
-            node.Properties.TryGetValue($"metadata/{key}", out var v) ? v.AsFloat : fallback;
-
-        var width = (int)Prop("terrain_width", 0);
-        var depth = (int)Prop("terrain_depth", 0);
-        var heights = node.Properties["metadata/terrain_heights"]
-            is { Kind: TscnValue.ValueKind.Call, CallName: "PackedFloat32Array" } packed
-            ? packed.Floats()
-            : Array.Empty<float>();
-        if (width < 2 || depth < 2 || heights.Length != width * depth)
-            throw new InvalidDataException(
-                $"node '{name}' carries {heights.Length} metadata terrain heights for a {width}x{depth} grid — " +
-                "set metadata/terrain_width, terrain_depth, and terrain_heights consistently");
-
-        return new HeightField(Prop("terrain_origin_x", 0f), Prop("terrain_origin_z", 0f),
-                               Prop("terrain_cell_size", 40f), width, depth, heights);
-    }
-
-    /// <summary>Read the RealmTerrain node's exported heightfield. Properties the
-    /// editor left at their defaults are absent from the file, so the defaults
-    /// here MIRROR RealmTerrain.cs exactly.</summary>
-    private static HeightField ReadRealmTerrain(TscnDocument.Section node, string name)
-    {
-        float Prop(string key, float fallback) =>
-            node.Properties.TryGetValue(key, out var v) ? v.AsFloat : fallback;
-
-        var width = (int)Prop("TerrainWidth", 0);
-        var depth = (int)Prop("TerrainDepth", 0);
-        var heights = node.Properties.TryGetValue("Heights", out var packed)
-                      && packed is { Kind: TscnValue.ValueKind.Call, CallName: "PackedFloat32Array" }
-            ? packed.Floats()
-            : Array.Empty<float>();
-        if (width < 2 || depth < 2 || heights.Length != width * depth)
-            throw new InvalidDataException(
-                $"RealmTerrain node '{name}' carries {heights.Length} heights for a {width}x{depth} grid — " +
-                "set TerrainWidth/TerrainDepth/Heights consistently");
-
-        return new HeightField(Prop("OriginX", 0f), Prop("OriginZ", 0f), Prop("CellSize", 40f),
-                               width, depth, heights);
-    }
-
-
     private static EnemyType TypeFromName(string name)
     {
         var lower = name.ToLowerInvariant();
@@ -195,17 +131,17 @@ public static class DungeonSceneFile
         return EnemyType.Minion;
     }
 
-    private static bool TryReadBoxSize(TscnDocument doc, TscnDocument.Section node, out Vector3 size)
+    private static bool TryReadBoxMeshSize(TscnDocument doc, TscnDocument.Section node, out Vector3 size)
     {
         size = default;
-        if (!node.Properties.TryGetValue("shape", out var shape) || shape.Kind != TscnValue.ValueKind.Call
-            || shape.CallName != "SubResource" || shape.Items.Count != 1)
+        if (!node.Properties.TryGetValue("mesh", out var mesh) || mesh.Kind != TscnValue.ValueKind.Call
+            || mesh.CallName != "SubResource" || mesh.Items.Count != 1)
             return false;
-        var sub = doc.SubResource(shape.Items[0].AsString);
-        if (sub?.AttributeString("type") != "BoxShape3D")
+        var sub = doc.SubResource(mesh.Items[0].AsString);
+        if (sub?.AttributeString("type") != "BoxMesh")
             return false;
 
-        // Godot omits properties left at their defaults; a BoxShape3D defaults to 1x1x1.
+        // Godot omits properties left at their defaults; a BoxMesh defaults to 1x1x1.
         if (sub.Properties.TryGetValue("size", out var v)
             && v is { Kind: TscnValue.ValueKind.Call, CallName: "Vector3" })
         {
@@ -217,22 +153,6 @@ public static class DungeonSceneFile
             size = Vector3.One;
         }
         return true;
-    }
-
-    private static Aabb WorldAabb(in Xf world, Vector3 half)
-    {
-        var min = new Vector3(float.MaxValue);
-        var max = new Vector3(float.MinValue);
-        for (var corner = 0; corner < 8; corner++)
-        {
-            var p = world.Apply(new Vector3(
-                (corner & 1) == 0 ? -half.X : half.X,
-                (corner & 2) == 0 ? -half.Y : half.Y,
-                (corner & 4) == 0 ? -half.Z : half.Z));
-            min = Vector3.Min(min, p);
-            max = Vector3.Max(max, p);
-        }
-        return new Aabb(min, max);
     }
 
     /// <summary>A 3D transform as .tscn stores it: a row-major 3x3 basis + origin.</summary>

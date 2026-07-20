@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Numerics;
 using WoadRaiders.Core;
@@ -6,11 +6,11 @@ using WoadRaiders.Server;
 
 namespace WoadRaiders.Server.Tests;
 
-// Drives the session with no socket — the point of extracting it from the server.
+// Drives the session with no socket â€” the point of extracting it from the server.
 public class GameSessionTests
 {
     private static DungeonGeometry OpenArena() =>
-        new(Vector3.Zero, Array.Empty<Aabb>(), Array.Empty<EnemySpawnPoint>());
+        new(Vector3.Zero, null, Array.Empty<EnemySpawnPoint>());
 
     [Fact]
     public void Buffered_input_moves_the_player_and_is_consumed_in_order()
@@ -40,7 +40,7 @@ public class GameSessionTests
         for (var i = 0; i < 5; i++) // drains the two inputs, then starves
             session.Step();
 
-        // Held at the last processed sequence — never reset, so the client reconciles cleanly.
+        // Held at the last processed sequence â€” never reset, so the client reconciles cleanly.
         Assert.Equal(2u, session.Snapshot().Players.Single().LastProcessedInput);
     }
 
@@ -52,7 +52,7 @@ public class GameSessionTests
         session.AddPlayer(2, "B");
 
         session.RemovePlayer(1);
-        session.EnqueueInput(1, new PlayerInput { MoveX = 1f, Sequence = 1 }); // gone — must be a harmless no-op
+        session.EnqueueInput(1, new PlayerInput { MoveX = 1f, Sequence = 1 }); // gone â€” must be a harmless no-op
         session.Step();
 
         var players = session.Snapshot().Players;
@@ -63,7 +63,7 @@ public class GameSessionTests
     [Fact]
     public void Announces_the_boss_awaiting_at_startup()
     {
-        var dungeon = new DungeonGeometry(Vector3.Zero, Array.Empty<Aabb>(),
+        var dungeon = new DungeonGeometry(Vector3.Zero, null,
             new[] { new EnemySpawnPoint(new Vector3(400, 0, 0), EnemyType.Minion) })
         {
             BossSpawn = new Vector3(900, 0, 900),
