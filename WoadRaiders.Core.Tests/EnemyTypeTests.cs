@@ -133,7 +133,7 @@ public class EnemyTypeTests
     [Fact]
     public void Geometry_json_round_trips_types_and_boss()
     {
-        var geometry = new DungeonGeometry(
+        var realm = new RealmDefinition(
             new Vector3(1, 0, 2),
             TestRealms.Flat(50f),
             new[]
@@ -146,13 +146,13 @@ public class EnemyTypeTests
             BossSpawn = new Vector3(99, 0, 42),
         };
 
-        var parsed = DungeonGeometryFile.Parse(DungeonGeometryFile.ToJson(geometry));
+        var parsed = RealmDefinitionFile.Parse(RealmDefinitionFile.ToJson(realm));
 
-        Assert.Equal(geometry.EnemySpawns, parsed.EnemySpawns);
-        Assert.Equal(geometry.BossSpawn, parsed.BossSpawn);
-        Assert.Equal(geometry.Soup!.Vertices, parsed.Soup!.Vertices);
-        Assert.Equal(geometry.Soup.Triangles, parsed.Soup.Triangles);
-        Assert.Equal(geometry.Soup.FloorTriangleCount, parsed.Soup.FloorTriangleCount);
+        Assert.Equal(realm.EnemySpawns, parsed.EnemySpawns);
+        Assert.Equal(realm.BossSpawn, parsed.BossSpawn);
+        Assert.Equal(realm.Soup!.Vertices, parsed.Soup!.Vertices);
+        Assert.Equal(realm.Soup.Triangles, parsed.Soup.Triangles);
+        Assert.Equal(realm.Soup.FloorTriangleCount, parsed.Soup.FloorTriangleCount);
     }
 
     [Fact]
@@ -231,10 +231,10 @@ public class EnemyTypeTests
               "enemySpawnTypes": [ {{type}} ] }
             """;
 
-        Assert.Throws<InvalidDataException>(() => DungeonGeometryFile.Parse(Json((int)EnemyType.Boss))); // bosses use bossSpawn
-        Assert.Throws<InvalidDataException>(() => DungeonGeometryFile.Parse(Json(259))); // must not wrap modulo 256 into "Boss"
-        Assert.Throws<InvalidDataException>(() => DungeonGeometryFile.Parse(Json(-1)));
-        _ = DungeonGeometryFile.Parse(Json((int)EnemyType.Mage)); // 0..2 stay valid
+        Assert.Throws<InvalidDataException>(() => RealmDefinitionFile.Parse(Json((int)EnemyType.Boss))); // bosses use bossSpawn
+        Assert.Throws<InvalidDataException>(() => RealmDefinitionFile.Parse(Json(259))); // must not wrap modulo 256 into "Boss"
+        Assert.Throws<InvalidDataException>(() => RealmDefinitionFile.Parse(Json(-1)));
+        _ = RealmDefinitionFile.Parse(Json((int)EnemyType.Mage)); // 0..2 stay valid
     }
 
     [Fact]
@@ -247,7 +247,7 @@ public class EnemyTypeTests
               "enemySpawns": [ [5,0,5], [9,0,9] ] }
             """;
 
-        var parsed = DungeonGeometryFile.Parse(legacy);
+        var parsed = RealmDefinitionFile.Parse(legacy);
 
         Assert.Null(parsed.BossSpawn);
         Assert.All(parsed.EnemySpawns, s => Assert.Equal(EnemyType.Minion, s.Type));

@@ -528,7 +528,7 @@ public sealed class EquipmentUpdatePacket : INetSerializable
 /// exactly the polygons the server moves on. A map with no soup is the flat
 /// test arena; it ships neither soup nor navmesh.
 /// </summary>
-public sealed class DungeonGeometryPacket : INetSerializable
+public sealed class RealmGeometryPacket : INetSerializable
 {
     public float SpawnX;
     public float SpawnY;

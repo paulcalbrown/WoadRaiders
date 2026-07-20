@@ -12,7 +12,7 @@ namespace WoadRaiders.Core.Tests;
 /// </summary>
 public class RealmValidatorTests
 {
-    private static DungeonGeometry Realm(TriangleSoup? soup, Vector3 spawn, Vector3? boss,
+    private static RealmDefinition Realm(TriangleSoup? soup, Vector3 spawn, Vector3? boss,
                                          params EnemySpawnPoint[] camps) =>
         new(spawn, soup, camps) { BossSpawn = boss };
 

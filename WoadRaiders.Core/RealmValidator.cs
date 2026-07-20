@@ -29,7 +29,7 @@ public static class RealmValidator
     /// Validate a realm. Returns problems found (empty = the realm is sound).
     /// A map without geometry is not a realm and fails outright.
     /// </summary>
-    public static IReadOnlyList<string> Validate(DungeonGeometry realm)
+    public static IReadOnlyList<string> Validate(RealmDefinition realm)
     {
         var issues = new List<string>();
         if (realm.Soup is not { } soup)
@@ -43,7 +43,7 @@ public static class RealmValidator
             return issues;
         }
 
-        var nav = new NavMeshGeometry(NavMeshBuilder.Build(soup), soup, realm.SpawnPoint);
+        var nav = new RealmGeometry(NavMeshBuilder.Build(soup), soup, realm.SpawnPoint);
 
         if (!Reaches(nav, realm.SpawnPoint, boss))
             issues.Add($"the boss court at ({boss.X:0},{boss.Z:0}) is not reachable from the spawn");
@@ -88,7 +88,7 @@ public static class RealmValidator
     }
 
     /// <summary>A complete route exists — the planner's last waypoint arrives at the goal.</summary>
-    private static bool Reaches(NavMeshGeometry nav, Vector3 from, Vector3 to)
+    private static bool Reaches(RealmGeometry nav, Vector3 from, Vector3 to)
     {
         var waypoints = new List<Vector3>();
         if (!nav.TryFindPath(from, to, waypoints) || waypoints.Count == 0)

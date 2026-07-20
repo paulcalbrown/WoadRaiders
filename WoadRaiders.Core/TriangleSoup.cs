@@ -34,6 +34,11 @@ public sealed class TriangleSoup
     private readonly int _cellsZ;
     private readonly float _cellSize;
 
+    // Each triangle's unit normal Y, precomputed: the orientation tests below
+    // (is this a surface underfoot, is this a wall) are pure geometry, asked
+    // often enough that recomputing a cross product per query would show.
+    private readonly float[] _normalY;
+
     // Query scratch: a stamp per triangle dedupes multi-cell hits without allocating.
     private readonly int[] _stamp;
     private readonly List<int> _found = new();
@@ -74,10 +79,14 @@ public sealed class TriangleSoup
         _cellsZ = (int)((max.Z - min.Z) / _cellSize) + 1;
         _cells = new List<int>?[_cellsX * _cellsZ];
         _stamp = new int[triangles.Length / 3];
+        _normalY = new float[triangles.Length / 3];
 
         for (var t = 0; t < triangles.Length / 3; t++)
         {
             var (a, b, c) = Corners(t);
+            var n = Vector3.Cross(b - a, c - a);
+            var len = n.Length();
+            _normalY[t] = len > 1e-12f ? n.Y / len : 0f;
             var (i0, j0) = CellOf(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)));
             var (i1, j1) = CellOf(MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
             for (var j = j0; j <= j1; j++)
@@ -139,6 +148,44 @@ public sealed class TriangleSoup
             if (t < FloorTriangleCount && HeightOfTriangleAt(t, x, z) is { } y && (best is null || y > best))
                 best = y;
         return best;
+    }
+
+    /// <summary>
+    /// How far a face must lean off vertical before it stops being a WALL and
+    /// starts being a surface something can rest on (its |normal.Y| above
+    /// this, ≈87°). Deliberately NOT the navmesh's walkable cutoff (~67.8°):
+    /// the sim lets a mover descend ground of ANY grade and inch up anything
+    /// within StepHeight, so treating merely-steep ground as a wall would
+    /// silently forbid descents the rules allow. Only the near-vertical walls.
+    /// </summary>
+    public const float WallNormalY = 0.05f;
+
+    /// <summary>
+    /// The surface underfoot at a world XZ: the highest up-facing surface at
+    /// or below <paramref name="referenceY"/> (plus <paramref name="tolerance"/>,
+    /// so a mover standing exactly ON a surface still finds it).
+    ///
+    /// Y-AWARE by design. A realm that stacks walkable levels — a bridge deck
+    /// over a chasm — has no single "the ground" at an XZ, and answering with
+    /// the highest puts the ground on the ROOF of whoever stands underneath.
+    /// When the point lies beneath everything here, the lowest surface is the
+    /// nearest thing to it, so that is the answer. Null when no surface
+    /// covers this XZ at all (the void beyond the realm).
+    /// </summary>
+    public float? GroundBelow(float x, float z, float referenceY, float tolerance)
+    {
+        float? below = null, lowest = null;
+        var (i, j) = CellOf(x, z);
+        foreach (var t in _cells[j * _cellsX + i] ?? (IEnumerable<int>)Array.Empty<int>())
+        {
+            if (_normalY[t] <= WallNormalY || HeightOfTriangleAt(t, x, z) is not { } y)
+                continue; // sheer or downward faces are not ground
+            if (y <= referenceY + tolerance && (below is null || y > below))
+                below = y;
+            if (lowest is null || y < lowest)
+                lowest = y;
+        }
+        return below ?? lowest;
     }
 
     /// <summary>

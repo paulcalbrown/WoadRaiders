@@ -12,11 +12,12 @@ public readonly record struct Aabb(Vector3 Min, Vector3 Max)
 /// <summary>
 /// A realm as DATA: its triangle soup (floors first, then structure — see
 /// <see cref="TriangleSoup"/>), spawn markers, and identity. This class only
-/// DESCRIBES the realm; movement lives in <see cref="NavMeshGeometry"/>,
+/// DESCRIBES the realm — it answers no spatial queries and is not an
+/// <see cref="IRealmGeometry"/>; movement lives in <see cref="RealmGeometry"/>,
 /// baked from this soup. A realm without a soup is the implicit flat arena
 /// (tiny test maps): the world falls back to its open-arena clamp rules.
 /// </summary>
-public sealed class DungeonGeometry
+public sealed class RealmDefinition
 {
     /// <summary>Where new/respawning players are placed.</summary>
     public Vector3 SpawnPoint { get; }
@@ -46,7 +47,7 @@ public sealed class DungeonGeometry
     /// <summary>World extent of the soup (a safety clamp / render hint).</summary>
     public Aabb Bounds { get; }
 
-    public DungeonGeometry(Vector3 spawnPoint, TriangleSoup? soup, IReadOnlyList<EnemySpawnPoint> enemySpawns)
+    public RealmDefinition(Vector3 spawnPoint, TriangleSoup? soup, IReadOnlyList<EnemySpawnPoint> enemySpawns)
     {
         SpawnPoint = spawnPoint;
         Soup = soup;

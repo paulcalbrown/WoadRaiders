@@ -1,5 +1,5 @@
 // Checks a map — a Godot .tscn realm scene (parsed by the shared
-// Core.DungeonSceneFile pipeline, exactly as the server will) or a classic
+// Core.RealmSceneFile pipeline, exactly as the server will) or a classic
 // geometry .json — with the same rules every shipping realm passes. Run it
 // after hand-editing or hand-making a realm, before serving the map.
 // A .NET 10 file-based app:

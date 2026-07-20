@@ -11,19 +11,19 @@ namespace WoadRaiders.Server;
 /// </summary>
 internal sealed class GameSession
 {
-    private readonly DungeonGeometry _dungeon;
+    private readonly RealmDefinition _realm;
     private readonly GameWorld _world;
     private readonly SpawnDirector _director;
     private readonly Dictionary<int, ServerInputBuffer> _inputBuffers = new();
 
-    public GameSession(DungeonGeometry dungeon, Random rng, IDungeonGeometry? movement = null)
+    public GameSession(RealmDefinition realm, Random rng, IRealmGeometry? movement = null)
     {
-        _dungeon = dungeon;
+        _realm = realm;
         // The realm's DATA (spawn markers, bounds, the boss post) is the loaded
-        // dungeon; what the world MOVES on is its baked navmesh — or nothing,
+        // RealmDefinition; what the world MOVES on is its baked navmesh — or nothing,
         // for the flat test arenas, which keep the open-arena clamp rules.
         _world = new GameWorld { Geometry = movement };
-        _director = new SpawnDirector(_world, dungeon, rng);
+        _director = new SpawnDirector(_world, realm, rng);
 
         // The session owns the wording of match events so the transport layer never has
         // to know about the boss (its name, its respawn timing) — it just relays Notice.
@@ -31,7 +31,7 @@ internal sealed class GameSession
         // player's run (GameWorld detects the step-through; ConsumePortalExits reports it).
         _director.BossFell += () =>
         {
-            if (_dungeon.BossSpawn is { } bossPos)
+            if (_realm.BossSpawn is { } bossPos)
                 _world.OpenPortal(bossPos);
             Raise(SessionEventKind.BossFell,
                 $"The lord of this realm has fallen! A portal tears open where he stood — " +
@@ -54,7 +54,7 @@ internal sealed class GameSession
     public int SpawnInitial()
     {
         var spawned = _director.SpawnInitial();
-        if (_dungeon.BossSpawn is not null)
+        if (_realm.BossSpawn is not null)
             Raise(SessionEventKind.BossAwaits, "The lord of this realm waits at its heart.");
         return spawned;
     }
@@ -75,7 +75,7 @@ internal sealed class GameSession
         }
 
         var player = _world.AddPlayer(id, name, cls);
-        player.Position = _dungeon.SpawnPoint;
+        player.Position = _realm.SpawnPoint;
         _inputBuffers[id] = new ServerInputBuffer();
     }
 

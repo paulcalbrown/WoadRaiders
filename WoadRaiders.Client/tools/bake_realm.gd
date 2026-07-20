@@ -1,10 +1,10 @@
 ﻿# Bakes a hand-made realm scene into server geometry JSON â€” needed ONLY when
 # the scene's terrain is sculpted meshes (group "terrain"): extracting their
 # triangles requires the engine. Scenes that use a RealmTerrain node skip this
-# entirely â€” the server loads their .tscn directly (Core.DungeonSceneFile).
+# entirely â€” the server loads their .tscn directly (Core.RealmSceneFile).
 #
 # All the real logic lives in C# (scripts/tools/RealmBaker.cs + the unit-tested
-# Core.TerrainSampler / Core.DungeonSceneFile); this shim exists because Godot
+# Core.TerrainSampler / Core.RealmSceneFile); this shim exists because Godot
 # cannot run a C# script from the command line.
 #
 # Build first (dotnet build WoadRaiders.Client), then:

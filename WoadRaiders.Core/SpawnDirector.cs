@@ -27,7 +27,7 @@ public sealed class SpawnDirector
         MinRespawnDistanceFromPlayerSpawn * MinRespawnDistanceFromPlayerSpawn;
 
     private readonly GameWorld _world;
-    private readonly DungeonGeometry _dungeon;
+    private readonly RealmDefinition _realm;
     private readonly Random _rng;
 
     private int _nextRepopTick;
@@ -39,13 +39,13 @@ public sealed class SpawnDirector
     /// <summary>Raised the tick the boss respawns.</summary>
     public event Action? BossRose;
 
-    public SpawnDirector(GameWorld world, DungeonGeometry dungeon, Random rng)
+    public SpawnDirector(GameWorld world, RealmDefinition realm, Random rng)
     {
         _world = world;
-        _dungeon = dungeon;
+        _realm = realm;
         _rng = rng;
         // Map-driven density: target one enemy per typed marker, clamped to a sane band.
-        TargetEnemyCount = Math.Clamp(dungeon.EnemySpawns.Count, 4, 40);
+        TargetEnemyCount = Math.Clamp(realm.EnemySpawns.Count, 4, 40);
     }
 
     /// <summary>The regular (non-boss) enemy population the director maintains.</summary>
@@ -61,14 +61,14 @@ public sealed class SpawnDirector
     /// </summary>
     public int SpawnInitial()
     {
-        var markers = _dungeon.EnemySpawns;
+        var markers = _realm.EnemySpawns;
         for (var i = 0; i < TargetEnemyCount; i++)
         {
             var spawn = i < markers.Count ? markers[i] : RandomSpawnAwayFromPlayers();
             _world.SpawnEnemy(spawn.Position, spawn.Type);
         }
 
-        if (_dungeon.BossSpawn is { } bossPos)
+        if (_realm.BossSpawn is { } bossPos)
             _world.SpawnEnemy(bossPos, EnemyType.Boss);
 
         _nextRepopTick = _world.Tick + RepopIntervalTicks;
@@ -93,7 +93,7 @@ public sealed class SpawnDirector
 
     private void UpdateBoss()
     {
-        if (_dungeon.BossSpawn is not { } bossPos)
+        if (_realm.BossSpawn is not { } bossPos)
             return;
 
         if (BossIsAlive())
@@ -134,10 +134,10 @@ public sealed class SpawnDirector
         // A random typed marker, but not right on top of the player spawn.
         for (var attempt = 0; attempt < 20; attempt++)
         {
-            var spawn = _dungeon.RandomEnemySpawn(_rng);
-            if (Vector3.DistanceSquared(spawn.Position, _dungeon.SpawnPoint) > MinRespawnDistanceSq)
+            var spawn = _realm.RandomEnemySpawn(_rng);
+            if (Vector3.DistanceSquared(spawn.Position, _realm.SpawnPoint) > MinRespawnDistanceSq)
                 return spawn;
         }
-        return _dungeon.RandomEnemySpawn(_rng);
+        return _realm.RandomEnemySpawn(_rng);
     }
 }

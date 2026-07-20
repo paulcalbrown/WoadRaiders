@@ -13,7 +13,7 @@ namespace WoadRaiders.Core.Tests;
 /// straight from the scene text. This is what the tools run when they read a
 /// realm scene, tested directly.
 /// </summary>
-public class DungeonSceneFileTests
+public class RealmSceneFileTests
 {
     private const string Realm = """
         [gd_scene load_steps=3 format=3]
@@ -61,7 +61,7 @@ public class DungeonSceneFileTests
     [Fact]
     public void A_realm_scene_parses_into_markers_and_a_slab_soup()
     {
-        var geometry = DungeonSceneFile.Parse(Realm, "res://maps/Realm.tscn");
+        var geometry = RealmSceneFile.Parse(Realm, "res://maps/Realm.tscn");
 
         Assert.Equal(new Vector3(100, 1, 200), geometry.SpawnPoint);
         Assert.Equal(new Vector3(400, 9, 500), geometry.BossSpawn);
@@ -83,7 +83,7 @@ public class DungeonSceneFileTests
     [Fact]
     public void Slabs_compose_transforms_and_ride_where_they_stand()
     {
-        var soup = DungeonSceneFile.Parse(Realm).Soup!;
+        var soup = RealmSceneFile.Parse(Realm).Soup!;
 
         // Floor: parent (10,0,20) + own (5,30,0), size (100,20,60) → top face
         // at y=40 over x∈[-35,65], z∈[-10,50].
@@ -107,21 +107,21 @@ public class DungeonSceneFileTests
             mesh = SubResource("p")
             [node name="PlayerSpawn" type="Marker3D" parent="."]
             """;
-        var e = Assert.Throws<InvalidDataException>(() => DungeonSceneFile.Parse(text));
+        var e = Assert.Throws<InvalidDataException>(() => RealmSceneFile.Parse(text));
         Assert.Contains("bake", e.Message);
 
         // The bake tool samples the meshes and hands the whole soup in — then it parses.
         var sampled = new SoupBuilder()
             .AddBox(new Aabb(Vector3.Zero, new Vector3(10, 1, 10)), floor: true)
             .Build();
-        var geometry = DungeonSceneFile.Parse(text, sampledSoup: sampled);
+        var geometry = RealmSceneFile.Parse(text, sampledSoup: sampled);
         Assert.Same(sampled, geometry.Soup);
     }
 
     [Fact]
     public void A_scene_of_markers_alone_is_a_flat_map()
     {
-        var geometry = DungeonSceneFile.Parse("""
+        var geometry = RealmSceneFile.Parse("""
             [gd_scene format=3]
             [node name="R" type="Node3D"]
             [node name="PlayerSpawn" type="Marker3D" parent="."]
@@ -132,7 +132,7 @@ public class DungeonSceneFileTests
     [Fact]
     public void A_scene_without_a_player_spawn_is_refused()
     {
-        var e = Assert.Throws<InvalidDataException>(() => DungeonSceneFile.Parse("""
+        var e = Assert.Throws<InvalidDataException>(() => RealmSceneFile.Parse("""
             [gd_scene format=3]
             [node name="R" type="Node3D"]
             """));
@@ -144,7 +144,7 @@ public class DungeonSceneFileTests
     {
         // Multi-line dictionaries, curves, strings with '=' — the parser must
         // shrug at everything a real authored scene carries.
-        var geometry = DungeonSceneFile.Parse("""
+        var geometry = RealmSceneFile.Parse("""
             [gd_scene format=3]
             [sub_resource type="Animation" id="a"]
             _data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]

@@ -5,7 +5,8 @@ using DotRecast.Detour;
 namespace WoadRaiders.Core;
 
 /// <summary>
-/// The mesh-based counterpart of <see cref="DungeonGeometry"/>: movement is
+/// The shipping <see cref="IRealmGeometry"/>, baked from a
+/// <see cref="RealmDefinition"/>'s soup: movement is
 /// clamped to a baked Detour navmesh (moveAlongSurface — polygon boundaries
 /// act as walls and produce sliding), while sight lines, cursor rays, and the
 /// projectile ground query test the exact <see cref="TriangleSoup"/> the mesh
@@ -23,7 +24,7 @@ namespace WoadRaiders.Core;
 /// code over identical baked bytes, so predicted movement can never drift
 /// from the authoritative sim. Not thread-safe: one instance per simulation.
 /// </summary>
-public sealed class NavMeshGeometry : IDungeonGeometry
+public sealed class RealmGeometry : IRealmGeometry
 {
     // FindNearestPoly search box around a character position: generous on XZ
     // (erosion can pull the mesh a radius away from where feet stand), a step
@@ -50,14 +51,14 @@ public sealed class NavMeshGeometry : IDungeonGeometry
     public Vector3 SpawnPoint { get; }
 
     /// <summary>A realm with the one standard agent class (CharacterRadius).</summary>
-    public NavMeshGeometry(DtNavMesh navMesh, TriangleSoup soup, Vector3 spawnPoint)
+    public RealmGeometry(DtNavMesh navMesh, TriangleSoup soup, Vector3 spawnPoint)
         : this(soup, spawnPoint, (SimConstants.CharacterRadius, navMesh)) { }
 
     /// <summary>
     /// A realm with one baked mesh per mover width — e.g. the character mesh
     /// plus a boss mesh. Every mesh must be baked from the same soup.
     /// </summary>
-    public NavMeshGeometry(TriangleSoup soup, Vector3 spawnPoint, params (float radius, DtNavMesh mesh)[] meshes)
+    public RealmGeometry(TriangleSoup soup, Vector3 spawnPoint, params (float radius, DtNavMesh mesh)[] meshes)
     {
         if (meshes.Length == 0)
             throw new ArgumentException("a navmesh realm needs at least one baked agent class");
@@ -164,7 +165,7 @@ public sealed class NavMeshGeometry : IDungeonGeometry
     private bool TryFloorRide(Vector3 from, float targetX, float targetZ, float radius, out Vector3 landing)
     {
         landing = default;
-        if (_soup.FloorHeightAt(targetX, targetZ) is not { } ground ||
+        if (_soup.GroundBelow(targetX, targetZ, from.Y, SimConstants.StepHeight) is not { } ground ||
             ground > from.Y + SimConstants.StepHeight)
             return false;
         var dx = targetX - from.X;
@@ -231,15 +232,17 @@ public sealed class NavMeshGeometry : IDungeonGeometry
     public bool HasLineOfSight(Vector3 from, Vector3 to) => !_soup.SegmentHits(from, to);
 
     /// <summary>
-    /// The floor under a world XZ point — the ground a projectile hugs and the
-    /// camera clears. Clamped into the soup's bounds so queries just past the
-    /// realm's edge keep answering.
+    /// The surface under a world point — the ground a projectile hugs and the
+    /// camera clears — resolved against the asker's own height, so a bolt in
+    /// the chasm follows the pit floor rather than the deck bridging overhead.
+    /// Clamped into the soup's bounds so queries just past the realm's edge
+    /// keep answering.
     /// </summary>
-    public float GroundHeight(float x, float z)
+    public float GroundHeight(Vector3 near)
     {
-        var cx = Math.Clamp(x, _soup.BoundsMin.X + 0.01f, _soup.BoundsMax.X - 0.01f);
-        var cz = Math.Clamp(z, _soup.BoundsMin.Z + 0.01f, _soup.BoundsMax.Z - 0.01f);
-        return _soup.FloorHeightAt(cx, cz) ?? 0f;
+        var cx = Math.Clamp(near.X, _soup.BoundsMin.X + 0.01f, _soup.BoundsMax.X - 0.01f);
+        var cz = Math.Clamp(near.Z, _soup.BoundsMin.Z + 0.01f, _soup.BoundsMax.Z - 0.01f);
+        return _soup.GroundBelow(cx, cz, near.Y, SimConstants.StepHeight) ?? 0f;
     }
 
     /// <summary>

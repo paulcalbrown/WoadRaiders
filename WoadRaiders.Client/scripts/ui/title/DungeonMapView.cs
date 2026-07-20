@@ -19,7 +19,7 @@ public partial class DungeonMapView : Control
     // (see PlayableBand) before ground reads as pit-dark or wild rock.
     private const float BandMargin = 60f;
 
-    private DungeonGeometry? _geometry;
+    private RealmDefinition? _realm;
 
     /// <summary>Load and display the floorplan for a catalog realm.</summary>
     public void ShowDungeon(in DungeonInfo info)
@@ -31,27 +31,27 @@ public partial class DungeonMapView : Control
         try
         {
             var text = Godot.FileAccess.GetFileAsString($"res://maps/{info.MapFile}");
-            _geometry = string.IsNullOrEmpty(text)
+            _realm = string.IsNullOrEmpty(text)
                 ? null
                 : info.MapFile.EndsWith(".tscn", StringComparison.OrdinalIgnoreCase)
-                    ? DungeonSceneFile.Parse(text, info.ScenePath)
-                    : DungeonGeometryFile.Parse(text);
+                    ? RealmSceneFile.Parse(text, info.ScenePath)
+                    : RealmDefinitionFile.Parse(text);
         }
         catch (Exception e)
         {
             GD.PushWarning($"map preview for '{info.MapFile}' failed to parse: {e.Message}");
-            _geometry = null;
+            _realm = null;
         }
         QueueRedraw();
     }
 
     /// <summary>Enemy count and boss presence, for the card's stats line.</summary>
     public (int Enemies, bool HasBoss) Census =>
-        _geometry is { } g ? (g.EnemySpawns.Count, g.BossSpawn is not null) : (0, false);
+        _realm is { } g ? (g.EnemySpawns.Count, g.BossSpawn is not null) : (0, false);
 
     /// <summary>The band of heights the realm is PLAYED at: the span its
     /// spawn, camps, and boss stand on, padded by <see cref="BandMargin"/>.</summary>
-    private static (float Deep, float Wild) PlayableBand(DungeonGeometry g)
+    private static (float Deep, float Wild) PlayableBand(RealmDefinition g)
     {
         float lo = g.SpawnPoint.Y, hi = g.SpawnPoint.Y;
         void Fold(float y)
@@ -68,7 +68,7 @@ public partial class DungeonMapView : Control
 
     public override void _Draw()
     {
-        if (_geometry is not { } g || g.Soup is null)
+        if (_realm is not { } g || g.Soup is null)
             return;
 
         // Fit the realm's bounds into this control, preserving aspect.

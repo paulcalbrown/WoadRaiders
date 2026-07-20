@@ -63,14 +63,14 @@ public static class NetConfig
     /// v12 = PlayerSnapshot.Name (fellow raiders' overhead nameplates),
     /// v13 = connect rejects carry a <see cref="ConnectDeniedPacket"/> payload
     ///       (server key + reason), so an outdated client learns why,
-    /// v14 = open realms (DungeonGeometryPacket heightfield terrain + props;
+    /// v14 = open realms (RealmGeometryPacket heightfield terrain + props;
     ///       the Gauntlet-style realm rework),
-    /// v15 = props dropped from DungeonGeometryPacket. The authored .tscn is the
+    /// v15 = props dropped from RealmGeometryPacket. The authored .tscn is the
     ///       only visual source, so nothing ever rendered from that record; a
     ///       cosmetic landmark is now just a node in the scene,
-    /// v16 = the baked navmesh (DungeonGeometryPacket.NavMesh): the server bakes
+    /// v16 = the baked navmesh (RealmGeometryPacket.NavMesh): the server bakes
     ///       each realm's Detour mesh once at load and ships the bytes, and both
-    ///       peers move on NavMeshGeometry instead of sampling the heightfield,
+    ///       peers move on RealmGeometry instead of sampling the heightfield,
     /// v17 = the heightfield and terrain concept removed outright: the packet
     ///       ships the realm's triangle soup (floors first) + navmesh; the
     ///       terrain grid and solid boxes are gone. Realms are BUILT — slabs,

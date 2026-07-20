@@ -65,8 +65,8 @@ listener.NetworkReceiveEvent += (peer, reader, channel, delivery) =>
 {
     switch ((MessageType)reader.GetByte())
     {
-        case MessageType.DungeonGeometry:
-            var geometry = new DungeonGeometryPacket();
+        case MessageType.RealmGeometry:
+            var geometry = new RealmGeometryPacket();
             geometry.Deserialize(reader);
             servedScene = geometry.ScenePath;
             break;

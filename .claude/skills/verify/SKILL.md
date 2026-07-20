@@ -28,11 +28,11 @@ dotnet run --project WoadRaiders.Server -- [port] --map <map.json>
 #   Stop-Process -Id (Get-NetUDPEndpoint -LocalPort 9050).OwningProcess[0] -Force
 ```
 
-Custom maps are plain JSON (see `DungeonGeometryFile` docs): `spawn: [x,y,z]`,
+Custom maps are plain JSON (see `RealmDefinitionFile` docs): `spawn: [x,y,z]`,
 `enemySpawns: [[x,y,z],...]`, optional `enemySpawnTypes` (0 Minion, 1 Rogue,
-2 Mage — parallel array), optional `bossSpawn`, optional `terrain` (a smooth
-heightfield: originX/originZ/cellSize/width/depth + row-major `heights` — the
-base plane movement rides; see the verticality rules in `DungeonGeometry`).
+2 Mage — parallel array), optional `bossSpawn`, optional `soup` (the realm's
+triangle soup, floors first — a soupless map is the flat test arena; movement
+rules live in `RealmGeometry`, baked from the soup behind `IRealmGeometry`).
 The geometry carries SIM truth only — scenery lives in the .tscn and never
 reaches the wire.
 

@@ -25,7 +25,7 @@
 //
 // Validation runs the REAL simulation rules against the BAKED geometry — the
 // very bytes the server will host:
-//   - a virtual raider walks the whole route with DungeonGeometry.Move at
+//   - a virtual raider walks the whole route with RealmGeometry.Move at
 //     player speed and must reach the boss court (and end up high);
 //   - Core.RealmValidator proves every camp comfortably reachable, the borders
 //     sealed even against slope-inching, and no reachable spot stranded.
@@ -69,11 +69,11 @@ Step("godot-mono", "--headless --path WoadRaiders.Client -s res://tools/bake_rea
 
 // ------------------------------------------------------------- validate what will be served
 
-var geometry = DungeonGeometryFile.Load(jsonPath);
+var definition = RealmDefinitionFile.Load(jsonPath);
 
 // The shared realm checks (Core.RealmValidator): comfortable reachability of
 // every camp and the boss, sealed borders, no stranding pits.
-var issues = RealmValidator.Validate(geometry);
+var issues = RealmValidator.Validate(definition);
 if (issues.Count > 0)
     throw new InvalidOperationException("the baked realm fails validation:\n  - " + string.Join("\n  - ", issues));
 
@@ -127,10 +127,10 @@ else
 {
     // The walk runs on the very movement geometry the SERVER will bake and
     // move on — the realm's navmesh over its baked soup.
-    if (geometry.Soup is not { } soup)
+    if (definition.Soup is not { } soup)
         throw new InvalidOperationException("the baked realm has no geometry soup — nothing to walk on");
-    var movement = new NavMeshGeometry(NavMeshBuilder.Build(soup), soup, geometry.SpawnPoint);
-    var pos = geometry.SpawnPoint;
+    var movement = new RealmGeometry(NavMeshBuilder.Build(soup), soup, definition.SpawnPoint);
+    var pos = definition.SpawnPoint;
     var step = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
     foreach (var target in route.Path)
     {
@@ -157,14 +157,14 @@ else
     Console.WriteLine($"Route walk OK — the raider stands at ({pos.X:0}, {pos.Y:0}, {pos.Z:0}) before the boss.");
 }
 
-var span = geometry.Bounds;
-var soupSummary = geometry.Soup is { } builtSoup
+var span = definition.Bounds;
+var soupSummary = definition.Soup is { } builtSoup
     ? $"{builtSoup.Triangles.Length / 3} triangles ({builtSoup.FloorTriangleCount} floor) over " +
       $"{span.Max.X - span.Min.X:0}x{span.Max.Z - span.Min.Z:0} units (heights {span.Min.Y:0}..{span.Max.Y:0})"
     : "no geometry";
 Console.WriteLine($"Wrote {realm}.tscn (the design) and {realm}.json (baked from it, validated): " +
-                  $"{soupSummary}, {geometry.EnemySpawns.Count} enemy camps" +
-                  $"{(geometry.BossSpawn is not null ? " + the boss" : "")}.");
+                  $"{soupSummary}, {definition.EnemySpawns.Count} enemy camps" +
+                  $"{(definition.BossSpawn is not null ? " + the boss" : "")}.");
 
 // ------------------------------------------------------------- helpers
 

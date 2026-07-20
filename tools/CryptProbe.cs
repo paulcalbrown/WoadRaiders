@@ -33,9 +33,9 @@ var assembler = new SnapshotAssembler();
 int myId = -1;
 uint sequence = 0;
 var welcomed = false;
-DungeonGeometry? geometry = null;
-IDungeonGeometry? movement = null; // the shipped navmesh — what prediction (and this replay) moves on
-DungeonGeometryPacket? geometryPacket = null;
+RealmDefinition? realm = null;
+IRealmGeometry? movement = null; // the shipped navmesh — what prediction (and this replay) moves on
+RealmGeometryPacket? geometryPacket = null;
 float? spawnY = null;
 float floorY = float.MaxValue;
 Vector3? latestPos = null;
@@ -59,11 +59,11 @@ listener.NetworkReceiveEvent += (peer, reader, channel, delivery) =>
 {
     switch ((MessageType)reader.GetByte())
     {
-        case MessageType.DungeonGeometry:
-            geometryPacket = new DungeonGeometryPacket();
+        case MessageType.RealmGeometry:
+            geometryPacket = new RealmGeometryPacket();
             geometryPacket.Deserialize(reader);
-            geometry = DungeonSnapshot.ToGeometry(geometryPacket);
-            movement = DungeonSnapshot.ToMovementGeometry(geometryPacket);
+            realm = RealmSnapshot.ToDefinition(geometryPacket);
+            movement = RealmSnapshot.ToMovementGeometry(geometryPacket);
             Console.WriteLine($"[probe] geometry: {geometryPacket.SoupTriangles.Length / 3} triangles " +
                               $"({geometryPacket.FloorTriangleCount} floor), " +
                               $"{geometryPacket.NavMesh.Length / 1024} KB navmesh");
@@ -118,9 +118,9 @@ while (clock.Elapsed < TimeSpan.FromSeconds(55))
 }
 net.Stop();
 
-var terrainOk = geometryPacket is { } gp && gp.SoupTriangles.Length > 0 && geometry?.Soup is not null;
-var spawnGroundY = movement is not null && geometry is not null
-    ? movement.GroundHeight(geometry.SpawnPoint.X, geometry.SpawnPoint.Z)
+var terrainOk = geometryPacket is { } gp && gp.SoupTriangles.Length > 0 && realm?.Soup is not null;
+var spawnGroundY = movement is not null && realm is not null
+    ? movement.GroundHeight(realm.SpawnPoint.X, realm.SpawnPoint.Z)
     : float.NaN;
 var spawnOk = spawnY is { } sy && MathF.Abs(sy - spawnGroundY) < 2f;
 var sank = spawnY is { } s && floorY < s - 100f;
@@ -128,9 +128,9 @@ var sank = spawnY is { } s && floorY < s - 100f;
 // Replay-determinism: walk the same inputs over the REBUILT geometry and land
 // where the server's last snapshot puts us.
 var replayOk = false;
-if (geometry is not null && movement is not null && latestPos is { } serverPos && spawnY is not null)
+if (realm is not null && movement is not null && latestPos is { } serverPos && spawnY is not null)
 {
-    var pos = geometry.SpawnPoint;
+    var pos = realm.SpawnPoint;
     var step = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
     for (var i = 0; i < (int)sequence; i++)
         pos = movement.Move(pos, new Vector3(step, 0, 0));

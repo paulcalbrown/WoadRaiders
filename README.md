@@ -205,11 +205,11 @@ core loop earns it.
       (Currently: immediate respawn at origin.)
 - [x] **3D simulation** — `Core` simulates in full 3D world space (`System.Numerics.Vector3`,
       **Y-up**, matching Godot and glTF conventions, so the client maps sim positions 1:1). Dungeon
-      shape sits behind the `IDungeonGeometry` seam. Movement input stays 2D ground-plane intent
+      shape sits behind the `IRealmGeometry` seam. Movement input stays 2D ground-plane intent
       (`MoveX`/`MoveZ`); the geometry decides height.
 - [x] **Open realms with real verticality (the Gauntlet rework)** — the game left its
       fixed-isometric dungeon roots for **Gauntlet Legends / Dark Legacy**-style realms.
-      `DungeonGeometry` gained a smooth **heightfield terrain** base plane (bilinear
+      `RealmDefinition` gained a smooth **heightfield terrain** base plane (bilinear
       `HeightField`, shipped bit-exact over the wire so prediction walks the same ground) under
       the solid boxes; movement now **rides the ground** — each step lands on the surface at its
       destination, a rise beyond `SimConstants.StepHeight` (18) is a wall or cliff, drops are
@@ -259,7 +259,7 @@ core loop earns it.
       (position-aware `HeightFieldMesh` overload). `GenerateRealm.cs` gained a headless
       `--import` step for the kits, and `tools/CryptProbe.cs` mirrors TerrainProbe for a
       DESCENDING realm (the authoritative Y sinks; replay agrees across the bridge deck).
-- [x] **Fully 3D dungeon geometry (`DungeonGeometry`)** — dungeons are sets of **world-space solid
+- [x] **Fully 3D dungeon geometry (`RealmDefinition`)** — dungeons are sets of **world-space solid
       boxes** + spawn markers, exactly what a Godot-editor scene reduces to. Collision is a vertical
       **cylinder-vs-box** test that is 3D-aware (walls block; beams above head height don't), sliding
       and shared verbatim by server and client prediction. Ships over the wire on join.
@@ -336,7 +336,7 @@ core loop earns it.
       derived client-side from motion; the attack clip is driven by an authoritative `Attacking`
       flag on the snapshot (set when an attack lands, ticked down, broadcast).
 - [ ] **Dungeon content & depth** — more maps and kit variety; BepuPhysics for non-box collision
-      and DotRecast navmesh for smarter AI pathing, all behind `IDungeonGeometry`.
+      and DotRecast navmesh for smarter AI pathing, all behind `IRealmGeometry`.
 - [ ] **Gauntlet-style systems** — enemy generators (destroy to stop the horde), an exit/portal to
       descend to the next realm, health-drain + food pickups, keys/doors/gates, more themed
       realms (the realm FORM itself shipped in the open-realms rework above).

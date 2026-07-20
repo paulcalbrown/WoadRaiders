@@ -51,7 +51,7 @@ public partial class RealmSceneBuilder : RefCounted
         if (!scene.HasPlayerSpawn)
         {
             GD.PrintErr($"the '{design.Name}' design placed no player spawn — call scene.SetPlayerSpawn(...); " +
-                        "every realm needs one (Core.DungeonSceneFile requires it)");
+                        "every realm needs one (Core.RealmSceneFile requires it)");
             return 1;
         }
 

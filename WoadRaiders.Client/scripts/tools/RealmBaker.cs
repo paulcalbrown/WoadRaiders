@@ -62,8 +62,8 @@ public partial class RealmBaker : RefCounted
         }
 
         // Everything else is the shared engine-free pipeline.
-        var geometry = DungeonSceneFile.Parse(text, scenePath, soup);
-        var json = DungeonGeometryFile.ToJson(geometry);
+        var definition = RealmSceneFile.Parse(text, scenePath, soup);
+        var json = RealmDefinitionFile.ToJson(definition);
 
         using var file = FileAccess.Open(outPath, FileAccess.ModeFlags.Write);
         if (file is null)
@@ -73,9 +73,9 @@ public partial class RealmBaker : RefCounted
         }
         file.StoreString(json);
 
-        GD.Print($"baked {geometry.EnemySpawns.Count} enemy spawns" +
-                 $"{(geometry.BossSpawn is not null ? " + boss" : "")}, " +
-                 $"{(geometry.Soup is { } s ? $"{s.Triangles.Length / 3} triangles" : "no geometry (flat map)")} " +
+        GD.Print($"baked {definition.EnemySpawns.Count} enemy spawns" +
+                 $"{(definition.BossSpawn is not null ? " + boss" : "")}, " +
+                 $"{(definition.Soup is { } s ? $"{s.Triangles.Length / 3} triangles" : "no geometry (flat map)")} " +
                  $"-> {outPath}");
         return 0;
     }

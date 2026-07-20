@@ -15,7 +15,7 @@ namespace WoadRaiders.Client;
 /// all SLABS — great cut stones, each a BoxMesh under an arbitrary transform.
 /// "ground" slabs are what raiders walk on; "structure" slabs block and
 /// occlude. The served geometry is baked FROM the finished scene afterwards,
-/// and a slab scene even parses engine-free (Core.DungeonSceneFile reads
+/// and a slab scene even parses engine-free (Core.RealmSceneFile reads
 /// BoxMesh sizes and transforms straight from the .tscn text).
 ///
 /// Everything here is a convenience, not a requirement. A design may hang
@@ -23,7 +23,7 @@ namespace WoadRaiders.Client;
 /// particles, or imported asset kits; the bake samples real triangles from
 /// anything it finds in the two groups and ignores the rest. A fresh scene is
 /// EMPTY — no light, no sky. A design states its whole look itself; the only
-/// thing a realm MUST have is a player spawn (Core.DungeonSceneFile's rule).
+/// thing a realm MUST have is a player spawn (Core.RealmSceneFile's rule).
 /// </summary>
 public sealed class RealmScene
 {

@@ -3,7 +3,7 @@ using System.Numerics;
 namespace WoadRaiders.Core;
 
 /// <summary>
-/// Builds a <see cref="DungeonGeometry"/> straight from a Godot .tscn text
+/// Builds a <see cref="RealmDefinition"/> straight from a Godot .tscn text
 /// scene — the shared scene-to-geometry pipeline behind the map tools: the
 /// bake tool (RealmBaker) reads a scene's markers and geometry through it when
 /// baking server geometry JSON, and ValidateRealm accepts scenes via it. Plain
@@ -23,12 +23,12 @@ namespace WoadRaiders.Core;
 ///                   contains "Rogue" → Rogue, "Mage" → Mage, else Minion.
 ///   - Boss:         a Marker3D named "BossSpawn" (optional).
 /// </summary>
-public static class DungeonSceneFile
+public static class RealmSceneFile
 {
-    public static DungeonGeometry Load(string path, string? scenePath = null) =>
+    public static RealmDefinition Load(string path, string? scenePath = null) =>
         Parse(File.ReadAllText(path), scenePath ?? $"res://maps/{Path.GetFileName(path)}");
 
-    public static DungeonGeometry Parse(string text, string? scenePath = null, TriangleSoup? sampledSoup = null)
+    public static RealmDefinition Parse(string text, string? scenePath = null, TriangleSoup? sampledSoup = null)
     {
         var doc = TscnDocument.Parse(text);
 
@@ -104,7 +104,7 @@ public static class DungeonSceneFile
         if (spawn is null)
             throw new InvalidDataException("the scene has no Marker3D named 'PlayerSpawn'");
 
-        return new DungeonGeometry(spawn.Value, sampledSoup ?? (slabs > 0 ? builder.Build() : null), enemySpawns)
+        return new RealmDefinition(spawn.Value, sampledSoup ?? (slabs > 0 ? builder.Build() : null), enemySpawns)
         {
             ScenePath = scenePath,
             BossSpawn = boss,
@@ -209,8 +209,8 @@ public static class DungeonSceneFile
 /// </summary>
 public static class MapLoader
 {
-    public static DungeonGeometry Load(string path) =>
+    public static RealmDefinition Load(string path) =>
         Path.GetExtension(path).Equals(".tscn", StringComparison.OrdinalIgnoreCase)
-            ? DungeonSceneFile.Load(path)
-            : DungeonGeometryFile.Load(path);
+            ? RealmSceneFile.Load(path)
+            : RealmDefinitionFile.Load(path);
 }

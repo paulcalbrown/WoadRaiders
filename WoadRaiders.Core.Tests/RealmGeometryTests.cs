@@ -7,12 +7,12 @@ namespace WoadRaiders.Core.Tests;
 
 /// <summary>
 /// The realm's movement rules, judged on slab-built geometry: baking soups
-/// into Detour meshes and moving on them through <see cref="NavMeshGeometry"/>.
+/// into Detour meshes and moving on them through <see cref="RealmGeometry"/>.
 /// Climb-or-refuse, ledge drops, deck boarding, routing around walls, and the
 /// properties multiplayer depends on: deterministic bakes and a serialized
 /// form both peers share bit-exact.
 /// </summary>
-public class NavMeshGeometryTests
+public class RealmGeometryTests
 {
     private const float TickStep = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
 
@@ -36,9 +36,16 @@ public class NavMeshGeometryTests
         .AddBox(new Aabb(new Vector3(200, -20, 0), new Vector3(400, 300, 400)), floor: true)
         .Build();
 
+    // A pit floor at y=-400 with a bridge deck slabbed across it at y=0 —
+    // two walkable levels sharing an XZ, the shape the Crypt's chasm has.
+    private static TriangleSoup DeckOverPit() => new SoupBuilder()
+        .AddBox(new Aabb(new Vector3(0, -420, 0), new Vector3(400, -400, 400)), floor: true)
+        .AddBox(new Aabb(new Vector3(0, -20, 150), new Vector3(400, 0, 250)), floor: true)
+        .Build();
+
     private static float RampHeight(float x) => x <= 200f ? 0f : (x - 200f) * 0.25f;
 
-    private static NavMeshGeometry Geo(TriangleSoup soup) =>
+    private static RealmGeometry Geo(TriangleSoup soup) =>
         new(NavMeshBuilder.Build(soup), soup, new Vector3(50, 0, 200));
 
     [Fact]
@@ -46,6 +53,49 @@ public class NavMeshGeometryTests
     {
         // StepHeight per player tick-step ≈ grade 2.45 ≈ 67.8°.
         Assert.InRange(NavMeshBuilder.MaxWalkableSlopeDegrees, 67f, 69f);
+    }
+
+    [Fact]
+    public void The_ground_under_a_stacked_realm_is_the_asker_s_own_level()
+    {
+        var geo = Geo(DeckOverPit());
+
+        // Standing in the pit, under the deck: the ground is the pit floor,
+        // not the deck bridging 400 units overhead.
+        Assert.Equal(-400f, geo.GroundHeight(new Vector3(200, -400, 200)), 1);
+
+        // Standing ON the deck at the same XZ: the ground is the deck.
+        Assert.Equal(0f, geo.GroundHeight(new Vector3(200, 0, 200)), 1);
+
+        // Off to the side there is only one level, whoever asks.
+        Assert.Equal(-400f, geo.GroundHeight(new Vector3(200, -400, 50)), 1);
+        Assert.Equal(-400f, geo.GroundHeight(new Vector3(200, 0, 50)), 1);
+    }
+
+    [Fact]
+    public void A_player_bolt_flying_under_a_deck_hugs_the_pit_floor()
+    {
+        // The regression this guards: a Y-less ground query answered every
+        // shot in the chasm with the DECK's height, so a terrain-following
+        // bolt read the deck as a cliff face risen in its path and died on
+        // the tick it spawned — while enemy bolts, which aim in full 3D,
+        // fired back freely.
+        var world = new GameWorld(new Random(1)) { Geometry = Geo(DeckOverPit()) };
+        var player = world.AddPlayer(1, "raider", CharacterClass.Ranger);
+        player.Position = new Vector3(120, -400, 200); // in the pit, under the deck
+
+        world.SetInput(1, new PlayerInput { Attack = true, AimX = 1f, AimZ = 0f });
+        world.Step();
+        var boltId = Assert.Single(world.Projectiles.Keys);
+
+        world.SetInput(1, new PlayerInput { AimX = 1f, AimZ = 0f }); // release, so one bolt is in flight
+        for (var i = 0; i < 20; i++)
+            world.Step();
+
+        Assert.True(world.Projectiles.TryGetValue(boltId, out var bolt),
+            "the bolt died in flight — the deck overhead was read as a cliff face");
+        Assert.True(bolt.Position.X > 140, $"the bolt should have flown east, but sits at {bolt.Position.X:0}");
+        Assert.InRange(bolt.Position.Y, -400f, -400f + SimConstants.EyeHeight + 1f);
     }
 
     [Fact]
@@ -191,7 +241,7 @@ public class NavMeshGeometryTests
             .AddBox(new Aabb(new Vector3(200, 0, 0), new Vector3(220, 60, 172.5f)), floor: false)
             .AddBox(new Aabb(new Vector3(200, 0, 227.5f), new Vector3(220, 60, 400)), floor: false)
             .Build();
-        var geo = new NavMeshGeometry(soup, new Vector3(50, 0, 200),
+        var geo = new RealmGeometry(soup, new Vector3(50, 0, 200),
             (SimConstants.CharacterRadius, NavMeshBuilder.Build(soup)),
             (30f, NavMeshBuilder.Build(soup, agentRadius: 30f)));
 
@@ -252,7 +302,7 @@ public class NavMeshGeometryTests
         var soup = Ramp();
         var bytes = NavMeshBuilder.Serialize(NavMeshBuilder.BuildMeshData(soup));
 
-        var geo = new NavMeshGeometry(NavMeshBuilder.Deserialize(bytes), soup, new Vector3(50, 0, 200));
+        var geo = new RealmGeometry(NavMeshBuilder.Deserialize(bytes), soup, new Vector3(50, 0, 200));
         var pos = geo.Move(new Vector3(50, 0, 200), new Vector3(TickStep, 0, 0));
         Assert.True(pos.X > 50f, "the round-tripped mesh refused a plain step east");
     }
@@ -264,7 +314,7 @@ public class NavMeshGeometryTests
         if (realm?.Soup is not { } soup)
             return; // outside the repo layout, or the realm is not yet regenerated
         Assert.NotNull(realm.BossSpawn);
-        var nav = new NavMeshGeometry(NavMeshBuilder.Build(soup), soup, realm.SpawnPoint);
+        var nav = new RealmGeometry(NavMeshBuilder.Build(soup), soup, realm.SpawnPoint);
 
         var boss = realm.BossSpawn!.Value;
         var waypoints = new System.Collections.Generic.List<Vector3>();
@@ -273,8 +323,8 @@ public class NavMeshGeometryTests
 
         Assert.True(((pos - boss) with { Y = 0 }).Length() < 40f,
             $"the route should end at the boss court {boss}, walker reached {pos}");
-        Assert.True(MathF.Abs(pos.Y - nav.GroundHeight(pos.X, pos.Z)) < 10f,
-            $"Y={pos.Y} is off the floor ({nav.GroundHeight(pos.X, pos.Z)}) at {pos.X},{pos.Z}");
+        Assert.True(MathF.Abs(pos.Y - nav.GroundHeight(pos)) < 10f,
+            $"Y={pos.Y} is off the floor ({nav.GroundHeight(pos)}) at {pos.X},{pos.Z}");
     }
 
     [Fact]
@@ -284,7 +334,7 @@ public class NavMeshGeometryTests
         if (realm?.Soup is not { } soup)
             return; // outside the repo layout, or the realm is not yet regenerated
         Assert.NotNull(realm.BossSpawn);
-        var nav = new NavMeshGeometry(NavMeshBuilder.Build(soup), soup, realm.SpawnPoint);
+        var nav = new RealmGeometry(NavMeshBuilder.Build(soup), soup, realm.SpawnPoint);
 
         var boss = realm.BossSpawn!.Value;
         var waypoints = new System.Collections.Generic.List<Vector3>();
@@ -298,7 +348,7 @@ public class NavMeshGeometryTests
     }
 
     /// <summary>Steer waypoint to waypoint through Move, the way an AI follower would.</summary>
-    private static Vector3 WalkPath(NavMeshGeometry geo, Vector3 start,
+    private static Vector3 WalkPath(RealmGeometry geo, Vector3 start,
                                     System.Collections.Generic.IReadOnlyList<Vector3> waypoints,
                                     int maxTicks, float radius = SimConstants.CharacterRadius)
     {
@@ -342,13 +392,13 @@ public class NavMeshGeometryTests
         Assert.Equal(150f, geo.CeilingHeight(new Vector3(0, 20, 0)), 1f);
     }
 
-    private static DungeonGeometry? LoadRealm(string mapFile)
+    private static RealmDefinition? LoadRealm(string mapFile)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
             var candidate = Path.Combine(dir.FullName, "WoadRaiders.Client", "maps", mapFile);
             if (File.Exists(candidate))
-                return DungeonGeometryFile.Load(candidate);
+                return RealmDefinitionFile.Load(candidate);
         }
         return null;
     }

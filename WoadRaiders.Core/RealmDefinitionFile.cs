@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace WoadRaiders.Core;
 
 /// <summary>
-/// JSON (de)serialization for <see cref="DungeonGeometry"/> — the interchange
+/// JSON (de)serialization for <see cref="RealmDefinition"/> — the interchange
 /// format between the realm bake / the Godot editor export tool and the
 /// headless server. Engine-free so it is unit-testable and usable anywhere.
 ///
@@ -23,7 +23,7 @@ namespace WoadRaiders.Core;
 ///   "bossSpawn": [x, y, z]                       (optional — the map's boss)
 /// }
 /// </summary>
-public static class DungeonGeometryFile
+public static class RealmDefinitionFile
 {
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -33,12 +33,12 @@ public static class DungeonGeometryFile
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static DungeonGeometry Load(string path) => Parse(File.ReadAllText(path));
+    public static RealmDefinition Load(string path) => Parse(File.ReadAllText(path));
 
-    public static DungeonGeometry Parse(string json)
+    public static RealmDefinition Parse(string json)
     {
         var doc = JsonSerializer.Deserialize<GeometryDoc>(json, Options)
-                  ?? throw new InvalidDataException("empty dungeon geometry document");
+                  ?? throw new InvalidDataException("empty realm definition document");
 
         var positions = doc.EnemySpawns ?? Array.Empty<float[]>();
         var types = doc.EnemySpawnTypes;
@@ -59,7 +59,7 @@ public static class DungeonGeometryFile
             spawns.Add(new EnemySpawnPoint(ToVec(positions[i], "enemySpawn"), (EnemyType)raw));
         }
 
-        return new DungeonGeometry(ToVec(doc.Spawn, "spawn"), ParseSoup(doc.Soup), spawns)
+        return new RealmDefinition(ToVec(doc.Spawn, "spawn"), ParseSoup(doc.Soup), spawns)
         {
             ScenePath = string.IsNullOrWhiteSpace(doc.Scene) ? null : doc.Scene,
             BossSpawn = doc.BossSpawn is null ? null : ToVec(doc.BossSpawn, "bossSpawn"),
@@ -76,7 +76,7 @@ public static class DungeonGeometryFile
         return new TriangleSoup(doc.Vertices, doc.Triangles, doc.FloorTriangleCount);
     }
 
-    public static string ToJson(DungeonGeometry g)
+    public static string ToJson(RealmDefinition g)
     {
         var doc = new GeometryDoc
         {

@@ -6,7 +6,7 @@ namespace WoadRaiders.Core;
 /// Client-side prediction + server reconciliation for the local player.
 ///
 /// It runs a one-player <see cref="GameWorld"/> using the exact same movement
-/// rules (and the same <see cref="IDungeonGeometry"/>) as the server, so
+/// rules (and the same <see cref="IRealmGeometry"/>) as the server, so
 /// predicting locally can never diverge from the server's physics. The flow:
 ///   1. Every client tick, call <see cref="Predict"/> with the local input. The
 ///      player moves immediately and the input is buffered as "unacknowledged".
@@ -23,7 +23,7 @@ public sealed class ClientPrediction
     private readonly List<PlayerInput> _pending = new();
     private readonly int _localPlayerId;
 
-    public ClientPrediction(int localPlayerId, Vector3 startPosition, IDungeonGeometry? geometry = null,
+    public ClientPrediction(int localPlayerId, Vector3 startPosition, IRealmGeometry? geometry = null,
                             CharacterClass cls = CharacterClass.Knight)
     {
         _world.Geometry = geometry; // predict against the same geometry the server uses

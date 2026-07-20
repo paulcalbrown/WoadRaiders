@@ -13,14 +13,14 @@ public class PortalRunTests
 {
     private static readonly Vector3 BossPost = new(200, 0, 0);
 
-    private static DungeonGeometry BossArena()
+    private static RealmDefinition BossArena()
     {
         // Four far-off markers satisfy the director's population floor without
         // ever aggroing (minion aggro 480 << 3000); the boss guards its post.
         var markers = Enumerable.Range(0, 4)
             .Select(i => new EnemySpawnPoint(new Vector3(3000 + 100 * i, 0, 3000), EnemyType.Minion))
             .ToArray();
-        return new DungeonGeometry(Vector3.Zero, null, markers) { BossSpawn = BossPost };
+        return new RealmDefinition(Vector3.Zero, null, markers) { BossSpawn = BossPost };
     }
 
     [Fact]
