@@ -50,7 +50,8 @@ public partial class RealmBaker : RefCounted
         var root = packed.Instantiate();
         var builder = new SoupBuilder();
         var triangles = new List<float>();
-        CollectTriangles(root, Transform3D.Identity, triangles);
+        var passed = new Passable();
+        CollectTriangles(root, Transform3D.Identity, triangles, passed);
         root.Free();
 
         TriangleSoup? soup = null;
@@ -60,6 +61,12 @@ public partial class RealmBaker : RefCounted
             soup = builder.Build();
             GD.Print($"sampled {soup.Triangles.Length / 3} triangles");
         }
+        // Always say what was waved through, even when it is nothing. A realm
+        // excusing more and more of itself from collision is the failure this
+        // convention invites, and it is invisible unless the bake counts aloud.
+        GD.Print(passed.Meshes == 0
+            ? $"no_collide: nothing excluded"
+            : $"no_collide: {passed.Meshes} mesh(es) excluded, {passed.Triangles} triangles waved through");
 
         // Everything else is the shared engine-free pipeline.
         var definition = RealmSceneFile.Parse(text, scenePath, soup);
@@ -98,30 +105,49 @@ public partial class RealmBaker : RefCounted
     /// once they were included, and that is fixed in the realm, where it
     /// belonged.
     /// </summary>
-    private static void CollectTriangles(Node node, Transform3D parentXf, List<float> triangles, bool isSceneRoot = true)
+    /// <summary>Running tally of what <c>no_collide</c> waved through.</summary>
+    private sealed class Passable
+    {
+        public int Meshes;
+        public int Triangles;
+    }
+
+    private static void CollectTriangles(Node node, Transform3D parentXf, List<float> triangles,
+                                         Passable passed, bool excluded = false)
     {
         var xf = node is Node3D spatial ? parentXf * spatial.Transform : parentXf;
+        // Inherited, never revoked: a subtree hung under a passable node is
+        // passable too, so one tag on a folder of dressing covers all of it.
+        excluded |= node.IsInGroup(RealmSceneFile.NoCollideGroup);
 
         if (node is MeshInstance3D { Mesh: { } mesh })
         {
-            // Godot winds front faces CLOCKWISE; the soup (and Recast's slope
-            // filter) want counter-clockwise, or every upward face reads as an
-            // overhang. Swap two corners per triangle.
             var faces = mesh.GetFaces();
-            for (var i = 0; i + 2 < faces.Length; i += 3)
+            if (excluded)
             {
-                foreach (var vertex in new[] { faces[i], faces[i + 2], faces[i + 1] })
+                passed.Meshes++;
+                passed.Triangles += faces.Length / 3;
+            }
+            else
+            {
+                // Godot winds front faces CLOCKWISE; the soup (and Recast's
+                // slope filter) want counter-clockwise, or every upward face
+                // reads as an overhang. Swap two corners per triangle.
+                for (var i = 0; i + 2 < faces.Length; i += 3)
                 {
-                    var world = xf * vertex;
-                    triangles.Add(world.X);
-                    triangles.Add(world.Y);
-                    triangles.Add(world.Z);
+                    foreach (var vertex in new[] { faces[i], faces[i + 2], faces[i + 1] })
+                    {
+                        var world = xf * vertex;
+                        triangles.Add(world.X);
+                        triangles.Add(world.Y);
+                        triangles.Add(world.Z);
+                    }
                 }
             }
         }
 
         foreach (var child in node.GetChildren())
-            CollectTriangles(child, xf, triangles, isSceneRoot: false);
+            CollectTriangles(child, xf, triangles, passed, excluded);
     }
 
     private static int[] SequentialIndices(int triangles)

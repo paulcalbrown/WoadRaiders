@@ -71,7 +71,11 @@ The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
      plus agent-radius erosion discard sub-agent detail on their own.
      Kit props are collision too — a sarcophagus blocks because it is one —
      so place anything large where it is fair to meet it; ValidateRealm says
-     so if a piece ever seals a route.
+     so if a piece ever seals a route. The ONE opt-out is the `no_collide`
+     group (node + subtree), for where physics and fiction disagree — a
+     banner, a cobweb — not for silencing the validator. The bake prints what
+     it excluded every run. `RealmScene.Passable(node)` is the design-side
+     call; the Crypt wraps its whole Relics folder in it.
      Markers: `PlayerSpawn` (required), `EnemySpawnN[_Rogue|_Mage]`,
      `BossSpawn`. `no_fade` is a render hint for the occlusion fader only.
   2. Bake to server geometry: `dotnet build WoadRaiders.Client`, then

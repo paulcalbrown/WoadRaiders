@@ -30,6 +30,11 @@ namespace WoadRaiders.Core;
 ///   - Enemy spawns: Marker3D nodes named "EnemySpawn*" — type from the name:
 ///                   contains "Rogue" → Rogue, "Mage" → Mage, else Minion.
 ///   - Boss:         a Marker3D named "BossSpawn" (optional).
+///   - Passable:     the group <see cref="NoCollideGroup"/> on a node excuses
+///                   it AND everything beneath it from the bake. The one
+///                   exception to "every mesh is collision", and the only tag
+///                   the pipeline reads — see below for why it is allowed to
+///                   exist when the floor/structure tags were not.
 ///
 /// Everything else the simulation needs is DERIVED, which is why there is so
 /// little to remember:
@@ -45,12 +50,37 @@ namespace WoadRaiders.Core;
 /// reads as an overhang. SoupBuilder keeps that straight for shapes it builds,
 /// and the engine bake flips Godot's clockwise faces as it samples them.
 ///
-/// Groups play no part in any of this. "no_fade" survives in the shipping
-/// scenes, but it is a rendering hint for the occlusion fader alone and the
-/// bake never looks at it.
+/// No other group plays any part. "no_fade" survives in the shipping scenes,
+/// but it is a rendering hint for the occlusion fader alone.
 /// </summary>
 public static class RealmSceneFile
 {
+    /// <summary>
+    /// The group that declares a node, and its whole subtree, PASSABLE — the
+    /// one thing an author may say about geometry that the pipeline will not
+    /// work out for itself.
+    ///
+    /// It is allowed to exist where the old floor/structure tags were not,
+    /// and the difference is worth stating because it is the rule for any
+    /// convention added later. Those tags duplicated FACTS: whether a surface
+    /// holds a raider up is a property of its normal, and whether a thing is
+    /// too small to matter is decided by the agent radius. A hand-kept copy of
+    /// a computable fact drifts, and drifts silently. This tag duplicates no
+    /// fact — a hanging banner and a wall panel are the same thin slab of
+    /// triangles, and nothing measurable separates them. The difference is
+    /// FICTION, and fiction is the author's to declare. Tag intent; never
+    /// tag facts.
+    ///
+    /// Reach for it only when the world would be wrong without it — a banner
+    /// across a doorway, a cobweb, a curtain — never to quiet a route the
+    /// validator complained about. That complaint is usually the level design
+    /// talking, and silencing it hides the very thing worth hearing: a large
+    /// prop wrongly excluded is invisible, because the validator can prove a
+    /// route is blocked but can never notice geometry that was never there.
+    /// Which is why the bake REPORTS what this drops, every time.
+    /// </summary>
+    public const string NoCollideGroup = "no_collide";
+
     public static RealmDefinition Load(string path, string? scenePath = null) =>
         Parse(File.ReadAllText(path), scenePath ?? $"res://maps/{Path.GetFileName(path)}");
 
@@ -68,6 +98,9 @@ public static class RealmSceneFile
         // World transform per node path, composed root-down (nodes appear in
         // tree order, parents before children).
         var transforms = new Dictionary<string, Xf> { [""] = Xf.Identity };
+        // Paths under a no_collide node. Tree order lets a single pass carry
+        // the claim down: a parent is always seen before its children.
+        var passable = new HashSet<string>(StringComparer.Ordinal);
         Span<Vector3> corners = stackalloc Vector3[8];
 
         foreach (var node in doc.Nodes)
@@ -92,7 +125,13 @@ public static class RealmSceneFile
 
             var type = node.AttributeString("type");
 
-            if (type == "MeshInstance3D")
+            // The claim is about GEOMETRY, so it silences meshes and nothing
+            // else: a spawn marker under a passable node still marks a spawn.
+            if ((parentPath.Length > 0 && passable.Contains(parentPath)) ||
+                Groups(node).Contains(NoCollideGroup))
+                passable.Add(path); // and so is everything hung beneath it
+
+            if (type == "MeshInstance3D" && !passable.Contains(path))
             {
                 if (sampledSoup is not null)
                 {

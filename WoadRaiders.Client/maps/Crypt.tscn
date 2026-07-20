@@ -1802,7 +1802,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7659.84, -821.6, 10036.16)
 [node name="BossSpawn" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6952, -805.60004, 9480)
 
-[node name="Relics" type="Node3D" parent="."]
+[node name="Relics" type="Node3D" parent="." groups=["no_collide"]]
 
 [node name="Relic0" type="Node3D" parent="Relics" instance=ExtResource("1_gacnk")]
 transform = Transform3D(-26, 0, -2.272992e-06, 0, 26, 0, 2.272992e-06, 0, -26, 1738, 0, 4890)

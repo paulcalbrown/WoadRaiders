@@ -1,7 +1,9 @@
 # Bakes a realm scene into the server geometry JSON it is played from.
 # Every mesh in the scene becomes collision, whatever it is and wherever it
 # sits: no groups, no naming, no privileged mesh type, and no exception for
-# instanced kit props — a sarcophagus blocks because it is one. What holds a
+# instanced kit props — a sarcophagus blocks because it is one, unless the
+# author says otherwise with the no_collide group (node + subtree; the bake
+# prints what it drops). What holds a
 # raider up and what blocks them are read afterwards off the geometry —
 # each triangle's normal, and what survives Recast's voxels and erosion.
 #

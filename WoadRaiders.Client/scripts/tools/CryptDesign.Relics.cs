@@ -20,12 +20,10 @@ namespace WoadRaiders.Client;
 ///
 /// The kits are authored at different scales (KayKit props run stylized-large,
 /// Kenney's run miniature), so every placement states its own scale; this
-/// game's characters stand ~44 units (~25 units to the metre). These are
-/// scenery to look at but not to walk through: the bake takes every mesh in
-/// the realm, so a coffin laid here stands in a raider's way exactly as it
-/// appears to. Anything large enough to matter should therefore be placed
-/// where it would be fair to meet one — and ValidateRealm will say so if a
-/// piece ever seals a route.
+/// game's characters stand ~44 units (~25 units to the metre). The whole pass
+/// is declared PASSABLE (<see cref="RealmScene.Passable{T}"/>), so none of it
+/// reaches the server as collision — see the note in <c>Relics()</c> for why
+/// this realm chooses that, and Core.RealmSceneFile for what the claim means.
 /// </summary>
 public sealed partial class CryptDesign
 {
@@ -60,7 +58,14 @@ public sealed partial class CryptDesign
 
     private void Relics()
     {
-        var relics = _scene.Folder("Relics");
+        // The whole pass is PASSABLE. The Crypt was laid out as rooms a raider
+        // fights through, and its dressing was placed to be looked at — coffins
+        // strewn where they fell, bones underfoot, urns in the corners of the
+        // walking line. Made solid, they turn every chamber into an obstacle
+        // course the fights were never spaced for. That is a decision about
+        // this realm rather than a rule about realms: another might well want
+        // its sarcophagi to be cover, and would simply not say this.
+        var relics = _scene.Passable(_scene.Folder("Relics"));
 
         // ---- the kits ----
         var skull = Kit.Load("assets/crypt/kaykit_halloween/skull.gltf");

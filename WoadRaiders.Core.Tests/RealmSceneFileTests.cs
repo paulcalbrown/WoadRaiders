@@ -86,6 +86,45 @@ public class RealmSceneFileTests
     }
 
     [Fact]
+    public void No_collide_excuses_a_mesh_and_everything_under_it()
+    {
+        // The one claim an author may make about geometry. The hall is solid;
+        // the banner hanging in it is not, and neither is the tassel hung off
+        // the banner — the claim runs down the subtree so one tag on a folder
+        // of dressing covers all of it. The spawn marker inside that folder
+        // still marks a spawn: the claim is about GEOMETRY, not about nodes.
+        var realm = RealmSceneFile.Parse("""
+            [gd_scene load_steps=2 format=3]
+
+            [sub_resource type="BoxMesh" id="slab"]
+            size = Vector3(400, 20, 400)
+
+            [node name="Realm" type="Node3D"]
+
+            [node name="Hall" type="MeshInstance3D" parent="."]
+            mesh = SubResource("slab")
+
+            [node name="Dressing" type="Node3D" parent="." groups=["no_collide"]]
+
+            [node name="Banner" type="MeshInstance3D" parent="Dressing"]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, 0)
+            mesh = SubResource("slab")
+
+            [node name="Tassel" type="MeshInstance3D" parent="Dressing/Banner"]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 100, 0)
+            mesh = SubResource("slab")
+
+            [node name="PlayerSpawn" type="Marker3D" parent="Dressing"]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 60, 7)
+            """);
+
+        // One slab's worth of triangles: the hall alone.
+        Assert.Equal(12, realm.Soup!.Triangles.Length / 3);
+        Assert.Equal(10f, realm.Soup.TopSurfaceAt(0f, 0f) ?? float.NaN, 3);   // the hall's top face
+        Assert.Equal(new Vector3(5, 60, 7), realm.SpawnPoint);                // the marker still counts
+    }
+
+    [Fact]
     public void A_mesh_in_no_group_is_geometry_like_any_other()
     {
         // The scene's only mesh is untagged and unnamed — the case that used

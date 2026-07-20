@@ -297,7 +297,12 @@ core loop earns it.
       maps are hand-crafted or generated *offline* into the same formats. **Authors tag
       nothing**: every mesh in the scene is collision, whatever it is and wherever
       it sits — no groups, no naming, no privileged mesh type, and no exception for
-      instanced kit props. What holds a raider up, what blocks them, and what is
+      instanced kit props. The single opt-out is the **`no_collide`** group, which excuses a
+      node and its subtree — for the cases where physics and *fiction* disagree (a banner
+      across a doorway, a cobweb), never to quiet a route the validator flagged; the bake
+      prints what it drops on every run so over-use stays visible. The Crypt uses it for its
+      whole relic pass, whose dressing was placed to be looked at rather than fought around.
+      What holds a raider up, what blocks them, and what is
       too small to matter are all derived: a surface's own normal separates ground from wall
       (`TriangleSoup.WallNormalY`, ~87° — deliberately *not* the navmesh's 67.8° walkable
       cutoff, so steep ground stays descendable), and Recast's voxels plus agent-radius

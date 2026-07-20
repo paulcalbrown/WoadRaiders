@@ -53,6 +53,30 @@ public sealed class RealmScene
 
     // ------------------------------------------------------------- the stones
 
+    /// <summary>
+    /// Declare a node — and everything hung beneath it — PASSABLE: present to
+    /// the eye, absent to the body. The bake takes every other mesh in the
+    /// scene, so this is the only thing a design may say about geometry that
+    /// the pipeline will not work out for itself, and the only tag it reads.
+    ///
+    /// Use it where physics and FICTION disagree: a banner across a doorway, a
+    /// cobweb, a curtain, mist. Those are thin slabs of triangles no different
+    /// in shape from a wall panel, so nothing measurable can tell them apart —
+    /// only the author knows a raider should walk through. What it is NOT for
+    /// is quieting a route ValidateRealm complained about. That complaint is
+    /// nearly always the level design talking, and excusing the prop hides it:
+    /// a blocked route the validator can prove, but geometry that was never
+    /// there it can never miss. The bake prints what this drops on every run,
+    /// so a realm quietly excusing more and more of itself is visible.
+    ///
+    /// Returns the node, so a placement can be wrapped where it is made.
+    /// </summary>
+    public T Passable<T>(T node) where T : Node
+    {
+        node.AddToGroup(RealmSceneFile.NoCollideGroup, persistent: true);
+        return node;
+    }
+
     // The floor/structure distinction below is the DESIGN's own bookkeeping —
     // which branch of the scene tree a slab is filed under, what it is called,
     // and whether the occlusion fader may dissolve it. The bake reads none of
