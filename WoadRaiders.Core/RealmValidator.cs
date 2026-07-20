@@ -54,15 +54,34 @@ public static class RealmValidator
 
         // The stranding sweep: everywhere the spawn can reach — drops included —
         // must still reach the boss. Spots the spawn CANNOT reach are not the
-        // realm's problem (a roof is scenery, not a trap).
+        // realm's problem (a roof is scenery, not a trap). Distinct landings
+        // are reported once each, since many samples resolve to the same
+        // ground.
+        var landing = new List<Vector3>();
+        var seen = new HashSet<(int, int)>();
         for (var x = soup.BoundsMin.X; x <= soup.BoundsMax.X; x += StrandingSampleSpacing)
             for (var z = soup.BoundsMin.Z; z <= soup.BoundsMax.Z; z += StrandingSampleSpacing)
             {
                 if (soup.FloorHeightAt(x, z) is not { } y)
                     continue;
-                var point = new Vector3(x, y, z);
-                if (Reaches(nav, realm.SpawnPoint, point) && !Reaches(nav, point, boss))
-                    issues.Add($"({x:0},{z:0}) is reachable but stranded — the boss cannot be reached from it");
+
+                // Judge where a raider would ACTUALLY end up walking at this
+                // sample, not the sample itself. A chamber's floor slab runs on
+                // underneath its own walls and pillars, and Recast rasterizes a
+                // slab as a hollow shell — so the floor sealed inside masonry
+                // survives as a walkable ISLAND, cut off from everything. Asked
+                // about such a cell directly, the sweep reports a dead end that
+                // no raider could ever be standing in. Pathing to it instead
+                // leaves the walker on the nearest ground it can truly reach,
+                // and if THAT cannot reach the boss, the trap is real.
+                landing.Clear();
+                if (!nav.TryFindPath(realm.SpawnPoint, new Vector3(x, y, z), landing) || landing.Count == 0)
+                    continue;
+                var stand = landing[^1];
+                if (!Reaches(nav, stand, boss) &&
+                    seen.Add(((int)(stand.X / StrandingSampleSpacing), (int)(stand.Z / StrandingSampleSpacing))))
+                    issues.Add($"({stand.X:0},{stand.Z:0}) is reachable but stranded — " +
+                               "the boss cannot be reached from it");
             }
 
         return issues;

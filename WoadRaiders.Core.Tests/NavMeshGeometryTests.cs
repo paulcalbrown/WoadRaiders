@@ -318,6 +318,30 @@ public class NavMeshGeometryTests
         return pos;
     }
 
+    [Fact]
+    public void Open_sky_has_no_ceiling()
+    {
+        Assert.Equal(float.PositiveInfinity, TestRealms.Open().CeilingHeight(new Vector3(0, 20, 0)));
+    }
+
+    [Fact]
+    public void A_roof_slab_is_the_ceiling_over_the_floor_beneath_it()
+    {
+        var geo = TestRealms.WithWalls(new Aabb(new Vector3(-200, 150, -200), new Vector3(200, 174, 200)));
+        Assert.Equal(150f, geo.CeilingHeight(new Vector3(0, 20, 0)), 1f);
+        // Step outside the roof's footprint and the sky opens again.
+        Assert.Equal(float.PositiveInfinity, geo.CeilingHeight(new Vector3(400, 20, 0)));
+    }
+
+    [Fact]
+    public void The_ceiling_is_the_lowest_thing_overhead_not_the_highest()
+    {
+        var geo = TestRealms.WithWalls(
+            new Aabb(new Vector3(-200, 150, -200), new Vector3(200, 174, 200)),
+            new Aabb(new Vector3(-200, 300, -200), new Vector3(200, 324, 200)));
+        Assert.Equal(150f, geo.CeilingHeight(new Vector3(0, 20, 0)), 1f);
+    }
+
     private static DungeonGeometry? LoadRealm(string mapFile)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)

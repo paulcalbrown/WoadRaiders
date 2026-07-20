@@ -83,6 +83,18 @@ if (issues.Count > 0)
 // Crypt's descent must lose it. Realms with no route here skip the walk —
 // RealmValidator's reachability proof stands on its own, so a new realm owes
 // this only if it has an intended path.
+// The Crypt is DRAWN in plan units and BUILT 3.16x larger (CryptDesign.Scale —
+// keep the two in step; if they drift, the walk below misses the realm and
+// fails loudly rather than silently proving nothing).
+const float CryptScale = 3.16f;
+static Vector2[] Scaled(float k, Vector2[] plan)
+{
+    var world = new Vector2[plan.Length];
+    for (var i = 0; i < plan.Length; i++)
+        world[i] = plan[i] * k;
+    return world;
+}
+
 var routes = new Dictionary<string, (Vector2[] Path, float MinFinalHeight, float MaxFinalHeight)>(StringComparer.OrdinalIgnoreCase)
 {
     // The Crag: gate court → stairs → the processional → stairs → the high
@@ -97,13 +109,15 @@ var routes = new Dictionary<string, (Vector2[] Path, float MinFinalHeight, float
     // The Crypt: undercroft → descent stair → the hall of the dead →
     // processional stair → the span → the east landing → the deep stair →
     // the catacombs → the low gallery → the Mausoleum. Ends DEEP or the
-    // descent is broken.
-    ["Crypt"] = ([
+    // descent is broken. Stated in the design's PLAN units and multiplied out
+    // by the same 3.16 CryptDesign builds with, so the route follows the realm
+    // when the plan is rescaled instead of pointing at where it used to be.
+    ["Crypt"] = (Scaled(CryptScale, [
     new(600, 1800), new(1200, 1800), new(1800, 1800), new(2400, 1800),
     new(2800, 1800), new(3300, 1800), new(3600, 1800), new(3800, 1800),
     new(3800, 2400), new(3800, 2650), new(3550, 3000), new(3000, 3000),
     new(2600, 3000), new(2200, 3000),
-    ], float.MinValue, -230f),
+    ]), float.MinValue, -230f * CryptScale),
 };
 if (!routes.TryGetValue(realm, out var route))
 {

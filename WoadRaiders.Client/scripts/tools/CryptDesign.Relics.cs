@@ -10,6 +10,14 @@ namespace WoadRaiders.Client;
 /// carries instance= references, never inlined geometry — RealmSceneBuilder
 /// owns only the instance roots when packing.
 ///
+/// EVERY PLACEMENT IS RELATIVE TO A CHAMBER. Nothing here names a world
+/// coordinate: pieces are set an INSET from a named wall, or walked along one,
+/// or scattered across a fraction of a floor. That is what lets the plan scale
+/// — a coffin asked to stand against the north wall still stands against it
+/// when the room trebles, where a hard-coded coordinate would have left it
+/// stranded in the middle of a much larger floor. It also means a bigger room
+/// is dressed with MORE pieces rather than the same few, adrift.
+///
 /// The kits are authored at different scales (KayKit props run stylized-large,
 /// Kenney's run miniature), so every placement states its own scale; this
 /// game's characters stand ~44 units (~25 units to the metre). Pure scenery —
@@ -44,11 +52,9 @@ public sealed partial class CryptDesign
         return (h & 0xFFFFFF) / (float)0x1000000; // 0..1
     }
 
-    /// <summary>Dress the chambers: the founder's tomb in the undercroft,
-    /// coffins and bone piles in the hall's wall niches, iron rails and the
-    /// fallen dead at the span, grave markers filing the catacomb lanes,
-    /// candles and shrine furniture in the Mausoleum, and lanterns hung from
-    /// every corridor roof. The bake walks straight past all of it.</summary>
+    /// <summary>Which wall of a chamber a piece is set against.</summary>
+    private enum Side { North, South, West, East }
+
     private void Relics()
     {
         var relics = _scene.Folder("Relics");
@@ -102,11 +108,48 @@ public sealed partial class CryptDesign
         void Place(Kit kit, float x, float z, float scale, float yaw = 0f, float lift = 0f) =>
             Add(kit.At(_scene.OnFloor(x, z) + new Vector3(0f, lift, 0f), scale, yaw));
 
-        // Hang a piece from a roof: the hanging lantern's origin is its hook
-        // (its mesh hangs ~1.3 native units BELOW the origin), so it mounts
-        // at the ceiling and swings under it.
-        void Hang(Kit kit, float x, float z, float ceiling, float scale = 24f) =>
-            Add(kit.At(new Vector3(x, ceiling - 2f, z), scale));
+        // A point an INSET in from one of a chamber's walls, at a fraction
+        // ALONG that wall — the primitive the whole dressing is built from.
+        Vector3 OnWall(Chamber c, Side side, float along, float inset) => side switch
+        {
+            Side.North => new Vector3(Mathf.Lerp(c.X0, c.X1, along), 0f, c.Z0 + inset),
+            Side.South => new Vector3(Mathf.Lerp(c.X0, c.X1, along), 0f, c.Z1 - inset),
+            Side.West => new Vector3(c.X0 + inset, 0f, Mathf.Lerp(c.Z0, c.Z1, along)),
+            _ => new Vector3(c.X1 - inset, 0f, Mathf.Lerp(c.Z0, c.Z1, along)),
+        };
+
+        // Which way a piece faces to have its back to that wall.
+        float Facing(Side side) => side switch
+        {
+            Side.North => Mathf.Pi,
+            Side.South => 0f,
+            Side.West => Mathf.Pi / 2f,
+            _ => -Mathf.Pi / 2f,
+        };
+
+        // Set a piece against a wall, back to the stone.
+        void Against(Kit kit, string room, Side side, float along, float scale,
+                     float inset = 110f, float skew = 0f, float lift = 0f)
+        {
+            var p = OnWall(Named(room), side, along, inset);
+            Place(kit, p.X, p.Z, scale, Facing(side) + skew, lift);
+        }
+
+        // Walk a wall, dropping a piece every stride — how a long wall gets
+        // dressed at any length. `pick` chooses by index so rows read varied.
+        void AlongWall(string room, Side side, float from, float to, int count,
+                       System.Func<int, (Kit kit, float scale)> pick,
+                       float inset = 110f, int salt = 0)
+        {
+            var c = Named(room);
+            for (var i = 0; i < count; i++)
+            {
+                var along = count == 1 ? (from + to) * 0.5f : Mathf.Lerp(from, to, i / (float)(count - 1));
+                var (kit, scale) = pick(i);
+                var p = OnWall(c, side, along, inset);
+                Place(kit, p.X, p.Z, scale, Facing(side) + (Hash(i, salt, 71) - 0.5f) * 0.3f);
+            }
+        }
 
         // A little heap of the dead — two or three remains, chosen and turned
         // by hash so every pile reads differently.
@@ -127,188 +170,175 @@ public sealed partial class CryptDesign
             }
         }
 
-        // Chamber ceilings, per the Masonry pass: a room's roof sits at
-        // floor + WallHeight; a corridor's at its HIGHER end + WallHeight.
-        const float UndercroftCeil = 0f + WallHeight;       // and the descent stair's
-        const float HallCeil = -80f + WallHeight;           // and the processional's
-        const float DeepStairCeil = -160f + WallHeight;
-        const float GalleryCeil = -240f + WallHeight;
-
-        // ---- the undercroft: the founder's sealed tomb against the north
-        // wall, the first graves along the west, and a coffin someone already
-        // dragged out into the light.
-        Place(tombFront, 550, 1585, 12f, Mathf.Pi); // door facing south, into the room
-        Place(markerA, 255, 1620, 22f, Mathf.Pi / 2 - 0.15f);
-        Place(markerB, 252, 1745, 22f, Mathf.Pi / 2 + 0.2f);
-        Place(gravestone, 250, 1955, 20f, Mathf.Pi / 2 - 0.1f);
-        Place(markerA, 300, 2015, 22f, Mathf.Pi / 2 + 0.35f);
-        Place(coffinOld, 770, 1590, 45f, 0.35f);
-        Place(debris, 690, 2010, 45f, 1.2f);
-        BonePile(645, 1565, 11);
-        Place(skull, 795, 2040, 8f, 2.1f, lift: 1f);
-        Place(lanternStanding, 835, 1690, 24f);
-        Place(lanternStanding, 835, 1910, 24f);
-        Hang(lanternHanging, 600, 1800, UndercroftCeil);
-
-        // ---- the descent stair: lanterns from the corridor roof.
-        Hang(lanternHanging, 1080, 1800, UndercroftCeil);
-        Hang(lanternHanging, 1320, 1800, UndercroftCeil);
-
-        // ---- the hall of the dead: the wall bays between the pillar lines
-        // are the burial niches — a coffin and its spilled occupants in each,
-        // urns at the west door, skull-post wardens at the east.
-        Place(coffin, 1600, 1490, 18f, Mathf.Pi / 2 + 0.06f);
-        BonePile(1662, 1470, 21);
-        Place(coffinCarved, 1850, 1490, 19f, Mathf.Pi / 2 - 0.04f);
-        Place(coffinOld, 2150, 1492, 45f, Mathf.Pi / 2 + 0.1f);
-        BonePile(2210, 1468, 22);
-        Place(coffin, 2400, 1490, 18f, Mathf.Pi / 2 - 0.1f);
-        Place(coffinCarved, 1600, 2110, 19f, Mathf.Pi / 2 + 0.08f);
-        BonePile(1665, 2132, 23);
-        Place(coffin, 1850, 2110, 18f, Mathf.Pi / 2 - 0.05f);
-        Place(coffin, 2150, 2112, 18f, Mathf.Pi / 2 + 0.12f);
-        BonePile(2215, 2136, 24);
-        Place(coffinCarved, 2400, 2110, 19f, Mathf.Pi / 2);
-        Place(urnRound, 1545, 1692, 38f, 0.4f);
-        Place(urnSquare, 1545, 1908, 38f, 1.7f);
-        Place(postSkull, 2428, 1700, 20f, -0.2f);
-        Place(postSkull, 2428, 1900, 20f, 0.2f);
-        Place(skullCandle, 1730, 1630, 9f, 0.8f);   // at the pillar bases
-        Place(boneA, 2032, 1938, 16f, 1.2f, lift: 2f);
-        Place(skullCandle, 2268, 1868, 9f, 2.4f);
-        Hang(lanternHanging, 1800, 1800, HallCeil);
-        Hang(lanternHanging, 2200, 1800, HallCeil);
-
-        // ---- the processional stair.
-        Hang(lanternHanging, 2650, 1800, HallCeil);
-        Hang(lanternHanging, 2950, 1800, HallCeil);
-
-        // ---- the span: iron rails along the bridge (one length torn away —
-        // the gap tells the story), witchfire baskets at its ends, lanterns
-        // from the chasm roof, and below, everyone the bridge has ever
-        // dropped. Chasm placements stay OUT of the bridge's z-band
-        // (1740..1860): OnFloor seats on the HIGHEST floor, which there is
-        // the bridge deck, not the pit.
-        foreach (var fx in new[] { 3220f, 3310f, 3400f, 3490f, 3580f })
-            Place(fx == 3400f ? ironFenceBent : ironFence, fx, 1748, 40f);
-        foreach (var fx in new[] { 3220f, 3310f, 3490f, 3580f })
-            Place(fx == 3310f ? ironFenceBent : ironFence, fx, 1852, 40f);
-        Place(fireBasket, 3140, 1775, 42f);
-        Place(fireBasket, 3140, 1825, 42f);
-        Place(fireBasket, 3660, 1775, 42f);
-        Place(fireBasket, 3660, 1825, 42f);
-        Hang(lanternHanging, 3300, 1800, -60f);
-        Hang(lanternHanging, 3500, 1800, -60f);
-        // The north pit: the nameless dead, and something far older.
-        Place(greatBone, 3300, 1480, 7f, 0.9f);
-        Place(standingBones, 3480, 1350, 10f, 2.6f); // still on its feet, down there
-        Place(graveBroken, 3190, 1560, 40f, 0.5f);
-        Place(debris, 3560, 1620, 45f, 2.6f);
-        Place(debris, 3260, 1300, 45f, 1.1f);
-        for (var k = 0; k < 10; k++)
+        // Scatter remains across a fraction-rect of a chamber's floor.
+        void Ossuary(string room, float u0, float v0, float u1, float v1, int count, int salt)
         {
-            var x = 3180f + Hash(k, 31, 821) * 440f;
-            var z = 1260f + Hash(k, 31, 823) * 400f;
-            var yaw = Hash(k, 31, 827) * Mathf.Tau;
-            switch ((int)(Hash(k, 31, 829) * 4f))
+            var c = Named(room);
+            for (var k = 0; k < count; k++)
             {
-                case 0: Place(ribcage, x, z, 13f, yaw, lift: 10f); break;
-                case 1: Place(smallSkull, x, z, 18f, yaw); break;
-                case 2: Place(boneA, x, z, 16f, yaw, lift: 2f); break;
-                default: Place(skull, x, z, 8f, yaw, lift: 1f); break;
+                var x = Mathf.Lerp(c.X0 + c.Width * u0, c.X0 + c.Width * u1, Hash(k, salt, 821));
+                var z = Mathf.Lerp(c.Z0 + c.Depth * v0, c.Z0 + c.Depth * v1, Hash(k, salt, 823));
+                var yaw = Hash(k, salt, 827) * Mathf.Tau;
+                switch ((int)(Hash(k, salt, 829) * 5f))
+                {
+                    case 0: Place(ribcage, x, z, 13f, yaw, lift: 10f); break;
+                    case 1: Place(smallSkull, x, z, 18f, yaw); break;
+                    case 2: Place(boneA, x, z, 16f, yaw, lift: 2f); break;
+                    case 3: Place(debris, x, z, 45f, yaw); break;
+                    default: Place(skull, x, z, 8f, yaw, lift: 1f); break;
+                }
             }
         }
-        Place(skullCandle, 3160, 1700, 9f, 1.9f); // someone's candle, still lit
+
+        // Hang a piece from a roof: the hanging lantern's origin is its hook
+        // (its mesh hangs ~1.3 native units BELOW the origin), so it mounts
+        // at the ceiling and swings under it.
+        void Hang(Kit kit, float x, float z, float ceiling, float scale = 24f) =>
+            Add(kit.At(new Vector3(x, ceiling - 2f, z), scale));
+
+        // Hang lanterns on a grid under a chamber's own roof.
+        void HangThrough(string room, int nx, int nz)
+        {
+            var c = Named(room);
+            for (var i = 1; i <= nx; i++)
+                for (var j = 1; j <= nz; j++)
+                    Hang(lanternHanging, Mathf.Lerp(c.X0, c.X1, i / (nx + 1f)),
+                         Mathf.Lerp(c.Z0, c.Z1, j / (nz + 1f)), c.TopY, 40f);
+        }
+
+        // ---- the undercroft: the founder's sealed tomb against the north
+        // wall, the first graves filing the west, and a coffin someone already
+        // dragged out into the light.
+        Against(tombFront, "undercroft", Side.North, 0.5f, 26f, inset: 150f);
+        AlongWall("undercroft", Side.West, 0.15f, 0.85f, 5,
+                  i => i % 2 == 0 ? (markerA, 22f) : (markerB, 22f), salt: 3);
+        Against(gravestone, "undercroft", Side.West, 0.5f, 20f, inset: 240f);
+        Against(coffinOld, "undercroft", Side.North, 0.82f, 45f, inset: 220f, skew: 0.35f);
+        Against(lanternStanding, "undercroft", Side.East, 0.28f, 24f, inset: 180f);
+        Against(lanternStanding, "undercroft", Side.East, 0.72f, 24f, inset: 180f);
+        Ossuary("undercroft", 0.35f, 0.20f, 0.90f, 0.85f, 9, 11);
+        HangThrough("undercroft", 2, 2);
+
+        // ---- the hall of the dead: the wall bays are the burial niches — a
+        // coffin every stride down both long walls with the spilled dead
+        // between them, urns at the west door, skull-post wardens at the east.
+        AlongWall("hall", Side.North, 0.10f, 0.90f, 7,
+                  i => i % 3 == 0 ? (coffinOld, 45f) : i % 3 == 1 ? (coffin, 18f) : (coffinCarved, 19f),
+                  inset: 130f, salt: 5);
+        AlongWall("hall", Side.South, 0.10f, 0.90f, 7,
+                  i => i % 3 == 0 ? (coffinCarved, 19f) : i % 3 == 1 ? (coffin, 18f) : (coffinOld, 45f),
+                  inset: 130f, salt: 6);
+        Against(urnRound, "hall", Side.West, 0.36f, 38f, inset: 150f);
+        Against(urnSquare, "hall", Side.West, 0.64f, 38f, inset: 150f);
+        Against(postSkull, "hall", Side.East, 0.38f, 20f, inset: 150f);
+        Against(postSkull, "hall", Side.East, 0.62f, 20f, inset: 150f);
+        Ossuary("hall", 0.10f, 0.08f, 0.92f, 0.30f, 10, 21);
+        Ossuary("hall", 0.10f, 0.70f, 0.92f, 0.92f, 10, 22);
+        Place(skullCandle, Named("hall").X0 + 700f, Named("hall").Z0 + 640f, 9f, 0.8f);
+        Place(skullCandle, Named("hall").X1 - 700f, Named("hall").Z1 - 640f, 9f, 2.4f);
+        HangThrough("hall", 3, 2);
+
+        // ---- the passages: lanterns from every corridor roof, walked along
+        // each one so a longer stair simply gets more of them.
+        foreach (var p in _passages)
+        {
+            var steps = Mathf.Max(2, Mathf.RoundToInt((p.AlongZ ? p.Z1 - p.Z0 : p.X1 - p.X0) / 700f));
+            for (var i = 1; i < steps; i++)
+            {
+                var f = i / (float)steps;
+                Hang(lanternHanging,
+                     p.AlongZ ? (p.X0 + p.X1) * 0.5f : Mathf.Lerp(p.X0, p.X1, f),
+                     p.AlongZ ? Mathf.Lerp(p.Z0, p.Z1, f) : (p.Z0 + p.Z1) * 0.5f,
+                     p.TopY, 36f);
+            }
+        }
+
+        // ---- the span: iron rails along the bridge (one length torn away —
+        // the gap tells the story), witchfire baskets at its ends, and below,
+        // everyone the bridge has ever dropped. Chasm placements stay OUT of
+        // the deck's z-band: OnFloor seats on the HIGHEST floor, which there
+        // is the bridge, not the pit.
+        var chasm = Named("span");
+        var deckZ0 = S(1740f);
+        var deckZ1 = S(1860f);
+        for (var i = 0; i < 9; i++)
+        {
+            var x = Mathf.Lerp(chasm.X0 + 200f, chasm.X1 - 200f, i / 8f);
+            Place(i == 4 ? ironFenceBent : ironFence, x, deckZ0 + 26f, 40f);
+            Place(i == 3 ? ironFenceBent : ironFence, x, deckZ1 - 26f, 40f);
+        }
+        Place(fireBasket, chasm.X0 + 150f, chasm.MidZ - 90f, 42f);
+        Place(fireBasket, chasm.X0 + 150f, chasm.MidZ + 90f, 42f);
+        Place(fireBasket, chasm.X1 - 150f, chasm.MidZ - 90f, 42f);
+        Place(fireBasket, chasm.X1 - 150f, chasm.MidZ + 90f, 42f);
+        Place(skullCandle, chasm.X0 + 190f, deckZ0 - 220f, 9f, 1.9f); // someone's candle, still lit
+        // The north pit: the nameless dead, and something far older.
+        Place(greatBone, chasm.MidX - 300f, chasm.Z0 + 800f, 7f, 0.9f);
+        Place(standingBones, chasm.MidX + 250f, chasm.Z0 + 450f, 10f, 2.6f); // still on its feet
+        Place(graveBroken, chasm.X0 + 280f, chasm.Z0 + 1100f, 40f, 0.5f);
+        Ossuary("span", 0.10f, 0.04f, 0.92f, 0.38f, 16, 31);
         // The south pit, west of the long stair out.
-        Place(coffinOld, 3165, 2060, 45f, 1.15f);
-        BonePile(3180, 2200, 33);
-        Place(smallSkull, 3200, 1950, 18f, 0.7f);
-        Place(boneB, 3170, 1930, 18f, 2.2f, lift: 2f);
-        Place(urnSquare, 3640, 2320, 38f, 0.9f);
-        Place(skull, 3620, 2240, 8f, 4.1f, lift: 1f);
-        Place(ribcage, 3650, 2150, 13f, 1.0f, lift: 10f);
+        Place(coffinOld, chasm.X0 + 250f, chasm.Z1 - 1000f, 45f, 1.15f);
+        Ossuary("span", 0.08f, 0.66f, 0.55f, 0.96f, 12, 33);
+        Place(urnSquare, chasm.X1 - 260f, chasm.Z1 - 300f, 38f, 0.9f);
 
         // ---- the east landing: a lit shelf to catch a breath on.
-        Place(plaqueCandles, 3760, 1565, 16f, 0.3f);
-        Place(urnRound, 3845, 1570, 38f, 1.1f);
-        Place(lanternStanding, 3745, 1985, 24f);
-        Place(skull, 3855, 1990, 8f, 3.3f, lift: 1f);
+        Against(plaqueCandles, "landing", Side.North, 0.5f, 16f, inset: 140f);
+        Against(urnRound, "landing", Side.East, 0.22f, 38f, inset: 150f);
+        Against(lanternStanding, "landing", Side.West, 0.78f, 24f, inset: 150f);
+        Ossuary("landing", 0.2f, 0.2f, 0.8f, 0.8f, 5, 37);
 
-        // ---- the deep stair.
-        Hang(lanternHanging, 3800, 2280, DeepStairCeil);
-        Hang(lanternHanging, 3800, 2520, DeepStairCeil);
-
-        // ---- the catacombs: grave markers file the lanes — rows along the
-        // north and south walls, and stones filling the gaps BETWEEN the
-        // pillars of each row, so the pillar lines read as burial shelving
-        // while the walked lanes stay open.
-        Place(markerA, 3415, 2848, 22f, Mathf.Pi + 0.1f);
-        Place(graveWide, 3480, 2852, 40f, Mathf.Pi - 0.06f);
-        Place(graveCross, 3618, 2850, 40f, Mathf.Pi + 0.04f);
-        Place(markerB, 3682, 2848, 22f, Mathf.Pi - 0.12f);
-        Place(graveRoof, 3418, 3052, 40f, 0.08f);
-        Place(markerB, 3480, 3048, 22f, -0.1f);
-        Place(markerA, 3615, 3050, 22f, 0.05f);
-        Place(graveBroken, 3680, 3052, 40f, 0.15f);
-        Place(markerA, 3300, 2762, 22f, 0.06f);
-        Place(gravestone, 3420, 2760, 20f, -0.08f);
-        Place(markerB, 3540, 2764, 22f, 0.1f);
-        Place(graveCross, 3650, 2762, 40f, -0.05f);
-        Place(graveWide, 3290, 3238, 40f, Mathf.Pi + 0.07f);
-        Place(markerB, 3410, 3242, 22f, Mathf.Pi - 0.1f);
-        Place(gravestone, 3530, 3240, 20f, Mathf.Pi + 0.12f);
-        Place(markerA, 3660, 3238, 22f, Mathf.Pi);
-        Place(graveBroken, 3800, 3242, 40f, Mathf.Pi - 0.08f);
-        Place(graveRuin, 3270, 2760, 20f, 0.5f); // a grave already broken open
-        BonePile(3325, 2885, 41);
-        BonePile(3577, 3082, 42);
-        BonePile(3775, 2875, 43);
-        Place(urnRound, 3252, 2888, 38f, 0.9f);
-        Place(urnSquare, 3252, 3112, 38f, 2.1f);
-        Place(lanternStanding, 3700, 2742, 24f);
-
-        // ---- the low gallery.
-        Hang(lanternHanging, 2750, 3000, GalleryCeil);
-        Hang(lanternHanging, 3050, 3000, GalleryCeil);
+        // ---- the catacombs: grave markers file the lanes — rows along both
+        // long walls, and stones filling the gaps between the pillar rows, so
+        // the pillar lines read as burial shelving while the lanes stay open.
+        AlongWall("catacombs", Side.North, 0.08f, 0.92f, 8,
+                  i => (i % 4) switch
+                  {
+                      0 => (graveWide, 40f), 1 => (markerA, 22f),
+                      2 => (graveCross, 40f), _ => (markerB, 22f),
+                  }, inset: 130f, salt: 41);
+        AlongWall("catacombs", Side.South, 0.08f, 0.92f, 8,
+                  i => (i % 4) switch
+                  {
+                      0 => (graveRoof, 40f), 1 => (markerB, 22f),
+                      2 => (gravestone, 20f), _ => (graveBroken, 40f),
+                  }, inset: 130f, salt: 42);
+        AlongWall("catacombs", Side.West, 0.2f, 0.8f, 4,
+                  i => i % 2 == 0 ? (markerA, 22f) : (graveCross, 40f), inset: 140f, salt: 43);
+        Against(graveRuin, "catacombs", Side.West, 0.1f, 20f, inset: 200f); // already broken open
+        Against(urnRound, "catacombs", Side.West, 0.34f, 38f, inset: 150f);
+        Against(urnSquare, "catacombs", Side.West, 0.66f, 38f, inset: 150f);
+        Against(lanternStanding, "catacombs", Side.East, 0.2f, 24f, inset: 160f);
+        Ossuary("catacombs", 0.15f, 0.15f, 0.85f, 0.85f, 14, 45);
+        HangThrough("catacombs", 3, 2);
 
         // ---- the Mausoleum: the shrine against the west wall behind the
         // dais, its altar before it, obelisks marking the court's corners,
-        // candle clusters on the dais rim and a ring of skull-candles around
-        // it, the kings' carved coffins and the honored dead along the walls,
-        // and fire baskets flanking the walk in from the east door.
-        Place(shrine, 1872, 3000, 22f, Mathf.Pi / 2);
-        Place(shrineCandles, 1870, 2905, 22f, Mathf.Pi / 2 - 0.1f);
-        Place(shrineCandles, 1870, 3095, 22f, Mathf.Pi / 2 + 0.1f);
-        Place(altar, 1965, 3000, 42f);
-        Place(obelisk, 2000, 2800, 45f);
-        Place(obelisk, 2400, 2800, 45f);
-        Place(obelisk, 2000, 3200, 45f);
-        Place(obelisk, 2400, 3200, 45f);
-        Place(candleCluster, 2070, 2872, 38f);
-        Place(candleCluster, 2330, 2872, 38f);
-        Place(candleCluster, 2070, 3128, 38f);
-        Place(candleCluster, 2330, 3128, 38f);
-        foreach (var (cx, cz, cy) in new[]
-                 {
-                     (2008f, 2952f, 0.6f), (2008f, 3048f, 2.1f), (2392f, 2952f, 4.2f), (2392f, 3048f, 5.5f),
-                     (2152f, 2808f, 1.3f), (2248f, 2808f, 3.7f), (2152f, 3192f, 5.0f), (2248f, 3192f, 0.2f),
-                 })
-            Place(skullCandle, cx, cz, 9f, cy);
-        Place(plaqueCandles, 2545, 2890, 16f, -Mathf.Pi / 2);
-        Place(plaqueCandles, 2545, 3110, 16f, -Mathf.Pi / 2);
-        Place(postSkull, 2505, 2925, 20f, 2.9f);
-        Place(postSkull, 2505, 3075, 20f, 3.4f);
-        Place(fireBasket, 2420, 2940, 42f);
-        Place(fireBasket, 2420, 3060, 42f);
-        Place(coffinCarved, 1885, 2705, 19f, 0.05f);
-        Place(coffinCarved, 1885, 3295, 19f, -0.05f);
-        Place(gravestone, 2080, 2676, 20f, 0.1f);
-        Place(gravestone, 2320, 2678, 20f, -0.08f);
-        Place(gravestone, 2080, 3324, 20f, Mathf.Pi - 0.1f);
-        Place(gravestone, 2320, 3322, 20f, Mathf.Pi + 0.06f);
-        Place(ribcage, 2450, 2680, 13f, 1.9f, lift: 10f);
-        Place(skull, 1980, 3320, 8f, 3.6f, lift: 1f);
-        Place(urnRound, 2540, 2660, 38f, 0.7f);
-        Place(urnSquare, 2540, 3340, 38f, 2.4f);
+        // candle clusters on the dais rim, the kings' carved coffins along the
+        // walls, and fire baskets flanking the walk in from the east door.
+        var court = Named("mausoleum");
+        Against(shrine, "mausoleum", Side.West, 0.5f, 26f, inset: 160f);
+        Against(shrineCandles, "mausoleum", Side.West, 0.38f, 22f, inset: 170f);
+        Against(shrineCandles, "mausoleum", Side.West, 0.62f, 22f, inset: 170f);
+        Place(altar, court.X0 + 620f, court.MidZ, 48f, Mathf.Pi / 2f);
+        foreach (var (u, v) in new[] { (0.16f, 0.16f), (0.84f, 0.16f), (0.16f, 0.84f), (0.84f, 0.84f) })
+            Place(obelisk, court.X0 + court.Width * u, court.Z0 + court.Depth * v, 46f);
+        // The dais rim: candles round the boss's floor, and skull-lights beyond.
+        for (var i = 0; i < 8; i++)
+        {
+            var a = i / 8f * Mathf.Tau;
+            Place(candleCluster, court.MidX + Mathf.Cos(a) * 560f, court.MidZ + Mathf.Sin(a) * 560f, 40f, a);
+            Place(skullCandle, court.MidX + Mathf.Cos(a + 0.4f) * 900f,
+                  court.MidZ + Mathf.Sin(a + 0.4f) * 900f, 9f, a);
+        }
+        AlongWall("mausoleum", Side.North, 0.25f, 0.75f, 4,
+                  i => i % 2 == 0 ? (coffinCarved, 19f) : (coffin, 18f), inset: 130f, salt: 51);
+        AlongWall("mausoleum", Side.South, 0.25f, 0.75f, 4,
+                  i => i % 2 == 0 ? (coffin, 18f) : (coffinCarved, 19f), inset: 130f, salt: 52);
+        Place(fireBasket, court.X1 - 380f, court.MidZ - 260f, 42f);
+        Place(fireBasket, court.X1 - 380f, court.MidZ + 260f, 42f);
+        Ossuary("mausoleum", 0.2f, 0.06f, 0.8f, 0.18f, 7, 55);
+        Ossuary("mausoleum", 0.2f, 0.82f, 0.8f, 0.94f, 7, 56);
+        HangThrough("mausoleum", 2, 2);
     }
 }

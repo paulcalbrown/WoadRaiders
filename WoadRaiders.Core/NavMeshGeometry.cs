@@ -35,6 +35,7 @@ public sealed class NavMeshGeometry : IDungeonGeometry
     private static readonly RcVec3f DropExtents = new(2f, 4096f, 2f);
     private const float DropSnapTolerance = 2f;
     private const float ClampEpsilon = 0.05f;
+    private const float CeilingReach = 4000f; // far enough to clear any realm's roof
     private const int MaxPathPolys = 256;
 
     private readonly record struct AgentClass(float Radius, DtNavMeshQuery Query);
@@ -240,6 +241,15 @@ public sealed class NavMeshGeometry : IDungeonGeometry
         var cz = Math.Clamp(z, _soup.BoundsMin.Z + 0.01f, _soup.BoundsMax.Z - 0.01f);
         return _soup.FloorHeightAt(cx, cz) ?? 0f;
     }
+
+    /// <summary>
+    /// The roof over a point, straight up through the soup — structure or the
+    /// underside of a floor above. Nothing overhead means open sky.
+    /// </summary>
+    public float CeilingHeight(Vector3 above) =>
+        _soup.RaycastNearest(above, Vector3.UnitY, CeilingReach, out var hit)
+            ? hit.Y
+            : float.PositiveInfinity;
 
     /// <summary>
     /// Cursor picking: the nearest surface the ray strikes, snapped onto the

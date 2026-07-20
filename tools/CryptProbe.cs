@@ -101,9 +101,11 @@ Console.WriteLine("[probe] dialing 127.0.0.1:9050 ...");
 // ~160 over ~2.6 km of walking.
 var clock = Stopwatch.StartNew();
 var nextInput = TimeSpan.Zero;
-// 18 s of eastward marching: the new-built necropolis reaches its second
-// descent (−160, past the hall of the dead) around the 14-second mark.
-while (clock.Elapsed < TimeSpan.FromSeconds(18))
+// 55 s of eastward marching. The crypt is DRAWN in plan units and BUILT 3.16x
+// larger (CryptDesign.Scale), so the march has to be that much longer to cover
+// the same ground: at 18 s the walker now only just reaches the descent stair,
+// and the probe would still pass while proving a fraction of what it claims.
+while (clock.Elapsed < TimeSpan.FromSeconds(55))
 {
     net.PollEvents();
     if (welcomed && clock.Elapsed >= nextInput)
