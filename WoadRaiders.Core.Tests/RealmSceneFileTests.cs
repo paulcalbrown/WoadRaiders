@@ -16,6 +16,10 @@ namespace WoadRaiders.Core.Tests;
 /// </summary>
 public class RealmSceneFileTests
 {
+    // The fixture keeps the "ground"/"structure" groups an older pipeline
+    // required, precisely so their IRRELEVANCE is under test: tagged and
+    // untagged meshes must bake alike, and scenes authored before the split
+    // was retired must keep loading unchanged.
     private const string Realm = """
         [gd_scene load_steps=3 format=3]
 

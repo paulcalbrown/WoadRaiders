@@ -7,21 +7,23 @@ using Aabb = WoadRaiders.Core.Aabb; // the sim's world box, not Godot's
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The scene a realm design composes — a thin facade over the root Node3D that
-/// knows the BAKE CONVENTIONS (BoxMesh slabs in the "ground" and "structure"
-/// groups, and the marker names) so a design never has to.
+/// The scene a realm design composes — a thin facade over the root Node3D,
+/// laying stone and placing the markers so a design need not think about the
+/// .tscn it is really writing.
 ///
 /// Realms are BUILT, not carved: floors, ramps, stairs, walls, and roofs are
 /// all SLABS — great cut stones, each a BoxMesh under an arbitrary transform.
-/// "ground" slabs are what raiders walk on; "structure" slabs block and
-/// occlude. The served geometry is baked FROM the finished scene afterwards,
-/// and a slab scene even parses engine-free (Core.RealmSceneFile reads
-/// BoxMesh sizes and transforms straight from the .tscn text).
+/// The served geometry is baked FROM the finished scene afterwards, and a slab
+/// scene even parses engine-free (Core.RealmSceneFile reads BoxMesh sizes and
+/// transforms straight from the .tscn text).
 ///
-/// Everything here is a convenience, not a requirement. A design may hang
-/// whatever it likes off <see cref="Root"/> — any meshes, materials,
-/// particles, or imported asset kits; the bake samples real triangles from
-/// anything it finds in the two groups and ignores the rest. A fresh scene is
+/// There is almost nothing here a design MUST use. Every mesh it hangs off
+/// <see cref="Root"/> by any means becomes collision, so the helpers below buy
+/// convenience, not compliance: the bake reads no group and no name (see
+/// Core.RealmSceneFile for the conventions in full). What they do add is the
+/// design's OWN bookkeeping — which branch of the tree a slab is filed under,
+/// what it is called, whether the occlusion fader may dissolve it, and which
+/// stones <see cref="OnFloor"/> should seat markers on. A fresh scene is
 /// EMPTY — no light, no sky. A design states its whole look itself; the only
 /// thing a realm MUST have is a player spawn (Core.RealmSceneFile's rule).
 /// </summary>

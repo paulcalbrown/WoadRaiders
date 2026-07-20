@@ -6,14 +6,14 @@
 //      runs it to build the full Godot scene — with the WHOLE engine
 //      available: any meshes, materials, particles, or asset kits. The scene
 //      is saved by Godot's own ResourceSaver, so the .tscn is exactly what a
-//      naturally-authored scene looks like: built-in nodes only, a real
-//      displaced terrain mesh, free-form scenery (the boulder fields), no
-//      scripts, no metadata.
+//      naturally-authored scene looks like: built-in nodes only, slabs of
+//      cut stone, free-form scenery (the boulder fields), no scripts, no
+//      metadata.
 //   2. The STANDARD hand-made pipeline (tools/bake_realm.gd) then bakes the
-//      .json out of that scene — sampling the real terrain mesh, reading the
-//      collision boxes and markers — the same way any
-//      Blender-sculpted realm becomes a hostable map. The JSON is derived
-//      output; nothing is ever generated FROM it.
+//      .json out of that scene — taking the triangles of every mesh the realm
+//      is modelled from, plus the spawn markers — the same way any
+//      hand-built realm becomes a hostable map. The JSON is derived output;
+//      nothing is ever generated FROM it.
 //
 // This tool orchestrates and validates the chain. A .NET 10 file-based app
 // (godot-mono and the client build are driven automatically):

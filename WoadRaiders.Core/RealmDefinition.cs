@@ -10,7 +10,7 @@ public readonly record struct Aabb(Vector3 Min, Vector3 Max)
 }
 
 /// <summary>
-/// A realm as DATA: its triangle soup (floors first, then structure — see
+/// A realm as DATA: its triangle soup (untyped — see
 /// <see cref="TriangleSoup"/>), spawn markers, and identity. This class only
 /// DESCRIBES the realm — it answers no spatial queries and is not an
 /// <see cref="IRealmGeometry"/>; movement lives in <see cref="RealmGeometry"/>,

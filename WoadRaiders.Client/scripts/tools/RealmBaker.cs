@@ -7,12 +7,15 @@ namespace WoadRaiders.Client;
 
 /// <summary>
 /// Bakes a realm scene into the server geometry JSON it is played from — how
-/// any .tscn (hand-made or generated) becomes a hostable map. Meshes in the
-/// "ground" and "structure" groups yield their world-space triangles (the one
-/// step that needs the engine); everything else (the scene parsing, the JSON,
-/// validation) is engine-free Core code, unit-tested there. The realm
-/// generator also runs this over its own scene as a round-trip proof that
-/// scene and JSON agree.
+/// any .tscn (hand-made or generated) becomes a hostable map. Every mesh the
+/// realm is MODELLED from yields its world-space triangles — no groups, no
+/// naming, no privileged mesh type; instanced sub-scenes are dressing and are
+/// skipped whole (see <see cref="CollectTriangles"/>, and
+/// <c>Core.RealmSceneFile</c> for the conventions in full). Sampling those
+/// triangles is the one step that needs the engine; everything else (the
+/// scene parsing, the JSON, validation) is engine-free Core code, unit-tested
+/// there. The realm generator also runs this over its own scene as a
+/// round-trip proof that scene and JSON agree.
 ///
 /// Driven headless by tools/bake_realm.gd (Godot cannot run a C# script from
 /// the command line, so a two-line GDScript shim instantiates this class).
@@ -37,8 +40,8 @@ public partial class RealmBaker : RefCounted
             return 1;
         }
 
-        // The engine-only step: instantiate the scene and collect the world-space
-        // triangles of every mesh in the "ground" and "structure" groups.
+        // The engine-only step: instantiate the scene and collect the
+        // world-space triangles of every mesh the realm is modelled from.
         if (GD.Load<PackedScene>(scenePath) is not { } packed)
         {
             GD.PrintErr($"could not load scene: {scenePath}");

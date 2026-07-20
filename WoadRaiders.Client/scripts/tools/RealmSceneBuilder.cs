@@ -16,10 +16,12 @@ namespace WoadRaiders.Client;
 ///
 /// Because the scene is built FIRST (the served geometry JSON is baked FROM it
 /// afterwards, by the same tools/bake_realm.gd every hand-made realm uses), a
-/// design has the WHOLE engine to work with. Only the pieces the simulation
-/// cares about follow the bake conventions — terrain meshes in the "terrain"
-/// group, BoxShape3D collision, the marker names — and
-/// everything else is pure scenery the bake never needs to understand.
+/// design has the WHOLE engine to work with. There is only one naming rule in
+/// the whole format — the spawn markers — because everything else the
+/// simulation needs is read back off the geometry itself: every mesh modelled
+/// into the scene is collision, and what holds a raider up, what blocks them,
+/// and what is too small to matter follow from that (Core.RealmSceneFile
+/// states the conventions in full).
 ///
 /// Driven headless by tools/build_realm_scene.gd (Godot cannot run a C# script
 /// from the command line). tools/GenerateRealm.cs orchestrates the chain.

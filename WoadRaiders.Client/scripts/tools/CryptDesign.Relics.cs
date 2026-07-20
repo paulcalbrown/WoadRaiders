@@ -20,9 +20,11 @@ namespace WoadRaiders.Client;
 ///
 /// The kits are authored at different scales (KayKit props run stylized-large,
 /// Kenney's run miniature), so every placement states its own scale; this
-/// game's characters stand ~44 units (~25 units to the metre). Pure scenery —
-/// only "ground" and "structure" slabs reach the bake, so nothing placed here
-/// can change what the server hosts.
+/// game's characters stand ~44 units (~25 units to the metre). Pure scenery,
+/// but not by exemption: the bake takes every mesh a realm is MODELLED from
+/// and skips only INSTANCED sub-scenes, which is exactly what these kit pieces
+/// are. Place a mesh here by hand rather than instancing one and it will reach
+/// the server as collision like any other stone.
 /// </summary>
 public sealed partial class CryptDesign
 {

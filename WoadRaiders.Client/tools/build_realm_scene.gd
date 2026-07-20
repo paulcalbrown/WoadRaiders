@@ -1,7 +1,7 @@
 # Builds a generated realm's .tscn from its DESIGN (any IRealmDesign listed in
 # scripts/tools/IRealmDesign.cs — CragDesign.cs is the first) using Godot's OWN
 # serializer (ResourceSaver) — so the file is exactly what a naturally-authored
-# scene looks like: built-in nodes only, a real terrain mesh, free-form scenery,
+# scene looks like: built-in nodes only, slabs of cut stone, free-form scenery,
 # no scripts, no metadata. The served geometry JSON is baked FROM the finished
 # scene afterwards (bake_realm.gd), never the other way around — a design can
 # place anything Godot can express.

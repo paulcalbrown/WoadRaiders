@@ -10,19 +10,45 @@ namespace WoadRaiders.Core;
 /// C#: unit-tested without an engine. (The server itself hosts baked JSON —
 /// scenes are the AUTHORING format, not the serving one.)
 ///
-/// Authoring conventions it reads (any scene built in the Godot editor):
-///   - Geometry:     every MeshInstance3D in the scene, whatever it is and
-///                   wherever it sits. Nothing is tagged and nothing is
-///                   named: which surfaces hold a raider up, which block, and
-///                   which are too small to matter are all read back off the
-///                   geometry by the soup and the navmesh bake. BoxMesh slabs
-///                   parse straight from the scene text; any OTHER mesh needs
-///                   the in-Godot bake tool, which samples real triangles and
-///                   hands the whole soup in via <paramref name="sampledSoup"/>.
+/// THE AUTHORING CONVENTIONS, in full — this comment is the one place they are
+/// stated, and the rest of the pipeline points here rather than restating them.
+/// There is exactly one naming rule in the format, and it is the spawn markers.
+///
+///   - Geometry:     every mesh the realm is MODELLED from, whatever it is and
+///                   wherever it sits. No group, no name, no privileged mesh
+///                   type. What is baked is not a curated subset — it is the
+///                   realm. Instanced sub-scenes (kit props, braziers, bone
+///                   piles) are DRESSING and are skipped whole: you model the
+///                   architecture and you drop in the props, which is the line
+///                   authors already draw. BoxMesh slabs parse straight from
+///                   the scene text here; any OTHER mesh needs the in-Godot
+///                   bake tool (Client RealmBaker), which samples real
+///                   triangles and hands the whole soup in via
+///                   <paramref name="sampledSoup"/> — it is also what enforces
+///                   the instanced-sub-scene rule, since scene text alone
+///                   cannot see inside an instance.
 ///   - Player spawn: a Marker3D named exactly "PlayerSpawn" (required).
 ///   - Enemy spawns: Marker3D nodes named "EnemySpawn*" — type from the name:
 ///                   contains "Rogue" → Rogue, "Mage" → Mage, else Minion.
 ///   - Boss:         a Marker3D named "BossSpawn" (optional).
+///
+/// Everything else the simulation needs is DERIVED, which is why there is so
+/// little to remember:
+///   - ground vs wall  a surface's own normal (TriangleSoup.WallNormalY, ~87°;
+///                     deliberately not the navmesh's slope limit, so ground
+///                     stays descendable at any grade).
+///   - walkable        the navmesh's answer (NavMeshBuilder), from slope,
+///                     headroom and step height.
+///   - too small       nothing has to say so: Recast's voxels and agent-radius
+///                     erosion discard sub-mover detail unaided.
+/// The one thing geometry cannot state about itself is which way a surface
+/// faces, so WINDING matters: counter-clockwise seen from above, or a floor
+/// reads as an overhang. SoupBuilder keeps that straight for shapes it builds,
+/// and the engine bake flips Godot's clockwise faces as it samples them.
+///
+/// Groups play no part in any of this. "no_fade" survives in the shipping
+/// scenes, but it is a rendering hint for the occlusion fader alone and the
+/// bake never looks at it.
 /// </summary>
 public static class RealmSceneFile
 {
