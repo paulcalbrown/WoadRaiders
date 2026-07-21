@@ -234,7 +234,7 @@ size = Vector3(36, 170, 28)
 
 [sub_resource type="BoxMesh" id="BoxMesh_55"]
 material = SubResource("StandardMaterial3D_3")
-size = Vector3(36, 170.00002, 28)
+size = Vector3(36, 170, 28)
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.25, 0.32, 0.45, 1)
@@ -546,7 +546,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3400, 240, 3900)
 [node name="BossSpawn" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3400, 256, 3650)
 
-[node name="Scenery" type="Node3D" parent="."]
+[node name="Scenery" type="Node3D" parent="." groups=["no_collide"]]
 
 [node name="Scenery0" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1170, 0, 1820)
@@ -555,7 +555,7 @@ transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1170, 0, 1820)
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1170, 0, 2180)
 
 [node name="Scenery2" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
-transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1530, 120, 1820)
+transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1530, 120.00001, 1820)
 
 [node name="Scenery3" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1530, 120, 2180)
@@ -564,13 +564,13 @@ transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1530, 120, 2180)
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 2670, 120, 1820)
 
 [node name="Scenery5" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
-transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 2670, 120.00001, 2180)
+transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 2670, 120, 2180)
 
 [node name="Scenery6" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3030, 240, 1820)
 
 [node name="Scenery7" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
-transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3030, 239.99998, 2180)
+transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3030, 240, 2180)
 
 [node name="Scenery8" type="Node3D" parent="Scenery" instance=ExtResource("2_si7y7")]
 transform = Transform3D(48, 0, 0, 0, 48, 0, 0, 0, 48, 3190, 240, 2750)

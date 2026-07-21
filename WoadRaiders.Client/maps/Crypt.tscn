@@ -1692,16 +1692,16 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1848.6, 0, 6162)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2401.6, 0, 5688)
 
 [node name="EnemySpawn3" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5372, -252.79999, 4980.16)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5372, -252.8, 4980.16)
 
 [node name="EnemySpawn4" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5372, -252.8, 6395.84)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5372, -252.79999, 6395.84)
 
 [node name="EnemySpawn5" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5940.8, -252.79999, 5688)
 
 [node name="EnemySpawn6_Rogue" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6478, -252.79997, 4929.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6478, -252.79999, 4929.6)
 
 [node name="EnemySpawn7_Rogue" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6478, -252.79999, 6446.4)
@@ -1719,10 +1719,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7457.6, -252.8, 5030.7197)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7457.6, -252.79999, 6345.2803)
 
 [node name="EnemySpawn12_Rogue" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10744, -505.59998, 5612.16)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10744, -505.6, 5612.16)
 
 [node name="EnemySpawn13_Rogue" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11161.12, -505.59998, 5763.84)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11161.12, -505.60004, 5763.84)
 
 [node name="EnemySpawn14" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10364.8, -948, 4322.88)
@@ -1755,10 +1755,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10510.16, -758.39996, 10048.8
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10886.2, -758.4, 9480)
 
 [node name="EnemySpawn24" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11218, -758.4, 8873.28)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11218, -758.4001, 8873.28)
 
 [node name="EnemySpawn25" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11218, -758.4001, 10086.72)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11218, -758.4, 10086.72)
 
 [node name="EnemySpawn26_Rogue" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11571.92, -758.4, 9176.64)
@@ -1776,28 +1776,28 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11970.08, -758.4, 10010.88)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11925.84, -758.4, 9480)
 
 [node name="EnemySpawn31" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6244.16, -821.60004, 8822.72)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6244.16, -821.6001, 8822.72)
 
 [node name="EnemySpawn32" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6244.16, -821.60004, 10137.28)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6244.16, -821.6001, 10137.28)
 
 [node name="EnemySpawn33_Rogue" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6496.96, -805.60004, 9480)
 
 [node name="EnemySpawn34_Mage" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6092.48, -821.60004, 9480)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6092.48, -821.6001, 9480)
 
 [node name="EnemySpawn35_Mage" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6952, -821.6001, 8620.48)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6952, -821.6, 8620.48)
 
 [node name="EnemySpawn36_Mage" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6952, -821.6, 10339.52)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6952, -821.6001, 10339.52)
 
 [node name="EnemySpawn37_Rogue" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7659.84, -821.6001, 8923.84)
 
 [node name="EnemySpawn38_Rogue" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7659.84, -821.6, 10036.16)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7659.84, -821.60004, 10036.16)
 
 [node name="BossSpawn" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6952, -805.60004, 9480)
@@ -1919,7 +1919,7 @@ transform = Transform3D(18.840706, 0, -2.4551544, 0, 19, 0, 2.4551544, 0, 18.840
 transform = Transform3D(-1.6610328e-06, 0, 38, 0, 38, 0, -38, 0, -1.6610328e-06, 4890, -252.79999, 5334.08)
 
 [node name="Relic38" type="Node3D" parent="Relics" instance=ExtResource("15_k6qan")]
-transform = Transform3D(-1.6610328e-06, 0, 38, 0, 38, 0, -38, 0, -1.6610328e-06, 4890, -252.79997, 6041.92)
+transform = Transform3D(-1.6610328e-06, 0, 38, 0, 38, 0, -38, 0, -1.6610328e-06, 4890, -252.79999, 6041.92)
 
 [node name="Relic39" type="Node3D" parent="Relics" instance=ExtResource("16_on0re")]
 transform = Transform3D(-8.742278e-07, 0, -20, 0, 20, 0, 20, 0, -8.742278e-07, 7750, -252.79999, 5384.64)
@@ -1934,7 +1934,7 @@ transform = Transform3D(2.004586, 0, -12.844518, 0, 13, 0, 12.844518, 0, 2.00458
 transform = Transform3D(-43.825993, 0, -10.2118635, 0, 45, 0, 10.2118635, 0, -43.825993, 6690.2676, -252.79999, 4853.019)
 
 [node name="Relic43" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
-transform = Transform3D(3.865148, 0, 15.526128, 0, 16, 0, -15.526128, 0, 3.865148, 5824.9546, -250.79999, 4996.2925)
+transform = Transform3D(3.865148, 0, 15.526128, 0, 16, 0, -15.526128, 0, 3.865148, 5824.9546, -250.79997, 4996.2925)
 
 [node name="Relic44" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
 transform = Transform3D(-9.028175, 0, -13.209544, 0, 16, 0, 13.209544, 0, -9.028175, 6158.1274, -250.79999, 5129.5137)
@@ -1955,7 +1955,7 @@ transform = Transform3D(-12.606341, 0, 12.848352, 0, 18, 0, -12.848352, 0, -12.6
 transform = Transform3D(-9.076171, 0, -9.307154, 0, 13, 0, 9.307154, 0, -9.076171, 5364.8545, -242.79999, 5117.6113)
 
 [node name="Relic50" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
-transform = Transform3D(-5.200517, 0, 15.131247, 0, 16, 0, -15.131247, 0, -5.200517, 5165.352, -250.79999, 4994.116)
+transform = Transform3D(-5.200517, 0, 15.131247, 0, 16, 0, -15.131247, 0, -5.200517, 5165.352, -250.79997, 4994.116)
 
 [node name="Relic51" type="Node3D" parent="Relics" instance=ExtResource("10_wn2rd")]
 transform = Transform3D(-2.313449, 0, -17.850712, 0, 18, 0, 17.850712, 0, -2.313449, 6644.999, -252.79999, 6345.881)
@@ -1964,7 +1964,7 @@ transform = Transform3D(-2.313449, 0, -17.850712, 0, 18, 0, 17.850712, 0, -2.313
 transform = Transform3D(-6.6869874, 0, -4.391378, 0, 8, 0, 4.391378, 0, -6.6869874, 6803.6, -251.79999, 6302.713)
 
 [node name="Relic53" type="Node3D" parent="Relics" instance=ExtResource("8_wk44q")]
-transform = Transform3D(14.721673, 0, 42.523785, 0, 45, 0, -42.523785, 0, 14.721673, 5459.7188, -252.8, 6423.469)
+transform = Transform3D(14.721673, 0, 42.523785, 0, 45, 0, -42.523785, 0, 14.721673, 5459.7188, -252.79999, 6423.469)
 
 [node name="Relic54" type="Node3D" parent="Relics" instance=ExtResource("17_nb8dx")]
 transform = Transform3D(5.24116, 0, -6.044025, 0, 8, 0, 6.044025, 0, 5.24116, 6296.024, -251.79999, 6741.066)
@@ -1973,7 +1973,7 @@ transform = Transform3D(5.24116, 0, -6.044025, 0, 8, 0, 6.044025, 0, 5.24116, 62
 transform = Transform3D(12.378926, 0, -10.137169, 0, 16, 0, 10.137169, 0, 12.378926, 7249.132, -250.79999, 6382.9175)
 
 [node name="Relic56" type="Node3D" parent="Relics" instance=ExtResource("10_wn2rd")]
-transform = Transform3D(10.900818, 0, 14.323832, 0, 18, 0, -14.323832, 0, 10.900818, 5614.5176, -252.79999, 6620.082)
+transform = Transform3D(10.900818, 0, 14.323832, 0, 18, 0, -14.323832, 0, 10.900818, 5614.5176, -252.8, 6620.082)
 
 [node name="Relic57" type="Node3D" parent="Relics" instance=ExtResource("8_wk44q")]
 transform = Transform3D(-37.00298, 0, 25.608198, 0, 45, 0, -25.608198, 0, -37.00298, 7295.546, -252.79999, 6523.6367)
@@ -1985,13 +1985,13 @@ transform = Transform3D(3.3508174, 0, -7.2644353, 0, 8, 0, 7.2644353, 0, 3.35081
 transform = Transform3D(-19.937738, 0, 40.342117, 0, 45, 0, -40.342117, 0, -19.937738, 5362.639, -252.79999, 6558.3384)
 
 [node name="Relic60" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
-transform = Transform3D(-14.57433, 0, -6.6021895, 0, 16, 0, 6.6021895, 0, -14.57433, 6385.204, -250.8, 6216.5547)
+transform = Transform3D(-14.57433, 0, -6.6021895, 0, 16, 0, 6.6021895, 0, -14.57433, 6385.204, -250.79999, 6216.5547)
 
 [node name="Relic61" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(6.2703605, 0, 6.456205, 0, 9, 0, -6.456205, 0, 6.2703605, 5440, -252.79999, 5064)
+transform = Transform3D(6.2703605, 0, 6.456205, 0, 9, 0, -6.456205, 0, 6.2703605, 5440, -252.8, 5064)
 
 [node name="Relic62" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(-6.636544, 0, 6.0791683, 0, 9, 0, -6.0791683, 0, -6.636544, 7200, -252.8, 6312)
+transform = Transform3D(-6.636544, 0, 6.0791683, 0, 9, 0, -6.0791683, 0, -6.636544, 7200, -252.79999, 6312)
 
 [node name="Relic63" type="Node3D" parent="Relics" instance=ExtResource("11_mmhcw")]
 transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 5530, 365.2, 5266.6665)
@@ -2036,58 +2036,58 @@ transform = Transform3D(36, 0, 0, 0, 36, 0, 0, 0, 36, 8848, -380.40002, 9480)
 transform = Transform3D(36, 0, 0, 0, 36, 0, 0, 0, 36, 9480, -380.40002, 9480)
 
 [node name="Relic77" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 9996, -505.59998, 5524.4004)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 9996, -505.6, 5524.4004)
 
 [node name="Relic78" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 9996, -505.59998, 5851.6)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 9996, -505.6, 5851.6)
 
 [node name="Relic79" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
 transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10183, -505.59998, 5524.4004)
 
 [node name="Relic80" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10183, -505.59998, 5851.6)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10183, -505.60004, 5851.6)
 
 [node name="Relic81" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
 transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10370, -505.59998, 5524.4004)
 
 [node name="Relic82" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10370, -505.59998, 5851.6)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10370, -505.60004, 5851.6)
 
 [node name="Relic83" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
 transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10557, -505.59998, 5524.4004)
 
 [node name="Relic84" type="Node3D" parent="Relics" instance=ExtResource("20_m8sul")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10557, -505.59998, 5851.6)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10557, -505.60004, 5851.6)
 
 [node name="Relic85" type="Node3D" parent="Relics" instance=ExtResource("20_m8sul")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10744, -505.59998, 5524.4004)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10744, -505.6, 5524.4004)
 
 [node name="Relic86" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10744, -505.59998, 5851.6)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10744, -505.6, 5851.6)
 
 [node name="Relic87" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10931, -505.59998, 5524.4004)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10931, -505.6, 5524.4004)
 
 [node name="Relic88" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10931, -505.59998, 5851.6)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 10931, -505.60004, 5851.6)
 
 [node name="Relic89" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11118, -505.59998, 5524.4004)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11118, -505.6, 5524.4004)
 
 [node name="Relic90" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11118, -505.59998, 5851.6)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11118, -505.60004, 5851.6)
 
 [node name="Relic91" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11305, -505.59998, 5524.4004)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11305, -505.6, 5524.4004)
 
 [node name="Relic92" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11305, -505.59998, 5851.6)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11305, -505.6, 5851.6)
 
 [node name="Relic93" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11492, -505.59998, 5524.4004)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11492, -505.6, 5524.4004)
 
 [node name="Relic94" type="Node3D" parent="Relics" instance=ExtResource("19_3q72a")]
-transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11492, -505.59998, 5851.6)
+transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11492, -505.6, 5851.6)
 
 [node name="Relic95" type="Node3D" parent="Relics" instance=ExtResource("21_icwkk")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 9946, -505.59998, 5598)
@@ -2096,13 +2096,13 @@ transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 9946, -505.59998, 5598)
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 9946, -505.59998, 5778)
 
 [node name="Relic97" type="Node3D" parent="Relics" instance=ExtResource("21_icwkk")]
-transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 11542, -505.59998, 5598)
+transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 11542, -505.60004, 5598)
 
 [node name="Relic98" type="Node3D" parent="Relics" instance=ExtResource("21_icwkk")]
-transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 11542, -505.59998, 5778)
+transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 11542, -505.60004, 5778)
 
 [node name="Relic99" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(-2.909606, 0, 8.516701, 0, 9, 0, -8.516701, 0, -2.909606, 9986, -568.7999, 5278.4004)
+transform = Transform3D(-2.909606, 0, 8.516701, 0, 9, 0, -8.516701, 0, -2.909606, 9986, -948, 5278.4004)
 
 [node name="Relic100" type="Node3D" parent="Relics" instance=ExtResource("22_y6qm1")]
 transform = Transform3D(4.3512697, 0, 5.4832883, 0, 7, 0, -5.4832883, 0, 4.3512697, 10444, -948, 4592)
@@ -2111,7 +2111,7 @@ transform = Transform3D(4.3512697, 0, 5.4832883, 0, 7, 0, -5.4832883, 0, 4.35126
 transform = Transform3D(-8.568887, 0, 5.1550145, 0, 10, 0, -5.1550145, 0, -8.568887, 10994, -948, 4242)
 
 [node name="Relic102" type="Node3D" parent="Relics" instance=ExtResource("24_xxp55")]
-transform = Transform3D(35.103302, 0, 19.177021, 0, 40, 0, -19.177021, 0, 35.103302, 10076, -695.19995, 4892)
+transform = Transform3D(35.103302, 0, 19.177021, 0, 40, 0, -19.177021, 0, 35.103302, 10076, -948, 4892)
 
 [node name="Relic103" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
 transform = Transform3D(-3.6251256, 0, 15.583917, 0, 16, 0, -15.583917, 0, -3.6251256, 10721.145, -946, 4252.2017)
@@ -2138,37 +2138,37 @@ transform = Transform3D(17.927635, 0, 1.6124032, 0, 18, 0, -1.6124032, 0, 17.927
 transform = Transform3D(-5.4314017, 0, 5.8736596, 0, 8, 0, -5.8736596, 0, -5.4314017, 10336.259, -947, 4382.6055)
 
 [node name="Relic111" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
-transform = Transform3D(15.407519, 0, -4.31374, 0, 16, 0, 4.31374, 0, 15.407519, 10129.428, -819.60004, 4470.078)
+transform = Transform3D(15.407519, 0, -4.31374, 0, 16, 0, 4.31374, 0, 15.407519, 10129.428, -946, 4470.078)
 
 [node name="Relic112" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
 transform = Transform3D(-6.6914554, 0, -14.533562, 0, 16, 0, 14.533562, 0, -6.6914554, 10907.633, -945.99994, 4617.7227)
 
 [node name="Relic113" type="Node3D" parent="Relics" instance=ExtResource("10_wn2rd")]
-transform = Transform3D(-6.4609637, 0, -16.800474, 0, 18, 0, 16.800474, 0, -6.4609637, 11006.8955, -947.99994, 4580.36)
+transform = Transform3D(-6.4609637, 0, -16.800474, 0, 18, 0, 16.800474, 0, -6.4609637, 11006.8955, -948, 4580.36)
 
 [node name="Relic114" type="Node3D" parent="Relics" instance=ExtResource("10_wn2rd")]
 transform = Transform3D(-17.731745, 0, 3.0960002, 0, 18, 0, -3.0960002, 0, -17.731745, 11150.227, -948, 4175.487)
 
 [node name="Relic115" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
-transform = Transform3D(4.06943, 0, 15.473841, 0, 16, 0, -15.473841, 0, 4.06943, 10148.742, -914.4, 4158.6787)
+transform = Transform3D(4.06943, 0, 15.473841, 0, 16, 0, -15.473841, 0, 4.06943, 10148.742, -930.19995, 4158.6787)
 
 [node name="Relic116" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
 transform = Transform3D(-13.299137, 0, -8.895671, 0, 16, 0, 8.895671, 0, -13.299137, 10760.299, -946, 4291.48)
 
 [node name="Relic117" type="Node3D" parent="Relics" instance=ExtResource("8_wk44q")]
-transform = Transform3D(-8.034184, 0, 44.276993, 0, 45, 0, -44.276993, 0, -8.034184, 11381.592, -948, 5160.657)
+transform = Transform3D(-8.034184, 0, 44.276993, 0, 45, 0, -44.276993, 0, -8.034184, 11381.592, -948.00006, 5160.657)
 
 [node name="Relic118" type="Node3D" parent="Relics" instance=ExtResource("8_wk44q")]
-transform = Transform3D(-44.719944, 0, -5.0126486, 0, 45, 0, 5.0126486, 0, -44.719944, 10946.455, -948.00006, 4272.379)
+transform = Transform3D(-44.719944, 0, -5.0126486, 0, 45, 0, 5.0126486, 0, -44.719944, 10946.455, -948, 4272.379)
 
 [node name="Relic119" type="Node3D" parent="Relics" instance=ExtResource("5_2sbnh")]
-transform = Transform3D(18.381937, 0, 41.07438, 0, 45, 0, -41.07438, 0, 18.381937, 10046, -726.7999, 6584)
+transform = Transform3D(18.381937, 0, 41.07438, 0, 45, 0, -41.07438, 0, 18.381937, 10046, -948, 6584)
 
 [node name="Relic120" type="Node3D" parent="Relics" instance=ExtResource("17_nb8dx")]
 transform = Transform3D(-6.739369, 0, -4.3105574, 0, 8, 0, 4.3105574, 0, -6.739369, 10251.01, -947, 7108.4717)
 
 [node name="Relic121" type="Node3D" parent="Relics" instance=ExtResource("7_2bgeg")]
-transform = Transform3D(12.96551, 0, -0.94633067, 0, 13, 0, 0.94633067, 0, 12.96551, 10183.524, -938.00006, 6629.268)
+transform = Transform3D(12.96551, 0, -0.94633067, 0, 13, 0, 0.94633067, 0, 12.96551, 10183.524, -938, 6629.268)
 
 [node name="Relic122" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
 transform = Transform3D(15.513456, 0, -3.9156964, 0, 16, 0, 3.9156964, 0, 15.513456, 10655.381, -946, 6684.9976)
@@ -2186,7 +2186,7 @@ transform = Transform3D(-36.772823, 0, 25.937607, 0, 45, 0, -25.937607, 0, -36.7
 transform = Transform3D(-11.925023, 0, -13.483094, 0, 18, 0, 13.483094, 0, -11.925023, 10278.534, -948, 7385.1494)
 
 [node name="Relic127" type="Node3D" parent="Relics" instance=ExtResource("10_wn2rd")]
-transform = Transform3D(-7.6266418, 0, 16.304426, 0, 18, 0, -16.304426, 0, -7.6266418, 10004.63, -758.4, 6674.6353)
+transform = Transform3D(-7.6266418, 0, 16.304426, 0, 18, 0, -16.304426, 0, -7.6266418, 10004.63, -948, 6674.6353)
 
 [node name="Relic128" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
 transform = Transform3D(7.3213625, 0, -14.226653, 0, 16, 0, 14.226653, 0, 7.3213625, 10378.337, -946, 6579.3066)
@@ -2240,28 +2240,28 @@ transform = Transform3D(-39.775154, 0, 4.2352166, 0, 40, 0, -4.2352166, 0, -39.7
 transform = Transform3D(-21.871603, 0, 2.3733954, 0, 22, 0, -2.3733954, 0, -21.871603, 11085.28, -758.4, 8662)
 
 [node name="Relic145" type="Node3D" parent="Relics" instance=ExtResource("26_p7ffj")]
-transform = Transform3D(-39.785835, 0, 4.133686, 0, 40, 0, -4.133686, 0, -39.785835, 11350.72, -758.4001, 8662)
+transform = Transform3D(-39.785835, 0, 4.133686, 0, 40, 0, -4.133686, 0, -39.785835, 11350.72, -758.4, 8662)
 
 [node name="Relic146" type="Node3D" parent="Relics" instance=ExtResource("2_t7rht")]
-transform = Transform3D(-21.837372, 0, -2.6700492, 0, 22, 0, 2.6700492, 0, -21.837372, 11616.16, -758.4, 8662)
+transform = Transform3D(-21.837372, 0, -2.6700492, 0, 22, 0, 2.6700492, 0, -21.837372, 11616.16, -758.4001, 8662)
 
 [node name="Relic147" type="Node3D" parent="Relics" instance=ExtResource("27_ruaaq")]
 transform = Transform3D(-39.87341, 0, 3.179831, 0, 40, 0, -3.179831, 0, -39.87341, 11881.6, -758.4, 8662)
 
 [node name="Relic148" type="Node3D" parent="Relics" instance=ExtResource("3_tuyq7")]
-transform = Transform3D(-21.998337, 0, 0.2705024, 0, 22, 0, -0.2705024, 0, -21.998337, 12147.04, -758.4001, 8662)
+transform = Transform3D(-21.998337, 0, 0.2705024, 0, 22, 0, -0.2705024, 0, -21.998337, 12147.04, -758.4, 8662)
 
 [node name="Relic149" type="Node3D" parent="Relics" instance=ExtResource("28_gdf6x")]
-transform = Transform3D(39.806137, 0, 3.9333777, 0, 40, 0, -3.9333777, 0, 39.806137, 10288.96, -758.4, 10298)
+transform = Transform3D(39.806137, 0, 3.9333777, 0, 40, 0, -3.9333777, 0, 39.806137, 10288.96, -758.4001, 10298)
 
 [node name="Relic150" type="Node3D" parent="Relics" instance=ExtResource("3_tuyq7")]
 transform = Transform3D(21.790462, 0, -3.0291405, 0, 22, 0, 3.0291405, 0, 21.790462, 10554.4, -758.4, 10298)
 
 [node name="Relic151" type="Node3D" parent="Relics" instance=ExtResource("4_twn75")]
-transform = Transform3D(19.977558, 0, 0.9471899, 0, 20, 0, -0.9471899, 0, 19.977558, 10819.84, -758.4001, 10298)
+transform = Transform3D(19.977558, 0, 0.9471899, 0, 20, 0, -0.9471899, 0, 19.977558, 10819.84, -758.4, 10298)
 
 [node name="Relic152" type="Node3D" parent="Relics" instance=ExtResource("24_xxp55")]
-transform = Transform3D(39.992012, 0, 0.79946315, 0, 40, 0, -0.79946315, 0, 39.992012, 11085.28, -758.4, 10298)
+transform = Transform3D(39.992012, 0, 0.79946315, 0, 40, 0, -0.79946315, 0, 39.992012, 11085.28, -758.4001, 10298)
 
 [node name="Relic153" type="Node3D" parent="Relics" instance=ExtResource("28_gdf6x")]
 transform = Transform3D(39.663765, 0, 5.1754894, 0, 40, 0, -5.1754894, 0, 39.663765, 11350.72, -758.4, 10298)
@@ -2285,7 +2285,7 @@ transform = Transform3D(5.456078, 0, 39.626144, 0, 40, 0, -39.626144, 0, 5.45607
 transform = Transform3D(0.24755718, 0, 21.998608, 0, 22, 0, -21.998608, 0, 0.24755718, 10252, -758.4, 9669.6)
 
 [node name="Relic160" type="Node3D" parent="Relics" instance=ExtResource("27_ruaaq")]
-transform = Transform3D(-0.8868271, 0, 39.990166, 0, 40, 0, -39.990166, 0, -0.8868271, 10252, -758.39996, 10048.8)
+transform = Transform3D(-0.8868271, 0, 39.990166, 0, 40, 0, -39.990166, 0, -0.8868271, 10252, -758.4, 10048.8)
 
 [node name="Relic161" type="Node3D" parent="Relics" instance=ExtResource("29_8hkx4")]
 transform = Transform3D(-8.742278e-07, 0, 20, 0, 20, 0, -20, 0, -8.742278e-07, 10312, -758.4, 8721.6)
@@ -2297,16 +2297,16 @@ transform = Transform3D(-1.6610328e-06, 0, 38, 0, 38, 0, -38, 0, -1.6610328e-06,
 transform = Transform3D(-1.6610328e-06, 0, 38, 0, 38, 0, -38, 0, -1.6610328e-06, 10262, -758.4, 9783.36)
 
 [node name="Relic164" type="Node3D" parent="Relics" instance=ExtResource("6_u7ak5")]
-transform = Transform3D(-1.0490733e-06, 0, -24, 0, 24, 0, 24, 0, -1.0490733e-06, 12164, -758.39996, 8911.2)
+transform = Transform3D(-1.0490733e-06, 0, -24, 0, 24, 0, 24, 0, -1.0490733e-06, 12164, -758.4, 8911.2)
 
 [node name="Relic165" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
-transform = Transform3D(11.319343, 0, -11.308071, 0, 16, 0, 11.308071, 0, 11.319343, 11343.026, -756.4001, 9422.316)
+transform = Transform3D(11.319343, 0, -11.308071, 0, 16, 0, 11.308071, 0, 11.319343, 11343.026, -756.4, 9422.316)
 
 [node name="Relic166" type="Node3D" parent="Relics" instance=ExtResource("8_wk44q")]
 transform = Transform3D(43.462387, 0, 11.662799, 0, 45, 0, -11.662799, 0, 43.462387, 11469.231, -758.4, 9760.12)
 
 [node name="Relic167" type="Node3D" parent="Relics" instance=ExtResource("7_2bgeg")]
-transform = Transform3D(-10.024317, 0, -8.277263, 0, 13, 0, 8.277263, 0, -10.024317, 11950.038, -748.4, 9200.181)
+transform = Transform3D(-10.024317, 0, -8.277263, 0, 13, 0, 8.277263, 0, -10.024317, 11950.038, -748.4001, 9200.181)
 
 [node name="Relic168" type="Node3D" parent="Relics" instance=ExtResource("10_wn2rd")]
 transform = Transform3D(6.6456804, 0, -16.728268, 0, 18, 0, 16.728268, 0, 6.6456804, 11569.947, -758.4, 8869.63)
@@ -2318,13 +2318,13 @@ transform = Transform3D(-10.710056, 0, -11.8867445, 0, 16, 0, 11.8867445, 0, -10
 transform = Transform3D(11.012123, 0, 6.908918, 0, 13, 0, -6.908918, 0, 11.012123, 11795.203, -748.4, 9512.027)
 
 [node name="Relic171" type="Node3D" parent="Relics" instance=ExtResource("8_wk44q")]
-transform = Transform3D(44.969467, 0, -1.6574154, 0, 45, 0, 1.6574154, 0, 44.969467, 11785.98, -758.4001, 8929.165)
+transform = Transform3D(44.969467, 0, -1.6574154, 0, 45, 0, 1.6574154, 0, 44.969467, 11785.98, -758.4, 8929.165)
 
 [node name="Relic172" type="Node3D" parent="Relics" instance=ExtResource("17_nb8dx")]
 transform = Transform3D(4.404919, 0, 6.678075, 0, 8, 0, -6.678075, 0, 4.404919, 11423.949, -757.4, 9009.453)
 
 [node name="Relic173" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
-transform = Transform3D(7.063951, 0, -14.356204, 0, 16, 0, 14.356204, 0, 7.063951, 10997.42, -756.39996, 9952.946)
+transform = Transform3D(7.063951, 0, -14.356204, 0, 16, 0, 14.356204, 0, 7.063951, 10997.42, -756.4, 9952.946)
 
 [node name="Relic174" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
 transform = Transform3D(0.6596881, 0, 15.986395, 0, 16, 0, -15.986395, 0, 0.6596881, 11637.549, -756.4, 9183.203)
@@ -2333,7 +2333,7 @@ transform = Transform3D(0.6596881, 0, 15.986395, 0, 16, 0, -15.986395, 0, 0.6596
 transform = Transform3D(10.340815, 0, 12.209323, 0, 16, 0, -12.209323, 0, 10.340815, 10660.179, -756.4, 9310.073)
 
 [node name="Relic176" type="Node3D" parent="Relics" instance=ExtResource("17_nb8dx")]
-transform = Transform3D(4.3103046, 0, -6.7395306, 0, 8, 0, 6.7395306, 0, 4.3103046, 11895.332, -757.39996, 9453.696)
+transform = Transform3D(4.3103046, 0, -6.7395306, 0, 8, 0, 6.7395306, 0, 4.3103046, 11895.332, -757.4, 9453.696)
 
 [node name="Relic177" type="Node3D" parent="Relics" instance=ExtResource("17_nb8dx")]
 transform = Transform3D(5.2033763, 0, -6.0765843, 0, 8, 0, 6.0765843, 0, 5.2033763, 11966.25, -757.4, 10102.713)
@@ -2363,7 +2363,7 @@ transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 11771, -140.40002, 9796)
 transform = Transform3D(-1.136496e-06, 0, 26, 0, 26, 0, -26, 0, -1.136496e-06, 5848, -821.60004, 9480)
 
 [node name="Relic186" type="Node3D" parent="Relics" instance=ExtResource("31_ymcew")]
-transform = Transform3D(-9.616506e-07, 0, 22, 0, 22, 0, -22, 0, -9.616506e-07, 5858, -821.60004, 9176.64)
+transform = Transform3D(-9.616506e-07, 0, 22, 0, 22, 0, -22, 0, -9.616506e-07, 5858, -821.6, 9176.64)
 
 [node name="Relic187" type="Node3D" parent="Relics" instance=ExtResource("31_ymcew")]
 transform = Transform3D(-9.616506e-07, 0, 22, 0, 22, 0, -22, 0, -9.616506e-07, 5858, -821.6, 9783.36)
@@ -2387,58 +2387,58 @@ transform = Transform3D(46, 0, 0, 0, 46, 0, 0, 0, 46, 7811.52, -821.60004, 10339
 transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 7512, -821.60004, 9480)
 
 [node name="Relic194" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, 7780.955, -821.6001, 9830.477)
+transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, 7780.955, -821.6, 9830.477)
 
 [node name="Relic195" type="Node3D" parent="Relics" instance=ExtResource("34_e1to8")]
 transform = Transform3D(28.284271, 0, 28.284271, 0, 40, 0, -28.284271, 0, 28.284271, 7347.98, -805.6, 9875.9795)
 
 [node name="Relic196" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(6.3639607, 0, 6.3639607, 0, 9, 0, -6.3639607, 0, 6.3639607, 7290.3354, -821.60004, 10313.984)
+transform = Transform3D(6.3639607, 0, 6.3639607, 0, 9, 0, -6.3639607, 0, 6.3639607, 7290.3354, -821.6, 10313.984)
 
 [node name="Relic197" type="Node3D" parent="Relics" instance=ExtResource("34_e1to8")]
 transform = Transform3D(-1.7484556e-06, 0, 40, 0, 40, 0, -40, 0, -1.7484556e-06, 6952, -821.60004, 10040)
 
 [node name="Relic198" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(-3.934025e-07, 0, 9, 0, 9, 0, -9, 0, -3.934025e-07, 6601.5234, -821.6, 10308.955)
+transform = Transform3D(-3.934025e-07, 0, 9, 0, 9, 0, -9, 0, -3.934025e-07, 6601.5234, -821.60004, 10308.955)
 
 [node name="Relic199" type="Node3D" parent="Relics" instance=ExtResource("34_e1to8")]
-transform = Transform3D(-28.284271, 0, 28.284271, 0, 40, 0, -28.284271, 0, -28.284271, 6556.02, -805.60004, 9875.9795)
+transform = Transform3D(-28.284271, 0, 28.284271, 0, 40, 0, -28.284271, 0, -28.284271, 6556.02, -805.6, 9875.9795)
 
 [node name="Relic200" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(-6.3639607, 0, 6.3639607, 0, 9, 0, -6.3639607, 0, -6.3639607, 6118.016, -821.6, 9818.335)
+transform = Transform3D(-6.3639607, 0, 6.3639607, 0, 9, 0, -6.3639607, 0, -6.3639607, 6118.016, -821.60004, 9818.335)
 
 [node name="Relic201" type="Node3D" parent="Relics" instance=ExtResource("34_e1to8")]
 transform = Transform3D(-40, 0, -3.4969112e-06, 0, 40, 0, 3.4969112e-06, 0, -40, 6392, -821.60004, 9480)
 
 [node name="Relic202" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(-9, 0, -7.86805e-07, 0, 9, 0, 7.86805e-07, 0, -9, 6123.045, -821.6, 9129.523)
+transform = Transform3D(-9, 0, -7.86805e-07, 0, 9, 0, 7.86805e-07, 0, -9, 6123.045, -821.6001, 9129.523)
 
 [node name="Relic203" type="Node3D" parent="Relics" instance=ExtResource("34_e1to8")]
-transform = Transform3D(-28.284266, 0, -28.284275, 0, 40, 0, 28.284275, 0, -28.284266, 6556.0205, -805.60004, 9084.0205)
+transform = Transform3D(-28.284266, 0, -28.284275, 0, 40, 0, 28.284275, 0, -28.284266, 6556.0205, -805.6, 9084.0205)
 
 [node name="Relic204" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(-6.36396, 0, -6.363962, 0, 9, 0, 6.363962, 0, -6.36396, 6613.665, -821.6, 8646.016)
+transform = Transform3D(-6.36396, 0, -6.363962, 0, 9, 0, 6.363962, 0, -6.36396, 6613.665, -821.60004, 8646.016)
 
 [node name="Relic205" type="Node3D" parent="Relics" instance=ExtResource("34_e1to8")]
 transform = Transform3D(4.7699524e-07, 0, -40, 0, 40, 0, 40, 0, 4.7699524e-07, 6952, -821.60004, 8920)
 
 [node name="Relic206" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(1.0732393e-07, 0, -9, 0, 9, 0, 9, 0, 1.0732393e-07, 7302.4766, -821.60004, 8651.045)
+transform = Transform3D(1.0732393e-07, 0, -9, 0, 9, 0, 9, 0, 1.0732393e-07, 7302.4766, -821.6, 8651.045)
 
 [node name="Relic207" type="Node3D" parent="Relics" instance=ExtResource("34_e1to8")]
-transform = Transform3D(28.28428, 0, -28.284262, 0, 40, 0, 28.284262, 0, 28.28428, 7347.98, -805.6, 9084.0205)
+transform = Transform3D(28.28428, 0, -28.284262, 0, 40, 0, 28.284262, 0, 28.28428, 7347.98, -805.60004, 9084.0205)
 
 [node name="Relic208" type="Node3D" parent="Relics" instance=ExtResource("18_r66ba")]
-transform = Transform3D(6.363963, 0, -6.363959, 0, 9, 0, 6.363959, 0, 6.363963, 7785.984, -821.60004, 9141.665)
+transform = Transform3D(6.363963, 0, -6.363959, 0, 9, 0, 6.363959, 0, 6.363963, 7785.984, -821.6, 9141.665)
 
 [node name="Relic209" type="Node3D" parent="Relics" instance=ExtResource("13_umpbv")]
-transform = Transform3D(-18.96877, 0, 1.0889455, 0, 19, 0, -1.0889455, 0, -18.96877, 6320, -821.60004, 8346)
+transform = Transform3D(-18.96877, 0, 1.0889455, 0, 19, 0, -1.0889455, 0, -18.96877, 6320, -821.6001, 8346)
 
 [node name="Relic210" type="Node3D" parent="Relics" instance=ExtResource("12_cbtsk")]
 transform = Transform3D(-17.950382, 0, -1.3355817, 0, 18, 0, 1.3355817, 0, -17.950382, 6741.3335, -821.60004, 8346)
 
 [node name="Relic211" type="Node3D" parent="Relics" instance=ExtResource("13_umpbv")]
-transform = Transform3D(-18.806679, 0, 2.7034862, 0, 19, 0, -2.7034862, 0, -18.806679, 7162.667, -821.60004, 8346)
+transform = Transform3D(-18.806679, 0, 2.7034862, 0, 19, 0, -2.7034862, 0, -18.806679, 7162.667, -821.6001, 8346)
 
 [node name="Relic212" type="Node3D" parent="Relics" instance=ExtResource("12_cbtsk")]
 transform = Transform3D(-17.991667, 0, 0.54765534, 0, 18, 0, -0.54765534, 0, -17.991667, 7584, -821.60004, 8346)
@@ -2450,10 +2450,10 @@ transform = Transform3D(17.999538, 0, 0.12883216, 0, 18, 0, -0.12883216, 0, 17.9
 transform = Transform3D(18.897326, 0, 1.9725723, 0, 19, 0, -1.9725723, 0, 18.897326, 6741.3335, -821.60004, 10614)
 
 [node name="Relic215" type="Node3D" parent="Relics" instance=ExtResource("12_cbtsk")]
-transform = Transform3D(17.981438, 0, 0.8172743, 0, 18, 0, -0.8172743, 0, 17.981438, 7162.667, -821.6001, 10614)
+transform = Transform3D(17.981438, 0, 0.8172743, 0, 18, 0, -0.8172743, 0, 17.981438, 7162.667, -821.60004, 10614)
 
 [node name="Relic216" type="Node3D" parent="Relics" instance=ExtResource("13_umpbv")]
-transform = Transform3D(18.993782, 0, -0.48605287, 0, 19, 0, 0.48605287, 0, 18.993782, 7584, -821.6001, 10614)
+transform = Transform3D(18.993782, 0, -0.48605287, 0, 19, 0, 0.48605287, 0, 18.993782, 7584, -821.60004, 10614)
 
 [node name="Relic217" type="Node3D" parent="Relics" instance=ExtResource("21_icwkk")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 7836, -821.60004, 9220)
@@ -2462,22 +2462,22 @@ transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 7836, -821.60004, 9220)
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 7836, -821.60004, 9740)
 
 [node name="Relic219" type="Node3D" parent="Relics" instance=ExtResource("7_2bgeg")]
-transform = Transform3D(-2.8336556, 0, 12.687411, 0, 13, 0, -12.687411, 0, -2.8336556, 6708.2383, -811.6, 8602.957)
+transform = Transform3D(-2.8336556, 0, 12.687411, 0, 13, 0, -12.687411, 0, -2.8336556, 6708.2383, -811.6001, 8602.957)
 
 [node name="Relic220" type="Node3D" parent="Relics" instance=ExtResource("10_wn2rd")]
-transform = Transform3D(-15.339882, 0, -9.417431, 0, 18, 0, 9.417431, 0, -15.339882, 6485.2666, -821.60004, 8550.414)
+transform = Transform3D(-15.339882, 0, -9.417431, 0, 18, 0, 9.417431, 0, -15.339882, 6485.2666, -821.6, 8550.414)
 
 [node name="Relic221" type="Node3D" parent="Relics" instance=ExtResource("10_wn2rd")]
-transform = Transform3D(-17.2718, 0, -5.068032, 0, 18, 0, 5.068032, 0, -17.2718, 7110.955, -821.6, 8510.676)
+transform = Transform3D(-17.2718, 0, -5.068032, 0, 18, 0, 5.068032, 0, -17.2718, 7110.955, -821.60004, 8510.676)
 
 [node name="Relic222" type="Node3D" parent="Relics" instance=ExtResource("17_nb8dx")]
-transform = Transform3D(1.9739788, 0, 7.752639, 0, 8, 0, -7.752639, 0, 1.9739788, 6488.992, -820.6001, 8399.489)
+transform = Transform3D(1.9739788, 0, 7.752639, 0, 8, 0, -7.752639, 0, 1.9739788, 6488.992, -820.6, 8399.489)
 
 [node name="Relic223" type="Node3D" parent="Relics" instance=ExtResource("17_nb8dx")]
 transform = Transform3D(4.1498694, 0, 6.839487, 0, 8, 0, -6.839487, 0, 4.1498694, 7417.844, -820.60004, 8594.143)
 
 [node name="Relic224" type="Node3D" parent="Relics" instance=ExtResource("17_nb8dx")]
-transform = Transform3D(3.6901028, 0, 7.0981083, 0, 8, 0, -7.0981083, 0, 3.6901028, 6984.1523, -820.6, 8453.036)
+transform = Transform3D(3.6901028, 0, 7.0981083, 0, 8, 0, -7.0981083, 0, 3.6901028, 6984.1523, -820.60004, 8453.036)
 
 [node name="Relic225" type="Node3D" parent="Relics" instance=ExtResource("8_wk44q")]
 transform = Transform3D(-44.959286, 0, 1.9138507, 0, 45, 0, -1.9138507, 0, -44.959286, 7211.768, -821.60004, 8479.164)
@@ -2486,22 +2486,22 @@ transform = Transform3D(-44.959286, 0, 1.9138507, 0, 45, 0, -1.9138507, 0, -44.9
 transform = Transform3D(7.980768, 0, 16.134043, 0, 18, 0, -16.134043, 0, 7.980768, 6212.4517, -821.6, 10541.724)
 
 [node name="Relic227" type="Node3D" parent="Relics" instance=ExtResource("8_wk44q")]
-transform = Transform3D(44.718746, 0, -5.02332, 0, 45, 0, 5.02332, 0, 44.718746, 6272.7383, -821.60004, 10524.968)
+transform = Transform3D(44.718746, 0, -5.02332, 0, 45, 0, 5.02332, 0, 44.718746, 6272.7383, -821.6, 10524.968)
 
 [node name="Relic228" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
 transform = Transform3D(11.816914, 0, 10.787054, 0, 16, 0, -10.787054, 0, 11.816914, 7604.372, -819.6, 10442.172)
 
 [node name="Relic229" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
-transform = Transform3D(-0.04318976, 0, -15.999942, 0, 16, 0, 15.999942, 0, -0.04318976, 6881.1113, -819.6, 10308.989)
+transform = Transform3D(-0.04318976, 0, -15.999942, 0, 16, 0, 15.999942, 0, -0.04318976, 6881.1113, -819.60004, 10308.989)
 
 [node name="Relic230" type="Node3D" parent="Relics" instance=ExtResource("9_vk0o2")]
-transform = Transform3D(-15.9963455, 0, -0.34192863, 0, 16, 0, 0.34192863, 0, -15.9963455, 6616.5923, -819.6, 10467.803)
+transform = Transform3D(-15.9963455, 0, -0.34192863, 0, 16, 0, 0.34192863, 0, -15.9963455, 6616.5923, -819.60004, 10467.803)
 
 [node name="Relic231" type="Node3D" parent="Relics" instance=ExtResource("7_2bgeg")]
-transform = Transform3D(-8.891726, 0, 9.483523, 0, 13, 0, -9.483523, 0, -8.891726, 6564.373, -811.60004, 10358.663)
+transform = Transform3D(-8.891726, 0, 9.483523, 0, 13, 0, -9.483523, 0, -8.891726, 6564.373, -811.6, 10358.663)
 
 [node name="Relic232" type="Node3D" parent="Relics" instance=ExtResource("10_wn2rd")]
-transform = Transform3D(-2.230246, 0, -17.8613, 0, 18, 0, 17.8613, 0, -2.230246, 7415.242, -821.6, 10539.168)
+transform = Transform3D(-2.230246, 0, -17.8613, 0, 18, 0, 17.8613, 0, -2.230246, 7415.242, -821.60004, 10539.168)
 
 [node name="Relic233" type="Node3D" parent="Relics" instance=ExtResource("11_mmhcw")]
 transform = Transform3D(40, 0, 0, 0, 40, 0, 0, 0, 40, 6530.6665, -128.4, 9058.667)

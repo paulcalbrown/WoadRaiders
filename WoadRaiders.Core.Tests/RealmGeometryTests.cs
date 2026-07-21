@@ -6,7 +6,7 @@ using WoadRaiders.Core;
 namespace WoadRaiders.Core.Tests;
 
 /// <summary>
-/// The realm's movement rules, judged on slab-built geometry: baking soups
+/// The realm's movement rules, judged on built geometry: baking soups
 /// into Detour meshes and moving on them through <see cref="RealmGeometry"/>.
 /// Climb-or-refuse, ledge drops, deck boarding, routing around walls, and the
 /// properties multiplayer depends on: deterministic bakes and a serialized
@@ -36,7 +36,7 @@ public class RealmGeometryTests
         .AddBox(new Aabb(new Vector3(200, -20, 0), new Vector3(400, 300, 400)))
         .Build();
 
-    // A pit floor at y=-400 with a bridge deck slabbed across it at y=0 —
+    // A pit floor at y=-400 with a bridge deck laid across it at y=0 —
     // two walkable levels sharing an XZ, the shape the Crypt's chasm has.
     private static TriangleSoup DeckOverPit() => new SoupBuilder()
         .AddBox(new Aabb(new Vector3(0, -420, 0), new Vector3(400, -400, 400)))
@@ -119,7 +119,7 @@ public class RealmGeometryTests
         // extents of any polygon has no legal move left and stands there. A
         // face longer than that reach is therefore a one-way shelf, not a
         // slide to the bottom. Both shipping realms avoid it by construction —
-        // their drops land back on mesh — but a designer tilting a long slab
+        // their drops land back on mesh — but a designer tilting a long deck
         // would meet it, so it is pinned here rather than left as folklore.
         Assert.True(pos.X > 0f,
             $"unexpected: the walker rode the whole face to the floor (X={pos.X}). If Move learned to " +
@@ -458,7 +458,7 @@ public class RealmGeometryTests
     }
 
     [Fact]
-    public void A_roof_slab_is_the_ceiling_over_the_floor_beneath_it()
+    public void A_roof_is_the_ceiling_over_the_floor_beneath_it()
     {
         var geo = TestRealms.WithWalls(new Aabb(new Vector3(-200, 150, -200), new Vector3(200, 174, 200)));
         Assert.Equal(150f, geo.CeilingHeight(new Vector3(0, 20, 0)), 1f);

@@ -8,7 +8,7 @@ namespace WoadRaiders.Core.Tests;
 
 /// <summary>
 /// The scene-to-geometry pipeline, engine-free: Godot .tscn text goes in,
-/// realm data comes out — markers, and every BoxMesh slab in the scene (with
+/// realm data comes out — markers, and every BoxMesh in the scene (with
 /// composed and rotated transforms) triangulated straight from the scene
 /// text. No groups, no naming, no privileged mesh: an author builds a scene
 /// and the pipeline reads what is there. This is what the tools run when they
@@ -23,7 +23,7 @@ public class RealmSceneFileTests
     private const string Realm = """
         [gd_scene load_steps=3 format=3]
 
-        [sub_resource type="BoxMesh" id="slab"]
+        [sub_resource type="BoxMesh" id="box"]
         size = Vector3(100, 20, 60)
 
         [sub_resource type="BoxMesh" id="unit"]
@@ -35,17 +35,17 @@ public class RealmSceneFileTests
 
         [node name="Floor" type="MeshInstance3D" parent="Terraces" groups=["ground"]]
         transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 30, 0)
-        mesh = SubResource("slab")
+        mesh = SubResource("box")
 
         [node name="Turned" type="MeshInstance3D" parent="Terraces" groups=["structure"]]
         transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
-        mesh = SubResource("slab")
+        mesh = SubResource("box")
 
         [node name="Tiny" type="MeshInstance3D" parent="." groups=["structure"]]
         mesh = SubResource("unit")
 
         [node name="Scenery" type="MeshInstance3D" parent="."]
-        mesh = SubResource("slab")
+        mesh = SubResource("box")
 
         [node name="PlayerSpawn" type="Marker3D" parent="."]
         transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 1, 200)
@@ -64,7 +64,7 @@ public class RealmSceneFileTests
         """;
 
     [Fact]
-    public void A_realm_scene_parses_into_markers_and_a_slab_soup()
+    public void A_realm_scene_parses_into_markers_and_a_geometry_soup()
     {
         var geometry = RealmSceneFile.Parse(Realm, "res://maps/Realm.tscn");
 
@@ -77,7 +77,7 @@ public class RealmSceneFileTests
             geometry.EnemySpawns.Select(s => s.Type).ToArray());
         Assert.Equal(new Vector3(30, 0, 40), geometry.EnemySpawns[0].Position);
 
-        // FOUR slabs, 12 triangles each — including "Scenery", which sits in
+        // FOUR boxes, 12 triangles each — including "Scenery", which sits in
         // no group at all. Authors tag nothing: every mesh in the scene is
         // geometry, and what it MEANS is read back off its shape afterwards.
         var soup = geometry.Soup;
@@ -96,29 +96,29 @@ public class RealmSceneFileTests
         var realm = RealmSceneFile.Parse("""
             [gd_scene load_steps=2 format=3]
 
-            [sub_resource type="BoxMesh" id="slab"]
+            [sub_resource type="BoxMesh" id="box"]
             size = Vector3(400, 20, 400)
 
             [node name="Realm" type="Node3D"]
 
             [node name="Hall" type="MeshInstance3D" parent="."]
-            mesh = SubResource("slab")
+            mesh = SubResource("box")
 
             [node name="Dressing" type="Node3D" parent="." groups=["no_collide"]]
 
             [node name="Banner" type="MeshInstance3D" parent="Dressing"]
             transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, 0)
-            mesh = SubResource("slab")
+            mesh = SubResource("box")
 
             [node name="Tassel" type="MeshInstance3D" parent="Dressing/Banner"]
             transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 100, 0)
-            mesh = SubResource("slab")
+            mesh = SubResource("box")
 
             [node name="PlayerSpawn" type="Marker3D" parent="Dressing"]
             transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 60, 7)
             """);
 
-        // One slab's worth of triangles: the hall alone.
+        // One box's worth of triangles: the hall alone.
         Assert.Equal(12, realm.Soup!.Triangles.Length / 3);
         Assert.Equal(10f, realm.Soup.TopSurfaceAt(0f, 0f) ?? float.NaN, 3);   // the hall's top face
         Assert.Equal(new Vector3(5, 60, 7), realm.SpawnPoint);                // the marker still counts
@@ -132,14 +132,14 @@ public class RealmSceneFileTests
         var soup = RealmSceneFile.Parse("""
             [gd_scene load_steps=2 format=3]
 
-            [sub_resource type="BoxMesh" id="slab"]
+            [sub_resource type="BoxMesh" id="box"]
             size = Vector3(100, 20, 100)
 
             [node name="Realm" type="Node3D"]
 
             [node name="AnyOldMesh" type="MeshInstance3D" parent="."]
             transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 30, 0)
-            mesh = SubResource("slab")
+            mesh = SubResource("box")
 
             [node name="PlayerSpawn" type="Marker3D" parent="."]
             transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
@@ -150,13 +150,13 @@ public class RealmSceneFileTests
         // read from the triangles' own normals, neither declared anywhere.
         Assert.Equal(40f, soup!.TopSurfaceAt(0f, 0f) ?? float.NaN, 3);
         Assert.True(soup.SegmentHits(new Vector3(-80, 30, 0), new Vector3(80, 30, 0), blockersOnly: true),
-            "the slab's sheer side should block a body's clearance probe");
+            "the box's sheer side should block a body's clearance probe");
         Assert.False(soup.SegmentHits(new Vector3(-20, 45, 0), new Vector3(20, 45, 0), blockersOnly: true),
-            "nothing sheer stands above the slab's top face");
+            "nothing sheer stands above the box's top face");
     }
 
     [Fact]
-    public void Slabs_compose_transforms_and_ride_where_they_stand()
+    public void Boxes_compose_transforms_and_ride_where_they_stand()
     {
         var soup = RealmSceneFile.Parse(Realm).Soup!;
 
@@ -165,14 +165,14 @@ public class RealmSceneFileTests
         Assert.Equal(40f, soup.TopSurfaceAt(15f, 20f) ?? float.NaN, 3);
         Assert.Null(soup.TopSurfaceAt(200f, 200f)); // no floor out there
 
-        // Turned: the same slab yawed 90° under the parent — its footprint
+        // Turned: the same box yawed 90° under the parent — its footprint
         // swaps, so its long side now runs along z. As structure it never
         // answers floor queries, but it blocks sight straight through it.
         Assert.True(soup.SegmentHits(new Vector3(-30, 5, 20), new Vector3(50, 5, 20)));
     }
 
     [Fact]
-    public void A_non_slab_mesh_in_the_groups_needs_the_bake_tool()
+    public void A_non_box_mesh_in_the_groups_needs_the_bake_tool()
     {
         var text = """
             [gd_scene format=3]
@@ -191,6 +191,62 @@ public class RealmSceneFileTests
             .Build();
         var geometry = RealmSceneFile.Parse(text, sampledSoup: sampled);
         Assert.Same(sampled, geometry.Soup);
+    }
+
+    // An instanced kit asset is OPAQUE to scene text: the file says only
+    // "instance=ExtResource(...)", so this reader cannot tell whether the
+    // piece carries collision. Skipping it silently was a real fault — a
+    // realm whose only doorway was plugged by an instanced prop parsed to an
+    // OPEN doorway and passed every check, while the baked geometry it would
+    // actually be served as had the boss walled off. Absent geometry is the
+    // one fault a reachability proof can never see, so the reader refuses.
+    [Fact]
+    public void An_instanced_prop_that_may_block_is_refused_not_skipped()
+    {
+        var text = """
+            [gd_scene load_steps=3 format=3]
+            [ext_resource type="PackedScene" path="res://assets/coffin.gltf" id="1_kit"]
+            [sub_resource type="BoxMesh" id="box"]
+            size = Vector3(100, 20, 100)
+            [node name="R" type="Node3D"]
+            [node name="Floor" type="MeshInstance3D" parent="."]
+            mesh = SubResource("box")
+            [node name="Sarcophagus" type="Node3D" parent="." instance=ExtResource("1_kit")]
+            [node name="PlayerSpawn" type="Marker3D" parent="."]
+            """;
+
+        var e = Assert.Throws<InvalidDataException>(() => RealmSceneFile.Parse(text));
+        Assert.Contains("instanced", e.Message);
+        Assert.Contains("bake", e.Message);
+
+        // The bake tool sees inside the instance and hands the soup in — then it parses.
+        var sampled = new SoupBuilder()
+            .AddBox(new Aabb(Vector3.Zero, new Vector3(10, 1, 10)))
+            .Build();
+        Assert.Same(sampled, RealmSceneFile.Parse(text, sampledSoup: sampled).Soup);
+    }
+
+    // The escape the shipping Crypt rides on: its 237 kit pieces sit under one
+    // no_collide folder, so they are dressing by declaration and this reader
+    // owes them nothing. Without this the Crypt's own scene would not parse.
+    [Fact]
+    public void An_instanced_prop_declared_passable_costs_the_reader_nothing()
+    {
+        var geometry = RealmSceneFile.Parse("""
+            [gd_scene load_steps=3 format=3]
+            [ext_resource type="PackedScene" path="res://assets/coffin.gltf" id="1_kit"]
+            [sub_resource type="BoxMesh" id="box"]
+            size = Vector3(100, 20, 100)
+            [node name="R" type="Node3D"]
+            [node name="Floor" type="MeshInstance3D" parent="."]
+            mesh = SubResource("box")
+            [node name="Relics" type="Node3D" parent="." groups=["no_collide"]]
+            [node name="Sarcophagus" type="Node3D" parent="Relics" instance=ExtResource("1_kit")]
+            [node name="PlayerSpawn" type="Marker3D" parent="."]
+            """);
+
+        // The floor alone — and no refusal, because nothing opaque claims to block.
+        Assert.Equal(12, geometry.Soup!.Triangles.Length / 3);
     }
 
     [Fact]

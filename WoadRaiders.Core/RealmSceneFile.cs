@@ -19,13 +19,24 @@ namespace WoadRaiders.Core;
 ///                   type, and no exception for instanced kit props either:
 ///                   what is baked is not a curated subset, it is the realm.
 ///                   A sarcophagus blocks because it is a sarcophagus.
-///                   BoxMesh slabs parse straight from the scene text here;
-///                   any OTHER mesh — a kit asset, a sculpted mesh — needs
-///                   the in-Godot bake tool (Client RealmBaker), which samples
-///                   real triangles and hands the whole soup in via
+///                   A BoxMesh is the one mesh this engine-free reader can
+///                   measure unaided, straight from the scene text; any OTHER
+///                   mesh — a kit asset, a sculpted mesh — needs the in-Godot
+///                   bake tool (Client RealmBaker), which samples real
+///                   triangles and hands the whole soup in via
 ///                   <paramref name="sampledSoup"/>, since scene text alone
 ///                   cannot see inside an instance or measure an arbitrary
-///                   mesh.
+///                   mesh. That is a limit of READING a .tscn as text, not a
+///                   limit on what a realm may be modelled from: the baked
+///                   pipeline every shipping realm goes through takes any
+///                   geometry Godot can express.
+///                   Where this reader cannot measure, it REFUSES — it never
+///                   quietly returns a smaller realm than the scene describes.
+///                   Both an unmeasurable mesh and an opaque instance throw,
+///                   because a prop missing from the geometry is precisely the
+///                   fault nothing downstream can detect (see NoCollideGroup
+///                   below on why absent geometry is invisible to a validator
+///                   that can only prove routes blocked).
 ///   - Player spawn: a Marker3D named exactly "PlayerSpawn" (required).
 ///   - Enemy spawns: Marker3D nodes named "EnemySpawn*" — type from the name:
 ///                   contains "Rogue" → Rogue, "Mage" → Mage, else Minion.
@@ -66,7 +77,7 @@ public static class RealmSceneFile
     /// holds a raider up is a property of its normal, and whether a thing is
     /// too small to matter is decided by the agent radius. A hand-kept copy of
     /// a computable fact drifts, and drifts silently. This tag duplicates no
-    /// fact — a hanging banner and a wall panel are the same thin slab of
+    /// fact — a hanging banner and a wall panel are the same thin sheet of
     /// triangles, and nothing measurable separates them. The difference is
     /// FICTION, and fiction is the author's to declare. Tag intent; never
     /// tag facts.
@@ -92,8 +103,9 @@ public static class RealmSceneFile
         Vector3? boss = null;
         var enemySpawns = new List<EnemySpawnPoint>();
         var builder = new SoupBuilder();
-        var slabs = 0;
+        var boxes = 0;
         var unsampledMeshes = 0;
+        var opaqueInstances = 0;
 
         // World transform per node path, composed root-down (nodes appear in
         // tree order, parents before children).
@@ -131,7 +143,22 @@ public static class RealmSceneFile
                 Groups(node).Contains(NoCollideGroup))
                 passable.Add(path); // and so is everything hung beneath it
 
-            if (type == "MeshInstance3D" && !passable.Contains(path))
+            // An INSTANCED scene — a kit asset, a .glb — is opaque to this
+            // reader: scene text says only "instance=ExtResource(...)", so
+            // whether the thing carries collision, and how much, is unknowable
+            // without loading it. REFUSE rather than skip. Skipping is the one
+            // error nothing downstream can catch: the validator can prove a
+            // route blocked, but can never notice geometry that was never
+            // there, so a sarcophagus sealing a doorway would read as an open
+            // doorway and the realm would certify as raidable while being
+            // sealed. Dressing that genuinely holds nobody up says so with
+            // NoCollideGroup and is excused above, which is why the shipping
+            // realms' kit props cost nothing here.
+            var instanced = node.Attributes.ContainsKey("instance");
+            if (instanced && !passable.Contains(path) && sampledSoup is null)
+                opaqueInstances++;
+
+            if (type == "MeshInstance3D" && !instanced && !passable.Contains(path))
             {
                 if (sampledSoup is not null)
                 {
@@ -142,7 +169,7 @@ public static class RealmSceneFile
                     for (var k = 0; k < 8; k++)
                         corners[k] = world.Apply(SoupBuilder.LocalCorner(k, size * 0.5f));
                     builder.AddBoxCorners(corners);
-                    slabs++;
+                    boxes++;
                 }
                 else
                 {
@@ -162,13 +189,20 @@ public static class RealmSceneFile
 
         if (sampledSoup is null && unsampledMeshes > 0)
             throw new InvalidDataException(
-                $"{unsampledMeshes} mesh(es) in this scene are not BoxMesh slabs — this engine-free reader can only " +
+                $"{unsampledMeshes} mesh(es) in this scene are not a BoxMesh — this engine-free reader can only " +
                 "measure boxes from scene text; sample them with the in-Godot bake tool " +
                 "(WoadRaiders.Client/tools/bake_realm.gd)");
+        if (sampledSoup is null && opaqueInstances > 0)
+            throw new InvalidDataException(
+                $"{opaqueInstances} instanced scene(s) here may carry collision this engine-free reader cannot " +
+                "see — scene text cannot look inside an instance, and skipping them would certify a realm that " +
+                "the baked geometry blocks. Sample them with the in-Godot bake tool " +
+                $"(WoadRaiders.Client/tools/bake_realm.gd), or put them in the '{NoCollideGroup}' group if they " +
+                "are dressing a raider walks through");
         if (spawn is null)
             throw new InvalidDataException("the scene has no Marker3D named 'PlayerSpawn'");
 
-        return new RealmDefinition(spawn.Value, sampledSoup ?? (slabs > 0 ? builder.Build() : null), enemySpawns)
+        return new RealmDefinition(spawn.Value, sampledSoup ?? (boxes > 0 ? builder.Build() : null), enemySpawns)
         {
             ScenePath = scenePath,
             BossSpawn = boss,

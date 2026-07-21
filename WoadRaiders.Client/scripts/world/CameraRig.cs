@@ -15,10 +15,10 @@ namespace WoadRaiders.Client;
 /// the crypt can afford, so under a roof the rig FITS itself to the space: it
 /// flattens its pitch and draws its boom in until the raider is in plain sight,
 /// then springs shorter still if a wall is in the way. There is no room concept
-/// to consult — realms are slabs, not volumes — so the fit is measured, by
-/// asking the geometry whether it can see the player from where it means to
-/// stand. Ducking under a roof is quick (a doorway must not clip); opening back
-/// out under the sky is slow, so the view never lurches.
+/// to consult — a realm is loose geometry, not a set of volumes — so the fit
+/// is measured, by asking the geometry whether it can see the player from
+/// where it means to stand. Ducking under a roof is quick (a doorway must not
+/// clip); opening back out under the sky is slow, so the view never lurches.
 ///
 /// Also the owner of the frame's camera facts that the rest of the client reads:
 /// the live ground-plane forward (input mapping, portal placement, spawn walk)

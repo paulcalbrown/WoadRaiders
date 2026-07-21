@@ -32,7 +32,7 @@ public sealed class SoupBuilder
     /// <summary>
     /// A box given its 8 world-space corners in the builder's ring order
     /// (see <see cref="LocalCorner"/>): 0-3 the bottom ring, 4-7 the top,
-    /// both wound min→max. This is how a ROTATED slab enters the soup — its
+    /// both wound min→max. This is how a ROTATED box enters the soup — its
     /// corners transformed by the caller, the outward winding preserved by
     /// any proper rotation.
     /// </summary>
@@ -50,7 +50,7 @@ public sealed class SoupBuilder
         ReadOnlySpan<int> faces = stackalloc int[]
         {
             0, 1, 2,  0, 2, 3,  // bottom (-Y)
-            4, 7, 5,  5, 7, 6,  // top (+Y) — the face feet ride when this slab is ground
+            4, 7, 5,  5, 7, 6,  // top (+Y) — the face feet ride when this box is ground
             0, 4, 1,  1, 4, 5,  // z-min
             3, 2, 6,  3, 6, 7,  // z-max
             0, 3, 4,  3, 7, 4,  // x-min

@@ -66,14 +66,15 @@ public static class RealmValidator
                     continue;
 
                 // Judge where a raider would ACTUALLY end up walking at this
-                // sample, not the sample itself. A chamber's floor slab runs on
-                // underneath its own walls and pillars, and Recast rasterizes a
-                // slab as a hollow shell — so the floor sealed inside masonry
-                // survives as a walkable ISLAND, cut off from everything. Asked
-                // about such a cell directly, the sweep reports a dead end that
-                // no raider could ever be standing in. Pathing to it instead
-                // leaves the walker on the nearest ground it can truly reach,
-                // and if THAT cannot reach the boss, the trap is real.
+                // sample, not the sample itself. A chamber's floor runs on
+                // underneath its own walls and pillars, and Recast rasterizes
+                // solid geometry as a hollow shell — so the floor sealed
+                // inside masonry survives as a walkable ISLAND, cut off from
+                // everything. Asked about such a cell directly, the sweep
+                // reports a dead end that no raider could ever be standing
+                // in. Pathing to it instead leaves the walker on the nearest
+                // ground it can truly reach, and if THAT cannot reach the
+                // boss, the trap is real.
                 landing.Clear();
                 if (!nav.TryFindPath(realm.SpawnPoint, new Vector3(x, y, z), landing) || landing.Count == 0)
                     continue;

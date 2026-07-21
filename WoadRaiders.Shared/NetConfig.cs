@@ -73,8 +73,8 @@ public static class NetConfig
     ///       peers move on RealmGeometry instead of sampling the heightfield,
     /// v17 = the heightfield and terrain concept removed outright: the packet
     ///       ships the realm's triangle soup (floors first) + navmesh; the
-    ///       terrain grid and solid boxes are gone. Realms are BUILT — slabs,
-    ///       not landscape,
+    ///       terrain grid and solid boxes are gone. Realms are BUILT — modelled
+    ///       geometry, not landscape,
     /// v18 = the soup loses its floor/structure split (no FloorTriangleCount;
     ///       triangle order carries no meaning). What can be stood on and what
     ///       blocks are read from each triangle's normal, and what can be
