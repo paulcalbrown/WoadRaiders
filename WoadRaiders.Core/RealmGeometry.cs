@@ -118,7 +118,7 @@ public sealed class RealmGeometry : IRealmGeometry
     /// <summary>
     /// Boarding by footprint reach: the sim's WalkSurface counts any surface
     /// within StepHeight above whose edge the body cylinder overlaps — that is
-    /// how a walker steps from a slope onto a bridge deck whose slab starts a
+    /// how a walker steps from a slope onto a bridge deck that starts a
     /// few units ahead. The mesh's edge additionally sits an eroded radius in
     /// from the physical edge, so the reach allows for both. Only genuine
     /// rises board (10..StepHeight — smaller steps are span-connected in the

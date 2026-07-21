@@ -46,7 +46,7 @@ public static class DungeonVisualBuilder
         var forward = CameraRig.LiveGroundForward;
         var mouth = realm.SpawnPoint.ToGodot() - forward * PortalSetback;
         // Seat the gate on the floor (the spawn's own height when the setback
-        // hangs past the slab's edge).
+        // hangs past the floor's edge).
         mouth.Y = realm.Soup?.GroundBelow(mouth.X, mouth.Z, realm.SpawnPoint.Y, SimConstants.StepHeight)
                   ?? realm.SpawnPoint.Y;
         parent.AddChild(new PortalView

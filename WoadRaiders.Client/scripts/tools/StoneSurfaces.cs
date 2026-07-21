@@ -3,18 +3,19 @@ using Godot;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// Cut-stone surfaces for slab-built realms — procedural, so a realm carries
-/// its whole look in its own .tscn with no texture files to ship or license.
+/// Cut-stone surfaces for built realms — procedural, so a realm carries its
+/// whole look in its own .tscn with no texture files to ship or license.
 /// Each surface is a StandardMaterial3D over two NoiseTexture2D layers (colour
 /// and relief) driven by seeded FastNoiseLite, which Godot's serializer writes
 /// out as ordinary sub-resources and regenerates on load.
 ///
-/// Mapping is WORLD triplanar, and that is the load-bearing choice: a realm's
-/// slabs range from a stair tread to a hall floor, and BoxMesh UVs stretch to
-/// whatever they are told to cover — so per-mesh UVs would give every stone a
-/// different grain size. Triplanar in world space fixes the texel density to
-/// the WORLD instead, so one texture scale reads identically on a tread and on
-/// a roof, and slabs meeting at a corner share a continuous grain.
+/// Mapping is WORLD triplanar, and that is the load-bearing choice: the
+/// surfaces a realm dresses range from a stair tread to a hall floor, and
+/// BoxMesh UVs stretch to whatever they are told to cover — so per-mesh UVs
+/// would give every stone a different grain size. Triplanar in world space
+/// fixes the texel density to the WORLD instead, so one texture scale reads
+/// identically on a tread and on a roof, and two stones meeting at a corner
+/// share a continuous grain.
 ///
 /// Seeds are explicit and fixed: the realm regenerates byte-identically, which
 /// the build pipeline's normalize-and-diff step depends on.
@@ -40,7 +41,7 @@ public static class StoneSurfaces
             NormalScale = relief,
             Roughness = roughness,
             Metallic = 0f,
-            // World triplanar: texel density belongs to the realm, not the slab.
+            // World triplanar: texel density belongs to the realm, not the mesh.
             Uv1Triplanar = true,
             Uv1WorldTriplanar = true,
             Uv1Scale = Vector3.One / grain,

@@ -50,14 +50,14 @@ public partial class RealmBaker : RefCounted
         var root = packed.Instantiate();
         var builder = new SoupBuilder();
         var triangles = new List<float>();
-        var passed = new Passable();
-        CollectTriangles(root, Transform3D.Identity, triangles, passed);
+        var passed = new MeshTriangles.Excluded();
+        MeshTriangles.Collect(root, Transform3D.Identity, triangles, passed);
         root.Free();
 
         TriangleSoup? soup = null;
         if (triangles.Count > 0)
         {
-            builder.AddTriangles(triangles.ToArray(), SequentialIndices(triangles.Count / 9));
+            builder.AddTriangles(triangles.ToArray(), MeshTriangles.SequentialIndices(triangles.Count / 9));
             soup = builder.Build();
             GD.Print($"sampled {soup.Triangles.Length / 3} triangles");
         }
@@ -87,74 +87,18 @@ public partial class RealmBaker : RefCounted
         return 0;
     }
 
-    /// <summary>
-    /// Every mesh the realm itself is BUILT from, in world space — whatever
-    /// the mesh is, wherever it sits, in no group and under no naming rule.
-    /// What holds a raider up and what blocks them are decided afterwards
-    /// from the geometry: by each triangle's normal, and by whether a surface
-    /// survives Recast's voxels and agent-radius erosion.
-    ///
-    /// EVERYTHING is taken — the kit sarcophagus and the brazier and the bone
-    /// pile along with the walls, because a sarcophagus you cannot walk
-    /// through is the honest answer and an author should not have to say so.
-    /// The costs turned out to be smaller than they looked: the navmesh
-    /// barely moves (+17%, since sub-agent detail cannot survive radius
-    /// erosion), and welding plus compression put a 131k-triangle Crypt on
-    /// the join wire at ~670 KB. The one real obstacle was never the props —
-    /// it was a dead corner in the Crypt's chasm that only became reachable
-    /// once they were included, and that is fixed in the realm, where it
-    /// belonged.
-    /// </summary>
-    /// <summary>Running tally of what <c>no_collide</c> waved through.</summary>
-    private sealed class Passable
-    {
-        public int Meshes;
-        public int Triangles;
-    }
-
-    private static void CollectTriangles(Node node, Transform3D parentXf, List<float> triangles,
-                                         Passable passed, bool excluded = false)
-    {
-        var xf = node is Node3D spatial ? parentXf * spatial.Transform : parentXf;
-        // Inherited, never revoked: a subtree hung under a passable node is
-        // passable too, so one tag on a folder of dressing covers all of it.
-        excluded |= node.IsInGroup(RealmSceneFile.NoCollideGroup);
-
-        if (node is MeshInstance3D { Mesh: { } mesh })
-        {
-            var faces = mesh.GetFaces();
-            if (excluded)
-            {
-                passed.Meshes++;
-                passed.Triangles += faces.Length / 3;
-            }
-            else
-            {
-                // Godot winds front faces CLOCKWISE; the soup (and Recast's
-                // slope filter) want counter-clockwise, or every upward face
-                // reads as an overhang. Swap two corners per triangle.
-                for (var i = 0; i + 2 < faces.Length; i += 3)
-                {
-                    foreach (var vertex in new[] { faces[i], faces[i + 2], faces[i + 1] })
-                    {
-                        var world = xf * vertex;
-                        triangles.Add(world.X);
-                        triangles.Add(world.Y);
-                        triangles.Add(world.Z);
-                    }
-                }
-            }
-        }
-
-        foreach (var child in node.GetChildren())
-            CollectTriangles(child, xf, triangles, passed, excluded);
-    }
-
-    private static int[] SequentialIndices(int triangles)
-    {
-        var indices = new int[triangles * 3];
-        for (var i = 0; i < indices.Length; i++)
-            indices[i] = i;
-        return indices;
-    }
+    // The sampling itself lives in MeshTriangles, shared with RealmScene so a
+    // design measures its own modelled ground with the same code (and the same
+    // winding rule) that the bake will measure it with.
+    //
+    // EVERYTHING is taken — the kit sarcophagus and the brazier and the bone
+    // pile along with the walls, because a sarcophagus you cannot walk
+    // through is the honest answer and an author should not have to say so.
+    // The costs turned out to be smaller than they looked: the navmesh
+    // barely moves (+17%, since sub-agent detail cannot survive radius
+    // erosion), and welding plus compression put a 131k-triangle Crypt on
+    // the join wire at ~670 KB. The one real obstacle was never the props —
+    // it was a dead corner in the Crypt's chasm that only became reachable
+    // once they were included, and that is fixed in the realm, where it
+    // belonged.
 }

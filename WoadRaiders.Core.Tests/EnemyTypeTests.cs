@@ -71,7 +71,7 @@ public class EnemyTypeTests
     [Fact]
     public void Bolt_dodged_by_stepping_aside_misses_and_fizzles()
     {
-        // Open slab floor = no arena clamp (so the dodge sticks) and clear LOS.
+        // Open flat floor = no arena clamp (so the dodge sticks) and clear LOS.
         var world = new GameWorld { Geometry = TestRealms.Open() };
         var player = world.AddPlayer(1, "A"); // origin
         world.SpawnEnemy(new Vector3(160, 0, 0), EnemyType.Mage);

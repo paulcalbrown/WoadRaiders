@@ -5,7 +5,7 @@ namespace WoadRaiders.Client;
 /// <summary>
 /// The Crypt's imported dressing — the pass that places the CC0 asset-kit
 /// pieces (KayKit Halloween Bits, Kenney Graveyard Kit, and a few Poly Pizza
-/// singles; see assets/crypt/*/LICENSE and ATTRIBUTION.md) through the slab
+/// singles; see assets/crypt/*/LICENSE and ATTRIBUTION.md) through the built
 /// chambers. Each piece is instanced from its .glb/.gltf, so the saved scene
 /// carries instance= references, never inlined geometry — RealmSceneBuilder
 /// owns only the instance roots when packing.
@@ -21,8 +21,8 @@ namespace WoadRaiders.Client;
 /// The kits are authored at different scales (KayKit props run stylized-large,
 /// Kenney's run miniature), so every placement states its own scale; this
 /// game's characters stand ~44 units (~25 units to the metre). The whole pass
-/// is declared PASSABLE (<see cref="RealmScene.Passable{T}"/>), so none of it
-/// reaches the server as collision — see the note in <c>Relics()</c> for why
+/// is declared PASSABLE (<see cref="RealmScene.DeclarePassable{T}"/>), so none
+/// of it reaches the server as collision — see the note in <c>Relics()</c> for why
 /// this realm chooses that, and Core.RealmSceneFile for what the claim means.
 /// </summary>
 public sealed partial class CryptDesign
@@ -65,7 +65,7 @@ public sealed partial class CryptDesign
         // course the fights were never spaced for. That is a decision about
         // this realm rather than a rule about realms: another might well want
         // its sarcophagi to be cover, and would simply not say this.
-        var relics = _scene.Passable(_scene.Folder("Relics"));
+        var relics = _scene.DeclarePassable(_scene.Folder("Relics"));
 
         // ---- the kits ----
         var skull = Kit.Load("assets/crypt/kaykit_halloween/skull.gltf");
@@ -110,9 +110,11 @@ public sealed partial class CryptDesign
             relics.AddChild(node);
         }
 
-        // Seat a piece on whatever floor lies under (x, z).
-        void Place(Kit kit, float x, float z, float scale, float yaw = 0f, float lift = 0f) =>
-            Add(kit.At(_scene.OnFloor(x, z) + new Vector3(0f, lift, 0f), scale, yaw));
+        // Seat a piece on the floor at or below `near` — its Y names the LEVEL
+        // meant, which is what keeps a piece bound for the chasm floor off the
+        // bridge (and off the flights climbing out of it).
+        void Place(Kit kit, Vector3 near, float scale, float yaw = 0f, float lift = 0f) =>
+            Add(kit.At(_scene.OnFloor(near) + new Vector3(0f, lift, 0f), scale, yaw));
 
         // A point an INSET in from one of a chamber's walls, at a fraction
         // ALONG that wall — the primitive the whole dressing is built from.
@@ -137,8 +139,9 @@ public sealed partial class CryptDesign
         void Against(Kit kit, string room, Side side, float along, float scale,
                      float inset = 110f, float skew = 0f, float lift = 0f)
         {
-            var p = OnWall(Named(room), side, along, inset);
-            Place(kit, p.X, p.Z, scale, Facing(side) + skew, lift);
+            var c = Named(room);
+            var p = OnWall(c, side, along, inset);
+            Place(kit, new Vector3(p.X, c.FloorY, p.Z), scale, Facing(side) + skew, lift);
         }
 
         // Walk a wall, dropping a piece every stride — how a long wall gets
@@ -153,26 +156,31 @@ public sealed partial class CryptDesign
                 var along = count == 1 ? (from + to) * 0.5f : Mathf.Lerp(from, to, i / (float)(count - 1));
                 var (kit, scale) = pick(i);
                 var p = OnWall(c, side, along, inset);
-                Place(kit, p.X, p.Z, scale, Facing(side) + (Hash(i, salt, 71) - 0.5f) * 0.3f);
+                Place(kit, new Vector3(p.X, c.FloorY, p.Z), scale,
+                      Facing(side) + (Hash(i, salt, 71) - 0.5f) * 0.3f);
             }
         }
 
-        // Scatter remains across a fraction-rect of a chamber's floor.
-        void Ossuary(string room, float u0, float v0, float u1, float v1, int count, int salt)
+        // Scatter remains across a fraction-rect of a chamber's floor. Defaults
+        // to the chamber's own floor; nearY names the level in a stacked room.
+        void Ossuary(string room, float u0, float v0, float u1, float v1, int count, int salt,
+                     float? nearY = null)
         {
             var c = Named(room);
+            var y = nearY ?? c.FloorY;
             for (var k = 0; k < count; k++)
             {
                 var x = Mathf.Lerp(c.X0 + c.Width * u0, c.X0 + c.Width * u1, Hash(k, salt, 821));
                 var z = Mathf.Lerp(c.Z0 + c.Depth * v0, c.Z0 + c.Depth * v1, Hash(k, salt, 823));
                 var yaw = Hash(k, salt, 827) * Mathf.Tau;
+                var at = new Vector3(x, y, z);
                 switch ((int)(Hash(k, salt, 829) * 5f))
                 {
-                    case 0: Place(ribcage, x, z, 13f, yaw, lift: 10f); break;
-                    case 1: Place(smallSkull, x, z, 18f, yaw); break;
-                    case 2: Place(boneA, x, z, 16f, yaw, lift: 2f); break;
-                    case 3: Place(debris, x, z, 45f, yaw); break;
-                    default: Place(skull, x, z, 8f, yaw, lift: 1f); break;
+                    case 0: Place(ribcage, at, 13f, yaw, lift: 10f); break;
+                    case 1: Place(smallSkull, at, 18f, yaw); break;
+                    case 2: Place(boneA, at, 16f, yaw, lift: 2f); break;
+                    case 3: Place(debris, at, 45f, yaw); break;
+                    default: Place(skull, at, 8f, yaw, lift: 1f); break;
                 }
             }
         }
@@ -221,8 +229,9 @@ public sealed partial class CryptDesign
         Against(postSkull, "hall", Side.East, 0.62f, 20f, inset: 150f);
         Ossuary("hall", 0.10f, 0.08f, 0.92f, 0.30f, 10, 21);
         Ossuary("hall", 0.10f, 0.70f, 0.92f, 0.92f, 10, 22);
-        Place(skullCandle, Named("hall").X0 + 700f, Named("hall").Z0 + 640f, 9f, 0.8f);
-        Place(skullCandle, Named("hall").X1 - 700f, Named("hall").Z1 - 640f, 9f, 2.4f);
+        var hall = Named("hall");
+        Place(skullCandle, new Vector3(hall.X0 + 700f, hall.FloorY, hall.Z0 + 640f), 9f, 0.8f);
+        Place(skullCandle, new Vector3(hall.X1 - 700f, hall.FloorY, hall.Z1 - 640f), 9f, 2.4f);
         HangThrough("hall", 3, 2);
 
         // ---- the passages: lanterns from every corridor roof, walked along
@@ -242,32 +251,36 @@ public sealed partial class CryptDesign
 
         // ---- the span: iron rails along the bridge (one length torn away —
         // the gap tells the story), witchfire baskets at its ends, and below,
-        // everyone the bridge has ever dropped. Chasm placements stay OUT of
-        // the deck's z-band: OnFloor seats on the HIGHEST floor, which there
-        // is the bridge, not the pit.
+        // everyone the bridge has ever dropped. This is the realm's one
+        // STACKED room, so every piece here names the level it belongs to —
+        // deckY for the bridge, pitY for the chasm floor under it. The deck's
+        // own extent is read from the plan, never restated.
         var chasm = Named("span");
-        var deckZ0 = S(1740f);
-        var deckZ1 = S(1860f);
+        var deckZ0 = _spanDeck.Min.Z;
+        var deckZ1 = _spanDeck.Max.Z;
+        var deckY = _spanDeck.Max.Y;
+        var pitY = chasm.FloorY;
         for (var i = 0; i < 9; i++)
         {
             var x = Mathf.Lerp(chasm.X0 + 200f, chasm.X1 - 200f, i / 8f);
-            Place(i == 4 ? ironFenceBent : ironFence, x, deckZ0 + 26f, 40f);
-            Place(i == 3 ? ironFenceBent : ironFence, x, deckZ1 - 26f, 40f);
+            Place(i == 4 ? ironFenceBent : ironFence, new Vector3(x, deckY, deckZ0 + 26f), 40f);
+            Place(i == 3 ? ironFenceBent : ironFence, new Vector3(x, deckY, deckZ1 - 26f), 40f);
         }
-        Place(fireBasket, chasm.X0 + 150f, chasm.MidZ - 90f, 42f);
-        Place(fireBasket, chasm.X0 + 150f, chasm.MidZ + 90f, 42f);
-        Place(fireBasket, chasm.X1 - 150f, chasm.MidZ - 90f, 42f);
-        Place(fireBasket, chasm.X1 - 150f, chasm.MidZ + 90f, 42f);
-        Place(skullCandle, chasm.X0 + 190f, deckZ0 - 220f, 9f, 1.9f); // someone's candle, still lit
+        Place(fireBasket, new Vector3(chasm.X0 + 150f, deckY, chasm.MidZ - 90f), 42f);
+        Place(fireBasket, new Vector3(chasm.X0 + 150f, deckY, chasm.MidZ + 90f), 42f);
+        Place(fireBasket, new Vector3(chasm.X1 - 150f, deckY, chasm.MidZ - 90f), 42f);
+        Place(fireBasket, new Vector3(chasm.X1 - 150f, deckY, chasm.MidZ + 90f), 42f);
+        // someone's candle, still lit
+        Place(skullCandle, new Vector3(chasm.X0 + 190f, pitY, deckZ0 - 220f), 9f, 1.9f);
         // The north pit: the nameless dead, and something far older.
-        Place(greatBone, chasm.MidX - 300f, chasm.Z0 + 800f, 7f, 0.9f);
-        Place(standingBones, chasm.MidX + 250f, chasm.Z0 + 450f, 10f, 2.6f); // still on its feet
-        Place(graveBroken, chasm.X0 + 280f, chasm.Z0 + 1100f, 40f, 0.5f);
-        Ossuary("span", 0.10f, 0.04f, 0.92f, 0.38f, 16, 31);
+        Place(greatBone, new Vector3(chasm.MidX - 300f, pitY, chasm.Z0 + 800f), 7f, 0.9f);
+        Place(standingBones, new Vector3(chasm.MidX + 250f, pitY, chasm.Z0 + 450f), 10f, 2.6f); // still on its feet
+        Place(graveBroken, new Vector3(chasm.X0 + 280f, pitY, chasm.Z0 + 1100f), 40f, 0.5f);
+        Ossuary("span", 0.10f, 0.04f, 0.92f, 0.38f, 16, 31, nearY: pitY);
         // The south pit, west of the long stair out.
-        Place(coffinOld, chasm.X0 + 250f, chasm.Z1 - 1000f, 45f, 1.15f);
-        Ossuary("span", 0.08f, 0.66f, 0.55f, 0.96f, 12, 33);
-        Place(urnSquare, chasm.X1 - 260f, chasm.Z1 - 300f, 38f, 0.9f);
+        Place(coffinOld, new Vector3(chasm.X0 + 250f, pitY, chasm.Z1 - 1000f), 45f, 1.15f);
+        Ossuary("span", 0.08f, 0.66f, 0.55f, 0.96f, 12, 33, nearY: pitY);
+        Place(urnSquare, new Vector3(chasm.X1 - 260f, pitY, chasm.Z1 - 300f), 38f, 0.9f);
 
         // ---- the east landing: a lit shelf to catch a breath on.
         Against(plaqueCandles, "landing", Side.North, 0.5f, 16f, inset: 140f);
@@ -307,23 +320,24 @@ public sealed partial class CryptDesign
         Against(shrine, "mausoleum", Side.West, 0.5f, 26f, inset: 160f);
         Against(shrineCandles, "mausoleum", Side.West, 0.38f, 22f, inset: 170f);
         Against(shrineCandles, "mausoleum", Side.West, 0.62f, 22f, inset: 170f);
-        Place(altar, court.X0 + 620f, court.MidZ, 48f, Mathf.Pi / 2f);
+        Place(altar, new Vector3(court.X0 + 620f, court.FloorY, court.MidZ), 48f, Mathf.Pi / 2f);
         foreach (var (u, v) in new[] { (0.16f, 0.16f), (0.84f, 0.16f), (0.16f, 0.84f), (0.84f, 0.84f) })
-            Place(obelisk, court.X0 + court.Width * u, court.Z0 + court.Depth * v, 46f);
+            Place(obelisk, new Vector3(court.X0 + court.Width * u, court.FloorY, court.Z0 + court.Depth * v), 46f);
         // The dais rim: candles round the boss's floor, and skull-lights beyond.
         for (var i = 0; i < 8; i++)
         {
             var a = i / 8f * Mathf.Tau;
-            Place(candleCluster, court.MidX + Mathf.Cos(a) * 560f, court.MidZ + Mathf.Sin(a) * 560f, 40f, a);
-            Place(skullCandle, court.MidX + Mathf.Cos(a + 0.4f) * 900f,
-                  court.MidZ + Mathf.Sin(a + 0.4f) * 900f, 9f, a);
+            Place(candleCluster, new Vector3(court.MidX + Mathf.Cos(a) * 560f, court.FloorY,
+                                             court.MidZ + Mathf.Sin(a) * 560f), 40f, a);
+            Place(skullCandle, new Vector3(court.MidX + Mathf.Cos(a + 0.4f) * 900f, court.FloorY,
+                                           court.MidZ + Mathf.Sin(a + 0.4f) * 900f), 9f, a);
         }
         AlongWall("mausoleum", Side.North, 0.25f, 0.75f, 4,
                   i => i % 2 == 0 ? (coffinCarved, 19f) : (coffin, 18f), inset: 130f, salt: 51);
         AlongWall("mausoleum", Side.South, 0.25f, 0.75f, 4,
                   i => i % 2 == 0 ? (coffin, 18f) : (coffinCarved, 19f), inset: 130f, salt: 52);
-        Place(fireBasket, court.X1 - 380f, court.MidZ - 260f, 42f);
-        Place(fireBasket, court.X1 - 380f, court.MidZ + 260f, 42f);
+        Place(fireBasket, new Vector3(court.X1 - 380f, court.FloorY, court.MidZ - 260f), 42f);
+        Place(fireBasket, new Vector3(court.X1 - 380f, court.FloorY, court.MidZ + 260f), 42f);
         Ossuary("mausoleum", 0.2f, 0.06f, 0.8f, 0.18f, 7, 55);
         Ossuary("mausoleum", 0.2f, 0.82f, 0.8f, 0.94f, 7, 56);
         HangThrough("mausoleum", 2, 2);

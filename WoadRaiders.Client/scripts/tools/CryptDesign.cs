@@ -83,6 +83,12 @@ public sealed partial class CryptDesign : IRealmDesign
     private readonly List<Chamber> _chambers = new();
     private readonly List<Passage> _passages = new();
 
+    /// <summary>The bridge deck over the chasm — the realm's one STACKED spot,
+    /// where "the floor here" has two honest answers. Kept so the dressing and
+    /// the camps can name the level they belong to (its top face, or the pit
+    /// floor beneath it) rather than dodging its footprint.</summary>
+    private Aabb _spanDeck;
+
     /// <summary>The chamber the plan recorded under this name.</summary>
     private Chamber Named(string name) => _chambers.Find(c => c.Name == name);
 
@@ -110,7 +116,11 @@ public sealed partial class CryptDesign : IRealmDesign
         // pit — climbing the south air to land back ON the bridge itself.
         Room("span", 3100, 1200, 3700, 2400, floorY: -300, wallTopY: -60,
                 doorWest: 1800, doorWestY: -160, doorEast: 1800, doorEastY: -160);
-        _scene.AddFloor(Box(S(3100), S(-172), S(1740), S(3700), S(-160), S(1860)), _bone, "Span");
+        // Recorded, not restated: the dressing and the camps read the deck's
+        // own extent from here, so moving the bridge moves everything that
+        // belongs to it instead of silently stranding a hand-copied z-band.
+        _spanDeck = Box(S(3100), S(-172), S(1740), S(3700), S(-160), S(1860));
+        BoxKit.Floor(_scene, _spanDeck, _bone, "Span");
         // Two climbs out, one at each end, and BOTH laid along the west wall.
         // That last part is the whole lesson of this pit. A flight rising 442
         // units is a wall for most of its length, so one struck diagonally
@@ -122,9 +132,9 @@ public sealed partial class CryptDesign : IRealmDesign
         // opened a way in and it surfaced. Laid along the wall instead, each
         // flight IS the margin rather than walling one off, and the whole
         // chasm floor stays a single room with a way up at either end.
-        _scene.AddStairs(new Vector3(S(3160), S(-300), S(2300)), new Vector3(S(3160), S(-160), S(1860)),
+        BoxKit.Stairs(_scene, new Vector3(S(3160), S(-300), S(2300)), new Vector3(S(3160), S(-160), S(1860)),
                          S(120), _floor);
-        _scene.AddStairs(new Vector3(S(3160), S(-300), S(1300)), new Vector3(S(3160), S(-160), S(1740)),
+        BoxKit.Stairs(_scene, new Vector3(S(3160), S(-300), S(1300)), new Vector3(S(3160), S(-160), S(1740)),
                          S(120), _floor);
         // The east landing beyond the span.
         Room("landing", 3700, 1500, 3900, 2100, floorY: -160, doorWest: 1800, doorSouth: 3800);
@@ -141,7 +151,7 @@ public sealed partial class CryptDesign : IRealmDesign
         // The Mausoleum — the boss's tall chamber.
         Room("mausoleum", 1800, 2600, 2600, 3400, floorY: -260, wallTopY: -40, doorEast: 3000);
         var dais = Named("mausoleum");
-        _scene.AddFloor(Box(dais.MidX - 474f, dais.FloorY, dais.MidZ - 474f,
+        BoxKit.Floor(_scene, Box(dais.MidX - 474f, dais.FloorY, dais.MidZ - 474f,
                             dais.MidX + 474f, dais.FloorY + DaisRise, dais.MidZ + 474f), _bone, "BossDais");
 
         Cast();
@@ -158,13 +168,18 @@ public sealed partial class CryptDesign : IRealmDesign
     /// </summary>
     private void Cast()
     {
-        _scene.SetPlayerSpawn(_scene.OnFloor(S(350), S(1800)));
+        var entry = Named("undercroft");
+        _scene.SetPlayerSpawn(_scene.OnFloor(new Vector3(S(350), entry.FloorY, S(1800))));
 
         // A camp at a fraction across a chamber — (0,0) its north-west corner.
-        void Camp(EnemyType type, string room, float u, float v)
+        // Pass nearY where the chamber STACKS (the chasm) to say which level
+        // the camp stands on; without it the topmost floor wins.
+        void Camp(EnemyType type, string room, float u, float v, float? nearY = null)
         {
             var c = Named(room);
-            _scene.AddEnemy(type, _scene.OnFloor(c.X0 + c.Width * u, c.Z0 + c.Depth * v));
+            var x = c.X0 + c.Width * u;
+            var z = c.Z0 + c.Depth * v;
+            _scene.AddEnemy(type, _scene.OnFloor(new Vector3(x, nearY ?? c.FloorY, z)));
         }
 
         // The undercroft: a thin picket, so the way in stays survivable.
@@ -185,12 +200,17 @@ public sealed partial class CryptDesign : IRealmDesign
         Camp(EnemyType.Mage, "hall", 0.86f, 0.76f);
 
         // The span: sentries on the bridge, and the drowned garrison below.
-        Camp(EnemyType.Rogue, "span", 0.50f, 0.48f);
-        Camp(EnemyType.Rogue, "span", 0.72f, 0.52f);
-        Camp(EnemyType.Minion, "span", 0.30f, 0.14f);
-        Camp(EnemyType.Minion, "span", 0.70f, 0.12f);
-        Camp(EnemyType.Minion, "span", 0.35f, 0.88f);
-        Camp(EnemyType.Minion, "span", 0.68f, 0.86f);
+        // Each states the LEVEL it belongs to, so a sentry stands on the deck
+        // and the garrison in the pit because the camp says so — not because
+        // its fraction happened to fall outside the bridge's footprint.
+        var deckY = _spanDeck.Max.Y;
+        var pitY = Named("span").FloorY;
+        Camp(EnemyType.Rogue, "span", 0.50f, 0.48f, nearY: deckY);
+        Camp(EnemyType.Rogue, "span", 0.72f, 0.52f, nearY: deckY);
+        Camp(EnemyType.Minion, "span", 0.30f, 0.14f, nearY: pitY);
+        Camp(EnemyType.Minion, "span", 0.70f, 0.12f, nearY: pitY);
+        Camp(EnemyType.Minion, "span", 0.35f, 0.88f, nearY: pitY);
+        Camp(EnemyType.Minion, "span", 0.68f, 0.86f, nearY: pitY);
 
         // The east landing — a squeeze on the shelf.
         Camp(EnemyType.Rogue, "landing", 0.50f, 0.22f);
@@ -220,8 +240,10 @@ public sealed partial class CryptDesign : IRealmDesign
         Camp(EnemyType.Rogue, "mausoleum", 0.78f, 0.28f);
         Camp(EnemyType.Rogue, "mausoleum", 0.78f, 0.72f);
 
+        // The boss stands on his dais, so the spawn asks at the DAIS's height,
+        // not the court's — the plinth is what he is meant to be standing on.
         var court = Named("mausoleum");
-        _scene.SetBossSpawn(_scene.OnFloor(court.MidX, court.MidZ));
+        _scene.SetBossSpawn(_scene.OnFloor(new Vector3(court.MidX, court.FloorY + DaisRise, court.MidZ)));
     }
 
     // ----------------------------------------------------------- vocabulary
@@ -230,7 +252,7 @@ public sealed partial class CryptDesign : IRealmDesign
         new(new System.Numerics.Vector3(x0, y0, z0), new System.Numerics.Vector3(x1, y1, z1));
 
     /// <summary>
-    /// A rectangular chamber, stated in PLAN units: a thick floor slab, four
+    /// A rectangular chamber, stated in PLAN units: a thick floor, four
     /// walls (each with an optional linteled doorway at a given coordinate),
     /// and a roof. Door Y defaults to the floor; a chasm chamber passes the
     /// height its doors open at instead. Recorded in <see cref="_chambers"/>
@@ -245,13 +267,13 @@ public sealed partial class CryptDesign : IRealmDesign
         float wx0 = S(x0), wz0 = S(z0), wx1 = S(x1), wz1 = S(z1), wFloor = S(floorY);
         var top = wallTopY is { } t ? S(t) : wFloor + RoomHeight;
 
-        _scene.AddFloor(Box(wx0, wFloor - 90f, wz0, wx1, wFloor, wz1), _floor);
+        BoxKit.Floor(_scene, Box(wx0, wFloor - 90f, wz0, wx1, wFloor, wz1), _floor);
         // North/south walls run along X (z fixed); west/east along Z.
         WallX(wx0, wx1, wz0, wFloor, top, Door(doorNorth), wFloor);
         WallX(wx0, wx1, wz1 - WallThickness, wFloor, top, Door(doorSouth), wFloor);
         WallZ(wz0, wz1, wx0, wFloor, top, Door(doorWest), doorWestY is { } w ? S(w) : wFloor);
         WallZ(wz0, wz1, wx1 - WallThickness, wFloor, top, Door(doorEast), doorEastY is { } e ? S(e) : wFloor);
-        _scene.AddStructure(Box(wx0, top, wz0, wx1, top + WallThickness, wz1), _wall); // the roof
+        BoxKit.Structure(_scene, Box(wx0, top, wz0, wx1, top + WallThickness, wz1), _wall); // the roof
 
         _chambers.Add(new Chamber(name, wx0, wz0, wx1, wz1, wFloor, top));
     }
@@ -263,14 +285,14 @@ public sealed partial class CryptDesign : IRealmDesign
     {
         if (doorAt is { } d)
         {
-            _scene.AddStructure(Box(x0, floorY, z, d - DoorWidth / 2, topY, z + WallThickness), _wall);
-            _scene.AddStructure(Box(d + DoorWidth / 2, floorY, z, x1, topY, z + WallThickness), _wall);
-            _scene.AddStructure(Box(d - DoorWidth / 2, doorY + DoorHeight, z, d + DoorWidth / 2, topY,
+            BoxKit.Structure(_scene, Box(x0, floorY, z, d - DoorWidth / 2, topY, z + WallThickness), _wall);
+            BoxKit.Structure(_scene, Box(d + DoorWidth / 2, floorY, z, x1, topY, z + WallThickness), _wall);
+            BoxKit.Structure(_scene, Box(d - DoorWidth / 2, doorY + DoorHeight, z, d + DoorWidth / 2, topY,
                                     z + WallThickness), _wall);
         }
         else
         {
-            _scene.AddStructure(Box(x0, floorY, z, x1, topY, z + WallThickness), _wall);
+            BoxKit.Structure(_scene, Box(x0, floorY, z, x1, topY, z + WallThickness), _wall);
         }
     }
 
@@ -279,14 +301,14 @@ public sealed partial class CryptDesign : IRealmDesign
     {
         if (doorAt is { } d)
         {
-            _scene.AddStructure(Box(x, floorY, z0, x + WallThickness, topY, d - DoorWidth / 2), _wall);
-            _scene.AddStructure(Box(x, floorY, d + DoorWidth / 2, x + WallThickness, topY, z1), _wall);
-            _scene.AddStructure(Box(x, doorY + DoorHeight, d - DoorWidth / 2, x + WallThickness, topY,
+            BoxKit.Structure(_scene, Box(x, floorY, z0, x + WallThickness, topY, d - DoorWidth / 2), _wall);
+            BoxKit.Structure(_scene, Box(x, floorY, d + DoorWidth / 2, x + WallThickness, topY, z1), _wall);
+            BoxKit.Structure(_scene, Box(x, doorY + DoorHeight, d - DoorWidth / 2, x + WallThickness, topY,
                                     d + DoorWidth / 2), _wall);
         }
         else
         {
-            _scene.AddStructure(Box(x, floorY, z0, x + WallThickness, topY, z1), _wall);
+            BoxKit.Structure(_scene, Box(x, floorY, z0, x + WallThickness, topY, z1), _wall);
         }
     }
 
@@ -298,19 +320,19 @@ public sealed partial class CryptDesign : IRealmDesign
         var bottom = Mathf.Min(wFrom, wTo);
         if (alongZ)
         {
-            _scene.AddStairs(new Vector3((wx0 + wx1) / 2, wFrom, wz0), new Vector3((wx0 + wx1) / 2, wTo, wz1),
+            BoxKit.Stairs(_scene, new Vector3((wx0 + wx1) / 2, wFrom, wz0), new Vector3((wx0 + wx1) / 2, wTo, wz1),
                              wx1 - wx0, _floor);
-            _scene.AddStructure(Box(wx0 - WallThickness, bottom, wz0, wx0, top, wz1), _wall);
-            _scene.AddStructure(Box(wx1, bottom, wz0, wx1 + WallThickness, top, wz1), _wall);
+            BoxKit.Structure(_scene, Box(wx0 - WallThickness, bottom, wz0, wx0, top, wz1), _wall);
+            BoxKit.Structure(_scene, Box(wx1, bottom, wz0, wx1 + WallThickness, top, wz1), _wall);
         }
         else
         {
-            _scene.AddStairs(new Vector3(wx0, wFrom, (wz0 + wz1) / 2), new Vector3(wx1, wTo, (wz0 + wz1) / 2),
+            BoxKit.Stairs(_scene, new Vector3(wx0, wFrom, (wz0 + wz1) / 2), new Vector3(wx1, wTo, (wz0 + wz1) / 2),
                              wz1 - wz0, _floor);
-            _scene.AddStructure(Box(wx0, bottom, wz0 - WallThickness, wx1, top, wz0), _wall);
-            _scene.AddStructure(Box(wx0, bottom, wz1, wx1, top, wz1 + WallThickness), _wall);
+            BoxKit.Structure(_scene, Box(wx0, bottom, wz0 - WallThickness, wx1, top, wz0), _wall);
+            BoxKit.Structure(_scene, Box(wx0, bottom, wz1, wx1, top, wz1 + WallThickness), _wall);
         }
-        _scene.AddStructure(Box(wx0, top, wz0, wx1, top + WallThickness, wz1), _wall); // roofed all the way
+        BoxKit.Structure(_scene, Box(wx0, top, wz0, wx1, top + WallThickness, wz1), _wall); // roofed all the way
         _passages.Add(new Passage(wx0, wz0, wx1, wz1, bottom, top, alongZ));
     }
 
@@ -340,7 +362,7 @@ public sealed partial class CryptDesign : IRealmDesign
                     {
                         var x = midX + sx * (i + 0.5f) * spacing;
                         var z = midZ + sz * (j + 0.5f) * spacing;
-                        _scene.AddStructure(Box(x - PillarHalf, wFloor, z - PillarHalf,
+                        BoxKit.Structure(_scene, Box(x - PillarHalf, wFloor, z - PillarHalf,
                                                 x + PillarHalf, wFloor + RoomHeight, z + PillarHalf), _wall);
                     }
     }

@@ -6,9 +6,8 @@
 //      runs it to build the full Godot scene — with the WHOLE engine
 //      available: any meshes, materials, particles, or asset kits. The scene
 //      is saved by Godot's own ResourceSaver, so the .tscn is exactly what a
-//      naturally-authored scene looks like: built-in nodes only, slabs of
-//      cut stone, free-form scenery (the boulder fields), no scripts, no
-//      metadata.
+//      naturally-authored scene looks like: built-in nodes only, cut stone,
+//      free-form scenery (the boulder fields), no scripts, no metadata.
 //   2. The STANDARD hand-made pipeline (tools/bake_realm.gd) then bakes the
 //      .json out of that scene — taking the triangles of every mesh the realm
 //      is modelled from, plus the spawn markers — the same way any

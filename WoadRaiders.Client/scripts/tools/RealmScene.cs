@@ -1,29 +1,36 @@
-using System;
 using System.Collections.Generic;
 using Godot;
 using WoadRaiders.Core;
-using Aabb = WoadRaiders.Core.Aabb; // the sim's world box, not Godot's
 
 namespace WoadRaiders.Client;
 
 /// <summary>
 /// The scene a realm design composes — a thin facade over the root Node3D,
-/// laying stone and placing the markers so a design need not think about the
-/// .tscn it is really writing.
+/// laying geometry and placing the markers so a design need not think about
+/// the .tscn it is really writing.
 ///
-/// Realms are BUILT, not carved: floors, ramps, stairs, walls, and roofs are
-/// all SLABS — great cut stones, each a BoxMesh under an arbitrary transform.
-/// The served geometry is baked FROM the finished scene afterwards, and a slab
-/// scene even parses engine-free (Core.RealmSceneFile reads BoxMesh sizes and
-/// transforms straight from the .tscn text).
+/// A realm is modelled from whatever geometry states it best: sculpted meshes,
+/// instanced kit assets, primitives. The served collision is baked FROM the
+/// finished scene afterwards by sampling real triangles off every mesh in it,
+/// so nothing here narrows what a design may build from.
+///
+/// The surface states ROLES, not shapes:
+///   <see cref="AddFloor{T}"/>      — ground raiders walk on;
+///   <see cref="AddStructure{T}"/>  — a wall, roof, or monument that blocks;
+///   <see cref="AddGeometry{T}"/>   — either, chosen by a flag.
+/// Each takes any Node3D and files it so <see cref="OnFloor"/> can seat the cast
+/// on what you just built. What matters is that the ROLE is stated; the mesh's
+/// own triangles decide the rest. (Convenience helpers that build the common
+/// primitive shapes for you live outside this class; they call these same role
+/// verbs, so this class need not know they exist.)
 ///
 /// There is almost nothing here a design MUST use. Every mesh it hangs off
-/// <see cref="Root"/> by any means becomes collision, so the helpers below buy
+/// <see cref="Root"/> by any means becomes collision, so the helpers here buy
 /// convenience, not compliance: the bake reads no group and no name (see
-/// Core.RealmSceneFile for the conventions in full). What they do add is the
-/// design's OWN bookkeeping — which branch of the tree a slab is filed under,
+/// Core.RealmSceneFile for the conventions in full). What they add is the
+/// design's OWN bookkeeping — which branch of the tree a mesh is filed under,
 /// what it is called, whether the occlusion fader may dissolve it, and which
-/// stones <see cref="OnFloor"/> should seat markers on. A fresh scene is
+/// surfaces <see cref="OnFloor"/> should seat markers on. A fresh scene is
 /// EMPTY — no light, no sky. A design states its whole look itself; the only
 /// thing a realm MUST have is a player spawn (Core.RealmSceneFile's rule).
 /// </summary>
@@ -32,9 +39,15 @@ public sealed class RealmScene
     private Node3D? _ground;
     private Node3D? _structure;
 
-    // A design-time mirror of the slabs the design laid as FLOOR, so it can
-    // seat markers and scenery on them (OnFloor). Deliberately not every slab:
-    // a design knows perfectly well which stones it meant as ground, and the
+    // A monotonic ordinal that gives every unnamed role node a unique default
+    // name ("Floor_0", "Structure_1", ...). Load-bearing: those names land
+    // verbatim in the saved .tscn, so the order they are handed out is part of
+    // the byte-deterministic output, not a metric anyone reads.
+    private int _roleOrdinal;
+
+    // A design-time mirror of what the design laid as FLOOR, so it can seat
+    // markers and scenery on it (OnFloor). Deliberately not every mesh: a
+    // design knows perfectly well which surfaces it meant as ground, and the
     // roofs it lays over a crypt are up-facing surfaces too — seat a boss by
     // "the topmost surface here" and he stands on the roof of his own court.
     // This is the design's own intent, not a convention the bake reads: what
@@ -46,12 +59,11 @@ public sealed class RealmScene
     /// <summary>The scene root. Add anything Godot can express.</summary>
     public Node3D Root { get; } = new();
 
-    public int SlabCount { get; private set; }
     public int EnemyCount { get; private set; }
     public bool HasPlayerSpawn { get; private set; }
     public bool HasBoss { get; private set; }
 
-    // ------------------------------------------------------------- the stones
+    // ----------------------------------------------------------- the geometry
 
     /// <summary>
     /// Declare a node — and everything hung beneath it — PASSABLE: present to
@@ -60,7 +72,7 @@ public sealed class RealmScene
     /// the pipeline will not work out for itself, and the only tag it reads.
     ///
     /// Use it where physics and FICTION disagree: a banner across a doorway, a
-    /// cobweb, a curtain, mist. Those are thin slabs of triangles no different
+    /// cobweb, a curtain, mist. Those are thin sheets of triangles no different
     /// in shape from a wall panel, so nothing measurable can tell them apart —
     /// only the author knows a raider should walk through. What it is NOT for
     /// is quieting a route ValidateRealm complained about. That complaint is
@@ -71,123 +83,112 @@ public sealed class RealmScene
     ///
     /// Returns the node, so a placement can be wrapped where it is made.
     /// </summary>
-    public T Passable<T>(T node) where T : Node
+    public T DeclarePassable<T>(T node) where T : Node
     {
         node.AddToGroup(RealmSceneFile.NoCollideGroup, persistent: true);
         return node;
     }
 
     // The floor/structure distinction below is the DESIGN's own bookkeeping —
-    // which branch of the scene tree a slab is filed under, what it is called,
+    // which branch of the scene tree a mesh is filed under, what it is called,
     // and whether the occlusion fader may dissolve it. The bake reads none of
     // it: what holds a raider up is decided from the geometry itself.
 
-    /// <summary>A floor slab raiders walk on, filed under "Ground" and never faded.</summary>
-    public MeshInstance3D AddFloor(Aabb box, Material material, string? name = null) =>
-        AddSlab(box, material, floor: true, name);
+    /// <summary>A floor raiders walk on — a sculpted terrace, a carved stair, an
+    /// instanced kit piece — filed under "Ground", never faded, and its real
+    /// surface is what <see cref="OnFloor"/> seats on.</summary>
+    public T AddFloor<T>(T node, string? name = null) where T : Node3D =>
+        AddGeometry(node, floor: true, name);
 
-    /// <summary>A blocking slab — wall, roof, monument — filed under "Structure".</summary>
-    public MeshInstance3D AddStructure(Aabb box, Material material, string? name = null) =>
-        AddSlab(box, material, floor: false, name);
-
-    public MeshInstance3D AddSlab(Aabb box, Material material, bool floor, string? name = null) =>
-        AddSlabAt(new Transform3D(Basis.Identity, box.Center.ToGodot()), box.Size.ToGodot(), material, floor, name);
+    /// <summary>A blocking structure — a wall, an arch, a sculpted cliff, a kit
+    /// sarcophagus meant to block — filed under "Structure".</summary>
+    public T AddStructure<T>(T node, string? name = null) where T : Node3D =>
+        AddGeometry(node, floor: false, name);
 
     /// <summary>
-    /// A slab under any transform — the primitive behind ramps and stairs.
-    /// The transform lands verbatim in the saved scene, where the bake (and
-    /// the engine-free parser) turn it back into world triangles.
+    /// Geometry the design contributes as first-class realm structure — a
+    /// sculpted cliff, an arch, an instanced kit piece, a primitive. Filed under
+    /// Ground or Structure per <paramref name="floor"/>, and given a default
+    /// name (Floor_N / Structure_N) when the design does not supply one.
+    ///
+    /// This grants no collision: every mesh under <see cref="Root"/> is already
+    /// collision, however it got there. What it adds is the design's own
+    /// bookkeeping, and one thing that genuinely matters — saying
+    /// <paramref name="floor"/> puts the mesh's REAL triangles into what
+    /// <see cref="OnFloor"/> seats on, sampled by the same code and the same
+    /// winding rule the bake will use. Without that a design whose ground is
+    /// modelled gets 0 back from <see cref="FloorAt"/> and seats its whole cast
+    /// at the origin's height.
+    ///
+    /// Prefer this (or <see cref="AddFloor{T}"/> / <see cref="AddStructure{T}"/>)
+    /// over <see cref="Add{T}"/> for anything that is part of the built realm;
+    /// <see cref="Add{T}"/> states no role and does none of this. A piece
+    /// wrapped in <see cref="DeclarePassable{T}"/> contributes nothing here
+    /// either — nobody stands on a banner. It reads like this:
+    /// <code>
+    /// var cliff = new MeshInstance3D { Mesh = carvedTerrace, Material = ... };
+    /// scene.AddFloor(cliff, "WestTerrace");     // or AddGeometry(cliff, floor: true)
+    /// scene.AddStructure(archKit.Instantiate&lt;Node3D&gt;(), "GateArch");
+    /// // seats on the sculpted surface, at the level named by the Y
+    /// scene.AddEnemy(EnemyType.Minion, scene.OnFloor(new Vector3(1200, terraceY, 800)));
+    /// </code>
     /// </summary>
-    public MeshInstance3D AddSlabAt(Transform3D xform, Vector3 size, Material material, bool floor, string? name = null)
+    public T AddGeometry<T>(T node, bool floor, string? name = null) where T : Node3D
     {
-        var parent = floor
-            ? _ground ??= Attach(new Node3D(), "Ground")
-            : _structure ??= Attach(new Node3D(), "Structure");
-        var node = new MeshInstance3D
-        {
-            Name = name ?? $"{(floor ? "Floor" : "Structure")}_{SlabCount}",
-            Transform = xform,
-            Mesh = new BoxMesh { Size = size, Material = material },
-        };
+        // Every role node gets a unique default name unless the design named it;
+        // the ordinal advances on all of them, named or not, so the names fall
+        // in a stable, byte-deterministic order in the saved .tscn.
+        node.Name = name ?? $"{(floor ? "Floor" : "Structure")}_{_roleOrdinal}";
+        _roleOrdinal++;
         if (floor)
             node.AddToGroup("no_fade", persistent: true); // the fader never eats the floor underfoot
-        parent.AddChild(node);
-        SlabCount++;
+        RoleFolder(floor).AddChild(node);
 
         if (!floor)
             return node;
 
-        // Mirror floor slabs into the design-time soup that OnFloor seats on.
-        Span<System.Numerics.Vector3> corners = stackalloc System.Numerics.Vector3[8];
-        for (var k = 0; k < 8; k++)
+        // The Ground/Structure folders sit at identity under an identity Root,
+        // so the node's own transform is already world — what _floors wants.
+        var triangles = new List<float>();
+        MeshTriangles.Collect(node, Transform3D.Identity, triangles);
+        if (triangles.Count > 0)
         {
-            var local = SoupBuilder.LocalCorner(k, (size * 0.5f).ToSim());
-            var world = xform * new Vector3(local.X, local.Y, local.Z);
-            corners[k] = new System.Numerics.Vector3(world.X, world.Y, world.Z);
+            _floors.AddTriangles(triangles.ToArray(), MeshTriangles.SequentialIndices(triangles.Count / 9));
+            _floorCount++;
+            _built = null;
         }
-        _floors.AddBoxCorners(corners);
-        _floorCount++;
-        _built = null;
         return node;
     }
 
     /// <summary>
-    /// A pitched floor slab whose top surface runs from one point to another —
-    /// a ramp. Both ends are the CENTRE of their edge; the slab hangs its
-    /// thickness below the surface.
+    /// The floor under a point, resolved against the height the caller means —
+    /// how a design seats markers and scenery on what it just built.
+    ///
+    /// A height is REQUIRED, and that is the whole point. A realm may stack
+    /// walkable levels (a bridge deck over a chasm), so "the floor at this XZ"
+    /// has no single answer, and the convenient one — the topmost — is silently
+    /// wrong underneath anything: ask for a spot in the pit without saying how
+    /// high you meant and you are handed the bridge. Where a design has no
+    /// vantage of its own, it still has a level in mind (the terrace it is
+    /// dressing, the chamber's own floor) and says so.
+    ///
+    /// Answers with the highest floor at or below <paramref name="nearY"/>
+    /// (within a step, so a surface you meant to stand exactly on still
+    /// counts), or the lowest floor here when the point lies beneath them all.
+    /// 0 before any floor exists. Same rule the simulation itself uses to
+    /// decide what is underfoot (TriangleSoup.GroundBelow), so a design seats
+    /// its cast where the server will agree they stand.
     /// </summary>
-    public MeshInstance3D AddRamp(Vector3 from, Vector3 to, float width, Material material,
-                                  float thickness = 12f, string? name = null)
-    {
-        var dir = (to - from).Normalized();
-        var side = new Vector3(dir.Z, 0, -dir.X);
-        if (side.LengthSquared() < 1e-6f)
-            throw new ArgumentException("a ramp must run somewhere on the ground plane, not straight up");
-        side = side.Normalized();
-        var normal = side.Cross(dir);
-        if (normal.Y < 0)
-            normal = -normal;
-        var centre = (from + to) * 0.5f - normal * (thickness * 0.5f);
-        return AddSlabAt(new Transform3D(new Basis(side, normal, dir), centre),
-                         new Vector3(width, thickness, (to - from).Length()), material, floor: true, name);
-    }
-
-    /// <summary>
-    /// A stair of tread slabs from one point up (or down) to another, each
-    /// tread rising less than the sim's StepHeight so feet flow up it.
-    /// </summary>
-    public void AddStairs(Vector3 from, Vector3 to, float width, Material material)
-    {
-        var run = new Vector3(to.X - from.X, 0, to.Z - from.Z);
-        if (run.LengthSquared() < 1e-6f)
-            throw new ArgumentException("a stair must run somewhere on the ground plane, not straight up");
-        var dir = run.Normalized();
-        var side = new Vector3(dir.Z, 0, -dir.X);
-        var steps = Math.Max(1, Mathf.CeilToInt(Mathf.Abs(to.Y - from.Y) / (SimConstants.StepHeight - 2f)));
-
-        for (var i = 0; i < steps; i++)
-        {
-            var a = from.Lerp(to, i / (float)steps);
-            var b = from.Lerp(to, (i + 1) / (float)steps);
-            var top = MathF.Max(a.Y, b.Y);
-            var depth = MathF.Max(MathF.Abs(b.Y - a.Y) + 10f, 14f); // overlap the tread below
-            var centre = new Vector3((a.X + b.X) * 0.5f, top - depth * 0.5f, (a.Z + b.Z) * 0.5f);
-            AddSlabAt(new Transform3D(new Basis(side, Vector3.Up, dir), centre),
-                      new Vector3(width, depth, (b - a with { Y = a.Y }).Length()), material, floor: true);
-        }
-    }
-
-    /// <summary>The floor height under a point, per the FLOOR slabs laid so far
-    /// — how a design seats markers and scenery on what it just built. 0 before
-    /// any floor exists.</summary>
-    public float FloorAt(float x, float z)
+    public float FloorAt(float x, float z, float nearY)
     {
         _built ??= _floorCount > 0 ? _floors.Build() : null;
-        return _built?.TopSurfaceAt(x, z) ?? 0f;
+        return _built?.GroundBelow(x, z, nearY, SimConstants.StepHeight) ?? 0f;
     }
 
-    /// <summary>A point set on the floor, from plan-view (x, z) coordinates.</summary>
-    public Vector3 OnFloor(float x, float z) => new(x, FloorAt(x, z), z);
+    /// <summary>A point dropped onto the floor at or below <paramref name="near"/>
+    /// — <paramref name="near"/>'s own X and Z, with Y resolved by
+    /// <see cref="FloorAt"/>.</summary>
+    public Vector3 OnFloor(Vector3 near) => new(near.X, FloorAt(near.X, near.Z, near.Y), near.Z);
 
     // ------------------------------------------------------------- the cast
 
@@ -212,16 +213,34 @@ public sealed class RealmScene
 
     // ------------------------------------------------------------- free-form
 
-    /// <summary>Hang anything else off the root — scenery, sound, an asset kit.
-    /// Nothing added this way ever reaches the simulation.</summary>
+    /// <summary>Hang anything else off the root — a light, a sky, a sound, a
+    /// particle system.
+    ///
+    /// This states no ROLE, so it does none of the design's bookkeeping. It
+    /// does NOT exempt anything from the simulation: a mesh added this way is
+    /// collision like every other mesh in the scene, because the bake takes the
+    /// whole tree (Core.RealmSceneFile's rule). Only <see cref="DeclarePassable{T}"/>
+    /// excuses geometry, and only <see cref="AddGeometry{T}"/> tells
+    /// <see cref="OnFloor"/> about it — so for anything the realm is BUILT
+    /// from, reach for those instead.</summary>
     public T Add<T>(T node, string? name = null) where T : Node => Attach(node, name);
 
-    /// <summary>An empty node to gather scenery under, keeping the tree tidy.</summary>
+    /// <summary>An empty node to gather children under, keeping the tree tidy.
+    /// A folder confers nothing by itself — meshes beneath it are collision
+    /// like any other. Dressing a raider walks through is a folder DECLARED
+    /// so: <c>DeclarePassable(Folder("Relics"))</c> excuses the whole subtree at
+    /// once.</summary>
     public Node3D Folder(string name) => Attach(new Node3D(), name);
 
-    /// <summary>What the realm ended up containing — for the build log.</summary>
-    public string Describe() =>
-        $"{SlabCount} slabs, {EnemyCount} enemy markers" + (HasBoss ? " + boss" : " (no boss)");
+    /// <summary>What the realm ended up containing — for the build log. Counted
+    /// off the tree rather than hand-tallied: the Ground and Structure branches
+    /// hold every floor and wall the design placed.</summary>
+    public string Describe()
+    {
+        var pieces = (_ground?.GetChildCount() ?? 0) + (_structure?.GetChildCount() ?? 0);
+        return $"{pieces} geometry pieces, {EnemyCount} enemy markers" +
+               (HasBoss ? " + boss" : " (no boss)");
+    }
 
     // ------------------------------------------------------------- plumbing
 
@@ -232,4 +251,10 @@ public sealed class RealmScene
         Root.AddChild(node);
         return node;
     }
+
+    /// <summary>The Ground or Structure branch, created on first use — where
+    /// every role verb files what it is handed.</summary>
+    private Node3D RoleFolder(bool floor) => floor
+        ? _ground ??= Attach(new Node3D(), "Ground")
+        : _structure ??= Attach(new Node3D(), "Structure");
 }

@@ -45,8 +45,8 @@ public interface IRealmGeometry
     /// <summary>
     /// The underside of whatever roofs a world-space point — the headroom the
     /// chase camera has before it would climb out of the chamber the raider is
-    /// standing in. Sight lines alone cannot answer this: a realm built from
-    /// slabs roofs each space at its own height, so where a low room abuts a
+    /// standing in. Sight lines alone cannot answer this: a built realm roofs
+    /// each space at its own height, so where a low room abuts a
     /// tall corridor the gap between their roofs is a slot a camera can see
     /// clean through. Open sky — and providers with no geometry — have none.
     /// </summary>

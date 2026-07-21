@@ -5,14 +5,14 @@ using WoadRaiders.Core;
 namespace WoadRaiders.Core.Tests;
 
 /// <summary>
-/// Slab-built movement fixtures for tests that need real geometry: a flat
-/// stone floor, optionally with structure walls standing on it. Baked with
+/// Movement fixtures for tests that need real geometry: a flat stone floor,
+/// optionally with structure walls standing on it. Baked with
 /// both agent classes (character and boss width) exactly as the server bakes
 /// realms, so wide-radius behaviour is testable too.
 /// </summary>
 public static class TestRealms
 {
-    /// <summary>A flat floor slab centred on the origin, top face at y = 0.</summary>
+    /// <summary>A flat floor centred on the origin, top face at y = 0.</summary>
     public static TriangleSoup Flat(float halfExtent = 600f) => new SoupBuilder()
         .AddBox(new Aabb(new Vector3(-halfExtent, -20, -halfExtent), new Vector3(halfExtent, 0, halfExtent)))
         .Build();
@@ -24,7 +24,7 @@ public static class TestRealms
             (EnemyArchetypes.Of(EnemyType.Boss).Radius,
              NavMeshBuilder.Build(soup, EnemyArchetypes.Of(EnemyType.Boss).Radius)));
 
-    /// <summary>An open flat realm — the slab world's stand-in for "no walls anywhere".</summary>
+    /// <summary>An open flat realm — the stand-in for "no walls anywhere".</summary>
     public static RealmGeometry Open() => Geo(Flat());
 
     /// <summary>A flat floor with structure walls standing on it.</summary>

@@ -223,7 +223,7 @@ core loop earns it.
       player bolts **hug the slopes** and sail level over gorges, enemy bolts aim in full 3D so
       overlook mages rain fire downhill. Realms are authored as **natural Godot .tscn
       scenes**: the generated scene is saved by **Godot's own serializer** and contains only
-      built-in nodes and resources — slabs of stone, braziers,
+      built-in nodes and resources — cut stone, braziers,
       lights, markers; no scripts, no metadata — so it opens whole in any Godot editor,
       exactly as if someone had modelled it there (the scene is the ONLY visual source — a
       client missing it refuses the raid with the download link rather than approximate it). The camera became a perspective
@@ -235,9 +235,16 @@ core loop earns it.
       math) that builds and returns a `RealmScene`, the facade holding the bake
       conventions; a new scene starts empty, so each design states its own look, and the
       realm-agnostic `RealmSceneBuilder` just runs whichever design was asked for and
-      saves the result. A design has the whole engine to dress the realm
+      saves the result. A design has the whole engine to build and dress the realm
       with: any meshes, materials, particles, or asset kits; boulder fields are the first
-      pure scenery. Adding a realm is a design class, a line in `RealmDesigns`, and
+      pure scenery. **Modelled geometry is first-class structure, not just dressing** — the
+      role verbs `AddFloor`/`AddStructure`/`AddGeometry` take any `Node3D` (a sculpted terrace,
+      an instanced arch), and a floor stated that way is what `OnFloor` seats the cast on.
+      Boxes are a convenience for rectilinear shapes, offered by a separate `BoxKit` helper
+      (`BoxKit.Floor(scene, ...)`, `BoxKit.Stairs(scene, ...)`) that builds a BoxMesh and hands
+      it to those same role verbs, filed and baked identically — the scene itself carries no
+      notion of boxes. Both shipping realms happen to be boxed throughout; that is their level design,
+      not a limit. Adding a realm is a design class, a line in `RealmDesigns`, and
       `dotnet run tools/GenerateRealm.cs <Name>`.
       `tools/GenerateRealm.cs` orchestrates: Godot builds and saves `Crag.tscn` itself
       (ResourceSaver, random ids normalized so regeneration is byte-deterministic), then
@@ -254,7 +261,7 @@ core loop earns it.
       The second realm, **The Sunken Crypt** (`scripts/tools/CryptDesign.cs` + partials), is
       the first INDOOR design: the wild default is unexcavated rock mass (its roof follows
       the rooms' envelope) and every hall is a plate sunk into it — undercroft → stepped
-      descent stair (real tread slabs, each rising under StepHeight) → hub rotunda → ossuary +
+      descent stair (real treads, each rising under StepHeight) → hub rotunda → ossuary +
       bone-crawl loop → flooded cloister → a Processional broken by a charnel chasm (stepped
       bridge deck, rogue ambush pit with a scree ramp out) → catacomb maze → candle chapel →
       the Mausoleum boss court ~260 units DOWN. It dresses itself with CC0 glTF kits
