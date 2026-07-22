@@ -126,7 +126,15 @@ tools/<Probe>.cs` with the server up):
   determinism).
 - `CryptProbe.cs` is its mirror for the DESCENDING indoor realm: forges the
   Crypt, asserts the walk east SINKS the authoritative Y (down the stair, over
-  the chasm's stepped bridge deck), and replays for determinism.
+  the chasm's stepped bridge deck), and replays for determinism. It marches until
+  it has descended 150, NOT for a fixed time — the Crypt's garrison is 200 strong
+  and a probe that cannot fight dies in the Ossuary at ~25 s, respawns at the
+  entrance, and then reports the replay divergence as a desync that is not there.
+  It says so explicitly if that happens.
+- `tools/MeasureCompression.cs` times each stage of the fallback geometry send
+  and prices brotli's levels (no server needed). Re-run it whenever a realm grows:
+  `REALM-C-026` exists because that cost was paid lazily on the game loop and
+  froze the whole server for 15 s the first time a raider needed the fallback.
 - `WoadRaiders.Client/tools/snap_realm.gd` renders screenshots of a realm's
   authored scene from scripted vantage points (needs a GPU window, NOT
   --headless) — how a headless-workflow session eyeballs a realm's look.

@@ -96,7 +96,11 @@ public static class NetConfig
     ///       TooBigPacketException on loopback — and it moves with the path, so
     ///       it was never a number a realm could be designed against.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v21";
+    /// v22 = the fallback geometry is compressed at LOAD, not on the game loop,
+    ///        and at brotli Optimal rather than SmallestSize. The wire format is
+    ///        unchanged and a v21 client would read a v22 payload perfectly —
+    ///        the key moves only because a release is a key here.
+    public const string ConnectionKey = "WoadRaiders.v22";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";

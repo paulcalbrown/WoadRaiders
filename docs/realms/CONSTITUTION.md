@@ -419,6 +419,31 @@ about by nothing, and shipped inside the client anyway.
 *Authority:* [RealmScene.SweepLibrary](../../WoadRaiders.Client/scripts/tools/RealmScene.cs)
 `[checked: the scene build prints what it swept; regeneration is byte-identical, which a stale file cannot be]`
 
+### REALM-C-026 — Per-realm work is paid at load, never on a join
+Anything whose cost scales with a realm's SIZE — compression, baking, indexing —
+MUST be done when the realm is loaded, not the first time a player needs it. A
+server's game loop is shared by every instance on it, so work deferred onto a
+join is not paid by the joining player: it is paid by everyone.
+
+The Crypt shipped this bug in v21. `RealmGeometryPacket` cached its compressed
+payload, which sounded like enough — but the cache filled lazily, so the first
+raider whose client did not already hold the realm triggered a brotli pass over
+6.4 MB on the loop. Measured at **15,026 ms**. The server's own watchdog caught
+it (`Sim stalled 15029 ms beyond the catch-up cap`), dropped the lost time and
+carried on; every live raid froze and no new connection was accepted for fifteen
+seconds. Nothing failed, nothing errored, and the realm arrived correctly.
+
+Note what made it invisible: the second join was instant, so any warm test
+passed. It reproduces only from a cold start, which is exactly the state a real
+server is in when its first player arrives.
+
+Compression level is part of this. Brotli's `SmallestSize` is quality 11 and cost
+**203×** `Optimal` here to save 776 KB — a saving `BUDGET-003` does not need.
+Levels are self-describing on the wire, so this is free to change: a client built
+against any earlier level reads a newer one without knowing.
+*Authority:* [RealmGeometryPacket.Precompress](../../WoadRaiders.Shared/Packets.cs), [GameServer map load](../../WoadRaiders.Server/GameServer.cs)
+`[checked: Shared.Tests/GeometryCompressionTests — packing the shipping realm stays under 3 s, and a warmed packet never recompresses]`
+
 ---
 
 ## Deferred
