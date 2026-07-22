@@ -25,9 +25,38 @@ public static class BoxKit
     public static MeshInstance3D Floor(RealmScene scene, Aabb box, Material material, string? name = null) =>
         Add(scene, box, material, floor: true, name);
 
-    /// <summary>A blocking box — wall, roof, monument — filed under "Structure".</summary>
-    public static MeshInstance3D Structure(RealmScene scene, Aabb box, Material material, string? name = null) =>
-        Add(scene, box, material, floor: false, name);
+    /// <summary>
+    /// The smallest a blocking box's two broadest faces may be before it is
+    /// worth offering the renderer as an occluder. Two modules: a wall panel or
+    /// a roof bay clears it, a pillar or a parapet cap does not — and neither of
+    /// those hides enough behind it to pay for the occlusion test.
+    /// </summary>
+    private const float OccluderMinFace = 160f;
+
+    /// <summary>
+    /// A blocking box — wall, roof, monument — filed under "Structure", and
+    /// offered to the renderer as an occluder when it is broad enough to hide
+    /// anything (<see cref="OccluderMinFace"/>).
+    ///
+    /// The occluder is emitted from the box's own bounds, which is what makes it
+    /// safe: an occluder larger than its solid culls what is really visible, and
+    /// a box is exactly its own extent. Nothing is authored and nothing can
+    /// drift — this is a fact about the geometry, read off the geometry.
+    /// </summary>
+    public static MeshInstance3D Structure(RealmScene scene, Aabb box, Material material, string? name = null)
+    {
+        var node = Add(scene, box, material, floor: false, name);
+        // Judge the box by its MIDDLE extent — ignore the thinnest, so a wall
+        // counts by its height and length rather than by its thickness. The
+        // middle can never exceed the largest, so this one test covers both.
+        var size = box.Size;
+        var middle = size.X + size.Y + size.Z
+                     - MathF.Min(size.X, MathF.Min(size.Y, size.Z))
+                     - MathF.Max(size.X, MathF.Max(size.Y, size.Z));
+        if (middle >= OccluderMinFace)
+            scene.AddOccluder(box.Center.ToGodot(), size.ToGodot(), name is null ? null : $"{name}_Occluder");
+        return node;
+    }
 
     /// <summary>A box in either role, from its world-space bounds.</summary>
     public static MeshInstance3D Add(RealmScene scene, Aabb box, Material material, bool floor, string? name = null) =>

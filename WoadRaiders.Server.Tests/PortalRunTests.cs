@@ -13,14 +13,18 @@ public class PortalRunTests
 {
     private static readonly Vector3 BossPost = new(200, 0, 0);
 
-    private static RealmDefinition BossArena()
+    private static RealmDefinition BossArena(Vector3? portal = null)
     {
         // Four far-off markers satisfy the director's population floor without
         // ever aggroing (minion aggro 480 << 3000); the boss guards its post.
         var markers = Enumerable.Range(0, 4)
             .Select(i => new EnemySpawnPoint(new Vector3(3000 + 100 * i, 0, 3000), EnemyType.Minion))
             .ToArray();
-        return new RealmDefinition(Vector3.Zero, null, markers) { BossSpawn = BossPost };
+        return new RealmDefinition(Vector3.Zero, null, markers)
+        {
+            BossSpawn = BossPost,
+            PortalSpawn = portal,
+        };
     }
 
     [Fact]
@@ -88,5 +92,60 @@ public class PortalRunTests
         Assert.True(report.Value.FoesSlain >= 1, "the boss itself counts toward the tally");
         Assert.True(report.Value.DurationSeconds > 0, "the fight takes real seconds");
         Assert.Empty(snap.Players); // out of the world â€” no snapshot carries them again
+    }
+
+    // A realm that stages its own ending â€” a walk back through ground it has
+    // cleared â€” puts the way out where it wants it, not on the corpse. Without
+    // this a run always stops on the tick of the kill, and the falling-action
+    // beat has nowhere to live.
+    [Fact]
+    public void A_realm_that_authors_a_portal_opens_the_way_out_where_it_says()
+    {
+        var hall = new Vector3(-600, 0, 250);
+        var session = new GameSession(BossArena(portal: hall), new Random(1));
+        session.SpawnInitial();
+        session.AddPlayer(1, "Bran", CharacterClass.Knight);
+
+        var snap = SlayTheBoss(session);
+
+        Assert.True(snap.PortalOpen, "slaying the boss should still open the portal");
+        Assert.Equal(hall.X, snap.PortalX);
+        Assert.Equal(hall.Z, snap.PortalZ);
+        Assert.NotEqual(BossPost.X, snap.PortalX); // and NOT where he stood
+    }
+
+    /// <summary>Drive a knight onto the boss and hold the blade there until the
+    /// portal opens; hands back the snapshot that first showed it open.</summary>
+    private static WorldSnapshotPacket SlayTheBoss(GameSession session)
+    {
+        uint seq = 0;
+        var snap = session.Snapshot();
+        for (var tick = 0; tick < 2000 && !snap.PortalOpen; tick++)
+        {
+            var me = snap.Players.Single();
+            var boss = snap.Enemies.Where(e => e.Type == (byte)EnemyType.Boss)
+                .Cast<EnemySnapshot?>().FirstOrDefault();
+
+            var input = new PlayerInput { Sequence = ++seq };
+            if (boss is { } target)
+            {
+                var dx = target.X - me.X;
+                var dz = target.Z - me.Z;
+                var dist = MathF.Sqrt(dx * dx + dz * dz);
+                if (dist > 60f)
+                {
+                    (input.MoveX, input.MoveZ) = (dx / dist, dz / dist);
+                }
+                else
+                {
+                    input.Attack = true;
+                    (input.AimX, input.AimZ) = (dx / dist, dz / dist);
+                }
+            }
+            session.EnqueueInput(1, input);
+            session.Step();
+            snap = session.Snapshot();
+        }
+        return snap;
     }
 }

@@ -121,4 +121,84 @@ public class RealmSnapshotTests
         Assert.Equal(packet.SoupVertices, back.SoupVertices);
         Assert.Equal(packet.SoupTriangles, back.SoupTriangles);
     }
+
+    // The digest is what a client stakes "I already hold this realm" on, so the
+    // property that matters is not that equal realms agree — it is that UNEQUAL
+    // ones cannot. A digest blind to any field it covers would let a client
+    // predict on different stone from the server, and the symptom would be
+    // rubber-banding with no visible cause.
+    public class Digest
+    {
+        private static RealmGeometryPacket Sample() =>
+            RealmSnapshot.From(SampleRealm(), new byte[] { 1, 2, 3, 4 });
+
+        [Fact]
+        public void Is_stable_across_calls_and_equal_for_equal_realms()
+        {
+            var a = RealmSnapshot.Digest(Sample());
+            var b = RealmSnapshot.Digest(Sample());
+
+            Assert.Equal(32, a.Length); // SHA-256
+            Assert.Equal(a, b);
+            Assert.True(RealmSnapshot.DigestMatches(a, b));
+        }
+
+        [Fact]
+        public void Changes_when_any_covered_field_changes()
+        {
+            var baseline = RealmSnapshot.Digest(Sample());
+
+            var moved = Sample();
+            moved.SpawnX += 0.5f;
+
+            var renamed = Sample();
+            renamed.ScenePath = "res://maps/Elsewhere.tscn";
+
+            var reshaped = Sample();
+            reshaped.SoupVertices = (float[])reshaped.SoupVertices.Clone();
+            reshaped.SoupVertices[0] += 0.01f; // one corner, one hundredth of a unit
+
+            var retriangulated = Sample();
+            retriangulated.SoupTriangles = (int[])retriangulated.SoupTriangles.Clone();
+            (retriangulated.SoupTriangles[0], retriangulated.SoupTriangles[1]) =
+                (retriangulated.SoupTriangles[1], retriangulated.SoupTriangles[0]); // winding flip
+
+            var rebaked = Sample();
+            rebaked.NavMesh = new byte[] { 1, 2, 3, 5 };
+
+            foreach (var changed in new[] { moved, renamed, reshaped, retriangulated, rebaked })
+                Assert.NotEqual(baseline, RealmSnapshot.Digest(changed));
+        }
+
+        [Fact]
+        public void An_absent_digest_is_never_a_match()
+        {
+            // A client shipping no copy of this realm sends nothing, and nothing
+            // must never read as agreement — the geometry has to be sent.
+            var real = RealmSnapshot.Digest(Sample());
+
+            Assert.False(RealmSnapshot.DigestMatches(Array.Empty<byte>(), real));
+            Assert.False(RealmSnapshot.DigestMatches(real, Array.Empty<byte>()));
+            Assert.False(RealmSnapshot.DigestMatches(null, real));
+            Assert.False(RealmSnapshot.DigestMatches(real, null));
+            Assert.False(RealmSnapshot.DigestMatches(Array.Empty<byte>(), Array.Empty<byte>()));
+        }
+
+        [Fact]
+        public void Survives_the_join_packet_round_trip()
+        {
+            // The digest is only useful if it crosses the wire intact.
+            var join = new JoinRequest { Name = "Bran", RealmDigest = RealmSnapshot.Digest(Sample()) };
+            var writer = new NetDataWriter();
+            join.Serialize(writer);
+
+            var reader = new NetDataReader();
+            reader.SetSource(writer);
+            var back = new JoinRequest();
+            back.Deserialize(reader);
+
+            Assert.Equal(join.RealmDigest, back.RealmDigest);
+            Assert.True(RealmSnapshot.DigestMatches(back.RealmDigest, RealmSnapshot.Digest(Sample())));
+        }
+    }
 }

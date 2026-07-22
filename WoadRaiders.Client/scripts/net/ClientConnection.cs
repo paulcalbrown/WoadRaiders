@@ -1,6 +1,7 @@
 using Godot;
 using LiteNetLib;
 using LiteNetLib.Utils;
+using WoadRaiders.Core;
 using WoadRaiders.Shared;
 
 namespace WoadRaiders.Client;
@@ -48,6 +49,12 @@ public sealed class ClientConnection
     private readonly EventBasedNetListener _listener = new();
     private readonly NetManager _net;
     private readonly SnapshotAssembler _snapshots = new(); // rebuilds chunked snapshots
+    private readonly GeometryAssembler _geometry = new();  // and chunked realms
+
+    /// <summary>This build's own copy of the realm being joined, offered to the
+    /// server by digest and used verbatim if it accepts. Null when this build
+    /// ships no copy — the server then sends one, as it always did.</summary>
+    private RealmGeometryPacket? _localRealm;
     private readonly Dictionary<MessageType, Action<NetPacketReader>> _handlers;
     private readonly string _host;
     private readonly int _port;
@@ -68,6 +75,7 @@ public sealed class ClientConnection
     // One event per server → client message. Handlers fire on the main thread
     // (from Poll), so subscribers may touch the scene tree freely.
     public event Action<RealmGeometryPacket>? GeometryReceived;
+
     public event Action<WelcomePacket>? Welcomed;
     public event Action<WorldSnapshotPacket>? SnapshotReceived;
     public event Action<ItemPickedUpPacket>? ItemPickedUp;
@@ -87,11 +95,23 @@ public sealed class ClientConnection
         // adding a message is a line here plus its event — no growing switch.
         _handlers = new Dictionary<MessageType, Action<NetPacketReader>>
         {
-            [MessageType.RealmGeometry] = r => GeometryReceived?.Invoke(Read<RealmGeometryPacket>(r)),
+            [MessageType.RealmGeometry] = r =>
+            {
+                if (_geometry.TryAdd(r, out var realm))
+                    GeometryReceived?.Invoke(realm);
+            },
             [MessageType.Welcome] = r =>
             {
                 State = ConnectionState.Playing;
-                Welcomed?.Invoke(Read<WelcomePacket>(r));
+                var welcome = Read<WelcomePacket>(r);
+                // The server accepted this build's own copy of the realm and sent
+                // no geometry, so raise the geometry event from it. Everything
+                // downstream — prediction, the camera, the visual build — then
+                // runs the one code path it always ran, and cannot tell (or need
+                // to tell) whether the realm arrived over the wire or off disk.
+                if (welcome.UsedLocalRealm && _localRealm is not null)
+                    GeometryReceived?.Invoke(_localRealm);
+                Welcomed?.Invoke(welcome);
             },
             [MessageType.WorldSnapshot] = r =>
             {
@@ -128,6 +148,9 @@ public sealed class ClientConnection
             // again at zero — stale-tick tracking from the old session would
             // swallow every snapshot, so it starts over too.
             _snapshots.Reset();
+            // A realm half-delivered when the link dropped must not be stitched
+            // together with chunks of whatever the new server is serving.
+            _geometry.Reset();
             Connected?.Invoke();
         };
 
@@ -208,10 +231,23 @@ public sealed class ClientConnection
     public void RequestInstances() =>
         Send(MessageType.InstanceListRequest, new InstanceListRequestPacket(), DeliveryMethod.ReliableOrdered);
 
-    /// <summary>Send the join (forge or enter an instance); Welcome or JoinDenied answers it.</summary>
+    /// <summary>
+    /// Send the join (forge or enter an instance); Welcome or JoinDenied answers
+    /// it. The realm this build already ships is offered with it, so the server
+    /// can skip sending one the client is already holding — for the Crypt that
+    /// is the whole opening wait, most of it navmesh.
+    ///
+    /// Filled in HERE rather than by each caller: a screen that forgot would not
+    /// break anything, it would only quietly go back to waiting for a transfer,
+    /// which is the kind of regression no test notices.
+    /// </summary>
     public void SendJoin(JoinRequest join)
     {
         State = ConnectionState.Joining;
+        _localRealm = LocalRealms.Load(DungeonCatalog.Sanitize(join.Dungeon));
+        join.RealmDigest = _localRealm is null
+            ? System.Array.Empty<byte>()
+            : RealmSnapshot.Digest(_localRealm);
         Send(MessageType.JoinRequest, join, DeliveryMethod.ReliableOrdered);
     }
 

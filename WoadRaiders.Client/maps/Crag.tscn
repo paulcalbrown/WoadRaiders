@@ -1,8 +1,8 @@
 [gd_scene format=3]
 
-[ext_resource type="PackedScene" path="res://assets/crypt/kenney_graveyard/fire-basket.glb" id="1_6s7hq"]
-[ext_resource type="PackedScene" path="res://assets/crypt/kenney_graveyard/pillar-obelisk.glb" id="2_si7y7"]
-[ext_resource type="PackedScene" path="res://assets/crypt/kenney_graveyard/debris.glb" id="3_0oc3n"]
+[ext_resource type="PackedScene" path="res://assets/crypt/kenney_graveyard/fire-basket.glb" id="PackedScene_ext1"]
+[ext_resource type="PackedScene" path="res://assets/crypt/kenney_graveyard/pillar-obelisk.glb" id="PackedScene_ext2"]
+[ext_resource type="PackedScene" path="res://assets/crypt/kenney_graveyard/debris.glb" id="PackedScene_ext3"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
 albedo_color = Color(0.42, 0.44, 0.47, 1)
@@ -548,61 +548,61 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3400, 256, 3650)
 
 [node name="Scenery" type="Node3D" parent="." groups=["no_collide"]]
 
-[node name="Scenery0" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery0" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1170, 0, 1820)
 
-[node name="Scenery1" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery1" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1170, 0, 2180)
 
-[node name="Scenery2" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery2" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1530, 120.00001, 1820)
 
-[node name="Scenery3" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery3" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 1530, 120, 2180)
 
-[node name="Scenery4" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery4" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 2670, 120, 1820)
 
-[node name="Scenery5" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery5" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 2670, 120, 2180)
 
-[node name="Scenery6" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery6" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3030, 240, 1820)
 
-[node name="Scenery7" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery7" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3030, 240, 2180)
 
-[node name="Scenery8" type="Node3D" parent="Scenery" instance=ExtResource("2_si7y7")]
+[node name="Scenery8" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext2")]
 transform = Transform3D(48, 0, 0, 0, 48, 0, 0, 0, 48, 3190, 240, 2750)
 
-[node name="Scenery9" type="Node3D" parent="Scenery" instance=ExtResource("2_si7y7")]
+[node name="Scenery9" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext2")]
 transform = Transform3D(48, 0, 0, 0, 48, 0, 0, 0, 48, 3610, 240, 2750)
 
-[node name="Scenery10" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery10" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3200, 240, 3260)
 
-[node name="Scenery11" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery11" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3600, 240, 3260)
 
-[node name="Scenery12" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery12" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3270, 256, 3520)
 
-[node name="Scenery13" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery13" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3530, 256, 3520)
 
-[node name="Scenery14" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery14" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3270, 256, 3780)
 
-[node name="Scenery15" type="Node3D" parent="Scenery" instance=ExtResource("1_6s7hq")]
+[node name="Scenery15" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext1")]
 transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3530, 256, 3780)
 
-[node name="Scenery16" type="Node3D" parent="Scenery" instance=ExtResource("3_0oc3n")]
+[node name="Scenery16" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext3")]
 transform = Transform3D(20.411823, 0, 40.104332, 0, 45, 0, -40.104332, 0, 20.411823, 600, 0, 2350)
 
-[node name="Scenery17" type="Node3D" parent="Scenery" instance=ExtResource("3_0oc3n")]
+[node name="Scenery17" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext3")]
 transform = Transform3D(-33.18272, 0, 30.395842, 0, 45, 0, -30.395842, 0, -33.18272, 950, 0, 1550)
 
-[node name="Scenery18" type="Node3D" parent="Scenery" instance=ExtResource("3_0oc3n")]
+[node name="Scenery18" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext3")]
 transform = Transform3D(37.140102, 0, 25.408913, 0, 45, 0, -25.408913, 0, 37.140102, 1600, 120, 2300)
 
 [node name="Sky" type="WorldEnvironment" parent="."]

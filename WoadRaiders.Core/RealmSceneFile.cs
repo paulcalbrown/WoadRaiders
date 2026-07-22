@@ -41,6 +41,10 @@ namespace WoadRaiders.Core;
 ///   - Enemy spawns: Marker3D nodes named "EnemySpawn*" — type from the name:
 ///                   contains "Rogue" → Rogue, "Mage" → Mage, else Minion.
 ///   - Boss:         a Marker3D named "BossSpawn" (optional).
+///   - Exit portal:  a Marker3D named "PortalSpawn" (optional) — where the way
+///                   out tears open once the boss falls. Absent, it opens where
+///                   the boss stood, so a realm owes this only if its ending is
+///                   somewhere other than its last fight.
 ///   - Passable:     the group <see cref="NoCollideGroup"/> on a node excuses
 ///                   it AND everything beneath it from the bake. The one
 ///                   exception to "every mesh is collision", and the only tag
@@ -101,6 +105,7 @@ public static class RealmSceneFile
 
         Vector3? spawn = null;
         Vector3? boss = null;
+        Vector3? portal = null;
         var enemySpawns = new List<EnemySpawnPoint>();
         var builder = new SoupBuilder();
         var boxes = 0;
@@ -182,6 +187,8 @@ public static class RealmSceneFile
                     spawn = world.Origin;
                 else if (name.StartsWith("BossSpawn", StringComparison.Ordinal))
                     boss = world.Origin; // several markers: the last wins
+                else if (name.StartsWith("PortalSpawn", StringComparison.Ordinal))
+                    portal = world.Origin;
                 else if (name.StartsWith("EnemySpawn", StringComparison.Ordinal))
                     enemySpawns.Add(new EnemySpawnPoint(world.Origin, TypeFromName(name)));
             }
@@ -206,6 +213,7 @@ public static class RealmSceneFile
         {
             ScenePath = scenePath,
             BossSpawn = boss,
+            PortalSpawn = portal,
         };
     }
 

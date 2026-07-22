@@ -19,22 +19,50 @@ public readonly record struct DungeonInfo(
                       // baked from the realm's .tscn scene
     string ScenePath, // the authored res:// scene the client renders — required, and the ONLY
                       // visual source: a client without it refuses the raid rather than approximate
-    string MusicKey); // assets/audio/<key>_theme.wav
+    string MusicKey,  // assets/audio/<key>_theme.wav
+    float SightRadius); // how far this realm is legible — see the note below
 
 /// <summary>
 /// The realm table. Kept in Core so the server (which maps to host), the
 /// client (the selection screen, music), and the tests all agree on it.
+///
+/// SIGHT RADIUS is what bounds a snapshot: the server sends each raider only the
+/// enemies, loot and bolts within this far of them, so a realm's population no
+/// longer has to fit on one wire (Shared.WorldSnapshot). It is per realm because
+/// legibility is: an open highland under a sky is visible end to end, while a
+/// fogged crypt shows you the chamber you are in and the mouth of the next.
+///
+/// Size it by what a raider can SEE, then add margin, never by what the
+/// simulation needs — an enemy leashes at 1.6x its aggro range, so ~1000 units
+/// is the furthest one is ever found from its post, and anything beyond that
+/// margin is bought purely to stop distant figures popping into view.
 /// </summary>
 public static class DungeonCatalog
 {
     public static readonly DungeonInfo[] All =
     {
+        // The Crag is 3700x2800 (a 4640 diagonal) under an open sky, so its sight
+        // radius deliberately exceeds the whole realm: nothing is ever filtered
+        // out, and a raider on the gate court still sees the boss court's
+        // garrison across the moor, exactly as they always have.
         new(DungeonId.Crag, "The Crag",
             "A broken highland — glen and gorge, the windswept moor, and the walled court on the summit.",
-            "Crag.json", "res://maps/Crag.tscn", "barrow"),
+            "Crag.json", "res://maps/Crag.tscn", "barrow", SightRadius: 5000f),
+        // The Crypt is dark and fogged: past a chamber or two there is nothing to
+        // see, so it pays nothing to send it. 1200 is chosen from both ends —
+        // comfortably past the ~1000 an engaged enemy can ever be from its post
+        // (aggro 620 x the 1.6 leash), and comfortably past what the fog leaves
+        // visible. Measured on a 7200x2800 realm holding 300 enemies
+        // (tools/MeasureSnapshot.cs): 60 of them in sight, two chunks, the same
+        // framing cost as the whole 40-enemy realm carried before.
+        //
+        // Watch this number if the plan ever grows THIN rather than large: a
+        // circular radius on a long, narrow realm covers far more of it than
+        // intuition suggests — 2200 here reaches 175 enemies, barely better than
+        // sending everything.
         new(DungeonId.Crypt, "The Sunken Crypt",
             "A burial complex carved into the dark — bone galleries, a broken span, and the Mausoleum below.",
-            "Crypt.json", "res://maps/Crypt.tscn", "barrow"),
+            "Crypt.json", "res://maps/Crypt.tscn", "barrow", SightRadius: 1200f),
     };
 
     public static DungeonInfo Of(DungeonId id) => All[(int)id];

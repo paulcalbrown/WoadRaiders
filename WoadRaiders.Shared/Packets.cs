@@ -69,6 +69,18 @@ public sealed class JoinRequest : INetSerializable
     public string InstanceName = ""; // what to call the forged instance ("" = server default)
     public int InstanceId;    // which live instance to enter (Join mode)
 
+    /// <summary>
+    /// A <see cref="RealmSnapshot.Digest"/> of the realm this client already
+    /// holds for <see cref="Dungeon"/>, or empty if it holds none. The server
+    /// sends the realm's geometry only when this does NOT match its own — so a
+    /// client shipping the map it is about to play waits for nothing.
+    ///
+    /// Being WRONG here is safe by construction: a digest that does not match is
+    /// simply not a match, and the geometry is sent. The client cannot talk the
+    /// server out of correcting it.
+    /// </summary>
+    public byte[] RealmDigest = System.Array.Empty<byte>();
+
     public void Serialize(NetDataWriter w)
     {
         w.Put(Name);
@@ -77,6 +89,7 @@ public sealed class JoinRequest : INetSerializable
         w.Put(Dungeon);
         w.Put(InstanceName);
         w.Put(InstanceId);
+        w.PutBytesWithLength(RealmDigest);
     }
 
     public void Deserialize(NetDataReader r)
@@ -87,6 +100,7 @@ public sealed class JoinRequest : INetSerializable
         Dungeon = r.GetByte();
         InstanceName = r.GetString();
         InstanceId = r.GetInt();
+        RealmDigest = r.GetBytesWithLength();
     }
 }
 
@@ -100,11 +114,24 @@ public sealed class WelcomePacket : INetSerializable
     /// this id so a reconnect rejoins the same run instead of forging another.</summary>
     public int InstanceId;
 
+    /// <summary>
+    /// True when the server accepted the client's own copy of the realm and sent
+    /// no geometry; false when it sent some, which the client will already have
+    /// received (geometry rides ahead of this packet, reliable-ordered on the
+    /// same channel).
+    ///
+    /// Stated rather than inferred from the geometry's absence: "nothing arrived"
+    /// is a reading the client would have to make about a message it never got,
+    /// and that is the kind of inference that silently becomes wrong.
+    /// </summary>
+    public bool UsedLocalRealm;
+
     public void Serialize(NetDataWriter w)
     {
         w.Put(PlayerId);
         w.Put(ServerTick);
         w.Put(InstanceId);
+        w.Put(UsedLocalRealm);
     }
 
     public void Deserialize(NetDataReader r)
@@ -112,6 +139,7 @@ public sealed class WelcomePacket : INetSerializable
         PlayerId = r.GetInt();
         ServerTick = r.GetInt();
         InstanceId = r.GetInt();
+        UsedLocalRealm = r.GetBool();
     }
 }
 

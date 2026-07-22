@@ -73,7 +73,11 @@ public partial class RealmSceneBuilder : RefCounted
             return 1;
         }
 
-        GD.Print($"built {outPath}: {scene.Describe()}, saved by Godot's own serializer.");
+        // Only now the scene has been saved successfully: a sweep that ran before
+        // a failed save would delete pieces the surviving .tscn still points at.
+        var swept = scene.SweepLibrary(design.Name);
+        GD.Print($"built {outPath}: {scene.Describe()}, saved by Godot's own serializer." +
+                 (swept > 0 ? $" Swept {swept} library piece(s) the design no longer makes." : ""));
         return 0;
     }
 

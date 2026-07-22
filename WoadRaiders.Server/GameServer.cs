@@ -27,7 +27,7 @@ public sealed class GameServer
 
     /// <summary>One loaded map: its display name, parsed geometry, and the immutable packet sent on join.</summary>
     private sealed record LoadedMap(string Name, RealmDefinition Realm, IRealmGeometry? Movement,
-                                    RealmGeometryPacket Packet);
+                                    RealmGeometryPacket Packet, byte[] Digest);
 
     /// <summary>One live raid: a player-forged run of a dungeon with its own world.</summary>
     private sealed class Instance(
@@ -57,7 +57,9 @@ public sealed class GameServer
     private readonly Dictionary<MessageType, Action<NetPeer, NetPacketReader>> _handlers;
     private readonly Dictionary<DungeonId, LoadedMap> _maps = new(); // every map this server can instantiate
     private readonly Dictionary<int, Instance> _instances = new();   // every live instance, by id
-    private readonly List<NetPeer> _peerScratch = new(); // reused per-instance send list
+    // Reused per-instance send list. Carries the player id alongside the peer
+    // because each raider is now sent their own filtered view of the world.
+    private readonly List<(int PlayerId, NetPeer Peer)> _peerScratch = new();
     private int _nextInstanceId = 1;
     private volatile bool _running;
 
@@ -103,18 +105,32 @@ public sealed class GameServer
                 try
                 {
                     realm = RealmDefinitionFile.Load(mapPath);
-                    // Built realms get their navmesh baked HERE, once — the sim
-                    // moves on it and every client receives these exact bytes, so
-                    // no peer ever bakes its own (identical polygons everywhere).
-                    // The boss-width mesh stays server-side: only the server
-                    // moves the boss. Soupless maps keep the flat-arena rules.
+                    // The character-width navmesh is a BUILD ARTIFACT beside the
+                    // map (tools/GenerateRealm.cs writes it), so the server and
+                    // every client move on the very SAME BYTES rather than on
+                    // two machines' separate bakes — which is what lets a client
+                    // play its own shipped copy of a realm at all.
+                    //
+                    // A map handed in with --map has no artifact, so one is baked
+                    // here. That realm is then unknown to every client anyway, so
+                    // its geometry is sent on join exactly as it always was.
+                    //
+                    // The boss-width mesh stays server-side and is always baked:
+                    // only the server moves the boss, so no client needs it.
+                    // Soupless maps keep the flat-arena rules.
                     if (realm.Soup is { } soup)
                     {
-                        var characters = NavMeshBuilder.BuildMeshData(soup);
+                        var navPath = Path.ChangeExtension(mapPath, ".navmesh");
+                        var shipped = File.Exists(navPath) ? File.ReadAllBytes(navPath) : null;
+                        if (shipped is null)
+                        {
+                            var baked = NavMeshBuilder.BuildMeshData(soup);
+                            shipped = NavMeshBuilder.Serialize(baked);
+                        }
+                        navMesh = shipped;
                         var boss = NavMeshBuilder.BuildMeshData(soup, EnemyArchetypes.Of(EnemyType.Boss).Radius);
-                        navMesh = NavMeshBuilder.Serialize(characters);
                         movement = new RealmGeometry(soup, realm.SpawnPoint,
-                            (SimConstants.CharacterRadius, NavMeshBuilder.ToNavMesh(characters)),
+                            (SimConstants.CharacterRadius, NavMeshBuilder.Deserialize(shipped)),
                             (EnemyArchetypes.Of(EnemyType.Boss).Radius, NavMeshBuilder.ToNavMesh(boss)));
                     }
                 }
@@ -125,7 +141,8 @@ public sealed class GameServer
                 }
 
                 var name = Path.GetFileNameWithoutExtension(mapPath);
-                _maps[id] = new LoadedMap(name, realm, movement, RealmSnapshot.From(realm, navMesh));
+                var packet = RealmSnapshot.From(realm, navMesh);
+                _maps[id] = new LoadedMap(name, realm, movement, packet, RealmSnapshot.Digest(packet));
                 _log.Info($"[map] Loaded '{mapPath}' " +
                           $"({(realm.Soup is { } s ? $"{s.Triangles.Length / 3} triangles" : "flat arena")}, " +
                           $"{realm.EnemySpawns.Count} spawn markers" +
@@ -303,11 +320,36 @@ public sealed class GameServer
         }
         instance.Session.AddPlayer(peer.Id, name, cls);
 
+        // IDENTITY FIRST. A client that already ships this realm offered its
+        // digest with the join; if it matches, the geometry stays home and the
+        // raid begins at once. A client that offered nothing, offered something
+        // stale, or is playing a map the server was handed with --map gets the
+        // whole thing, exactly as every client did before.
+        //
+        // Failing towards SENDING is the whole safety argument: the expensive
+        // outcome is a redundant transfer, while the cheap-looking one — trusting
+        // a digest that does not match — is a client predicting on different
+        // stone from the server, which shows up as rubber-banding nobody can
+        // trace. So the match must be positive and exact, never assumed.
+        var known = _maps.TryGetValue(instance.Dungeon, out var map) ? map.Digest : null;
+        var usedLocal = RealmSnapshot.DigestMatches(join.RealmDigest, known);
+
         // Geometry first, then the welcome (both reliable-ordered on the same
         // channel), so by the time the client starts playing its player exists —
         // classed, in its chosen instance — in every snapshot from the first one.
-        peer.Send(NetProtocol.Frame(MessageType.RealmGeometry, instance.Geometry), Channel, DeliveryMethod.ReliableOrdered);
-        var welcome = new WelcomePacket { PlayerId = peer.Id, ServerTick = instance.Session.Tick, InstanceId = instance.Id };
+        if (!usedLocal)
+            // Chunked, so a realm may outgrow what one fragmented message can
+            // carry — that ceiling is 65535 fragments times the NEGOTIATED MTU,
+            // so it moves with the path and cannot be designed against.
+            foreach (var chunk in GeometryChunks.Split(instance.Geometry))
+                peer.Send(chunk, Channel, DeliveryMethod.ReliableOrdered);
+        var welcome = new WelcomePacket
+        {
+            PlayerId = peer.Id,
+            ServerTick = instance.Session.Tick,
+            InstanceId = instance.Id,
+            UsedLocalRealm = usedLocal,
+        };
         peer.Send(NetProtocol.Frame(MessageType.Welcome, welcome), Channel, DeliveryMethod.ReliableOrdered);
         _log.Info($"[join] Player {peer.Id} enters \"{instance.Name}\" (#{instance.Id}, {instance.DungeonName}) " +
                   $"as a {cls} named \"{name}\" — {instance.Players}/{NetConfig.MaxPlayersPerInstance} raiders");
@@ -471,7 +513,7 @@ public sealed class GameServer
             if (plan.Snapshot)
             {
                 foreach (var (id, instance) in _instances)
-                    BroadcastSnapshot(id, instance.Session);
+                    BroadcastSnapshot(id, instance.Dungeon, instance.Session);
                 ReapEmptyInstances(); // snapshot cadence is plenty for a 60 s linger
             }
 
@@ -535,30 +577,44 @@ public sealed class GameServer
         }
     }
 
-    private void BroadcastSnapshot(int instanceId, GameSession session)
+    private void BroadcastSnapshot(int instanceId, DungeonId dungeon, GameSession session)
     {
-        // Only the peers inside this instance receive its snapshots.
+        // Only the peers inside this instance receive its snapshots. The budget
+        // is still the SMALLEST listening peer's, not each peer's own: chunk
+        // sizing has to be one number for the group, or a raider on a poor link
+        // would silently define a different framing from their warband's.
         _peerScratch.Clear();
         var budget = int.MaxValue;
-        foreach (var connection in _connections.Values)
+        foreach (var (playerId, connection) in _connections)
         {
             if (connection.Instance != instanceId)
                 continue;
-            _peerScratch.Add(connection.Peer);
+            _peerScratch.Add((playerId, connection.Peer));
             budget = Math.Min(budget, connection.Peer.GetMaxSinglePacketSize(DeliveryMethod.Unreliable));
         }
         if (_peerScratch.Count == 0)
             return;
 
-        // Unreliable delivery tops out at one MTU and never fragments, while the
-        // world (and so the snapshot) grows without bound — so each snapshot is
-        // split into as many packets as it needs, sized to the smallest listening
-        // peer's limit so one send plan fits the whole group. The client's
-        // assembler rebuilds it and drops stale ticks; losing any chunk just
-        // costs that one snapshot.
-        foreach (var chunk in SnapshotChunks.Split(session.Snapshot(), budget))
-            foreach (var peer in _peerScratch)
+        // Each raider is sent THEIR OWN view of the world: the whole warband,
+        // and everything else within the realm's sight radius of where they
+        // stand (Shared.WorldSnapshot). That filter is what lets a realm hold
+        // hundreds of enemies without the snapshot growing — which matters more
+        // than it sounds, because unreliable delivery tops out at one MTU and
+        // never fragments, so a snapshot is split into as many packets as it
+        // needs and losing ANY of them costs the whole thing. Held to a couple
+        // of chunks, that is a rare stutter; at nine chunks it is a quarter of
+        // every update gone on a lossy link.
+        //
+        // The cost is one snapshot built per raider rather than one per
+        // instance — bounded by eight, against a world of unbounded size, which
+        // is the right way round.
+        var sight = DungeonCatalog.Of(dungeon).SightRadius;
+        foreach (var (playerId, peer) in _peerScratch)
+        {
+            var snapshot = session.SnapshotFor(playerId, sight);
+            foreach (var chunk in SnapshotChunks.Split(snapshot, budget))
                 peer.Send(chunk, Channel, DeliveryMethod.Unreliable);
+        }
     }
 
     private void DeliverPickups(GameSession session)

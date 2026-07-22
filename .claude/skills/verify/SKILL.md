@@ -28,6 +28,16 @@ dotnet run --project WoadRaiders.Server -- [port] --map <map.json>
 #   Stop-Process -Id (Get-NetUDPEndpoint -LocalPort 9050).OwningProcess[0] -Force
 ```
 
+**Joins are identity-first (v20).** A client ships its own copy of each catalog
+realm — `maps/<Realm>.json` AND `maps/<Realm>.navmesh`, both written by
+`GenerateRealm` — offers a `RealmSnapshot.Digest` of it in the `JoinRequest`, and
+the server sends geometry only when that does not match. `WelcomePacket.
+UsedLocalRealm` says which happened. A probe that sends no digest (every existing
+one) takes the fallback and receives the realm exactly as before, so old probe
+skeletons keep working. `dotnet run tools/RealmIdentityProbe.cs` asserts all
+three cases — held, stale-by-one-bit, and absent. A map handed in with `--map`
+has no `.navmesh` beside it, so the server bakes one and every client falls back.
+
 Custom maps are plain JSON (see `RealmDefinitionFile` docs): `spawn: [x,y,z]`,
 `enemySpawns: [[x,y,z],...]`, optional `enemySpawnTypes` (0 Minion, 1 Rogue,
 2 Mage — parallel array), optional `bossSpawn`, optional `soup` (the realm's
@@ -89,9 +99,19 @@ The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
      A client whose build lacks that .tscn REFUSES the raid (terminal
      Incompatible + the download URL) — there is no from-geometry renderer,
      so a map must ship in the build that plays it.
-`SpawnDirector` clamps the live population to 40 regulars no matter how many
-markers the map has. An all-Mage map keeps projectiles in the snapshot, which
-is the cheapest way to inflate world size.
+`SpawnDirector` clamps the live population to `MaxLiveEnemies` (300) regulars no
+matter how many markers the map has — a ceiling, not a target: a realm holds one
+enemy per marker it places. An all-Mage map keeps projectiles in the snapshot,
+which is the cheapest way to inflate world size.
+
+**Snapshots are per raider, not per instance.** Each player is sent the whole
+warband plus everything within their realm's `SightRadius`
+(`Core.DungeonCatalog`: Crag 5000 — larger than the realm, so nothing is ever
+filtered; Crypt 1200). So a probe standing at the spawn will NOT see enemies
+across the realm, and that is correct. `dotnet run tools/MeasureSnapshot.cs`
+sweeps the radius against a synthetic 300-enemy realm and reports bytes, chunk
+count and survival odds on a lossy link — the chunk count is what to design
+against, since losing any one chunk discards the whole snapshot.
 
 ## Drive the wire protocol without Godot
 
