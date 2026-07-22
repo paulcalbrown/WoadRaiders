@@ -597,6 +597,23 @@ public sealed class RealmGeometryPacket : INetSerializable
     /// </summary>
     private byte[]? _packed;
 
+    /// <summary>
+    /// Pay the compression NOW, off whatever loop would otherwise pay it.
+    ///
+    /// Building it once per realm was never enough: the first raider to need the
+    /// fallback still paid it, and paid it on the server's game loop. At the
+    /// Crypt's 325,594 triangles that was measured at fifteen seconds — the
+    /// server's own watchdog reported <c>Sim stalled 15029 ms</c>, no instance
+    /// ticked, and nobody else could connect for the duration (REALM-C-026).
+    ///
+    /// Returns this, so a load site can build and warm in one expression.
+    /// </summary>
+    public RealmGeometryPacket Precompress()
+    {
+        _packed ??= Pack();
+        return this;
+    }
+
     public void Serialize(NetDataWriter w)
     {
         w.Put(SpawnX);
@@ -654,9 +671,24 @@ public sealed class RealmGeometryPacket : INetSerializable
         PutInt(NavMesh.Length);
         System.Buffer.BlockCopy(NavMesh, 0, raw, at, NavMesh.Length);
 
+        // OPTIMAL, NOT SMALLESTSIZE. Measured on the shipping Crypt's 6.4 MB of
+        // vertices, indices and navmesh (tools/StallProbe.cs):
+        //
+        //   SmallestSize   12,172 ms    704 KB
+        //   Optimal             60 ms  1,480 KB
+        //   Fastest             17 ms  1,801 KB
+        //
+        // SmallestSize is brotli quality 11, and it costs 203x the time to save
+        // 776 KB. That was a defensible trade when a realm was 2,280 triangles
+        // and is an absurd one at 325,594: the saving is invisible against
+        // BUDGET-003's 50 MB, and the cost froze the whole server.
+        //
+        // Inflation is unaffected — ~10 ms at every level — and brotli streams
+        // are self-describing, so a client built against any earlier level reads
+        // this one without knowing anything changed.
         using var packed = new System.IO.MemoryStream();
         using (var brotli = new System.IO.Compression.BrotliStream(
-                   packed, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+                   packed, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
             brotli.Write(raw, 0, raw.Length);
         return packed.ToArray();
     }

@@ -141,12 +141,21 @@ public sealed class GameServer
                 }
 
                 var name = Path.GetFileNameWithoutExtension(mapPath);
-                var packet = RealmSnapshot.From(realm, navMesh);
+                // Compress HERE, at load, where the only thing waiting is startup
+                // — never on the game loop when a raider turns out to need the
+                // fallback (REALM-C-026). The packet was already built once per
+                // map, which was not the same thing: the compression inside it
+                // stayed lazy, so the first join that needed geometry paid it,
+                // and at the Crypt's size that stalled every instance on the
+                // server for fifteen seconds.
+                var packing = Stopwatch.StartNew();
+                var packet = RealmSnapshot.From(realm, navMesh).Precompress();
                 _maps[id] = new LoadedMap(name, realm, movement, packet, RealmSnapshot.Digest(packet));
                 _log.Info($"[map] Loaded '{mapPath}' " +
                           $"({(realm.Soup is { } s ? $"{s.Triangles.Length / 3} triangles" : "flat arena")}, " +
                           $"{realm.EnemySpawns.Count} spawn markers" +
-                          $"{(navMesh is null ? "" : $", {navMesh.Length / 1024} KB navmesh")}).");
+                          $"{(navMesh is null ? "" : $", {navMesh.Length / 1024} KB navmesh")}, " +
+                          $"packed in {packing.ElapsedMilliseconds} ms).");
             }
 
             // Only now, with every map loaded, open the socket — so a joining peer

@@ -105,11 +105,27 @@ Console.WriteLine("[probe] dialing 127.0.0.1:9050 ...");
 // ~160 over ~2.6 km of walking.
 var clock = Stopwatch.StartNew();
 var nextInput = TimeSpan.Zero;
-// 55 s of eastward marching. The crypt is DRAWN in plan units and BUILT 3.16x
-// larger (CryptDesign.Scale), so the march has to be that much longer to cover
-// the same ground: at 18 s the walker now only just reaches the descent stair,
-// and the probe would still pass while proving a fraction of what it claims.
-while (clock.Elapsed < TimeSpan.FromSeconds(55))
+var lastX = float.MinValue;
+
+// March until the walker has DESCENDED far enough to prove the point, then stop
+// — never for a fixed duration.
+//
+// This used to march for a flat 55 s, a number tuned to a realm that no longer
+// exists. Two things then broke it at once, and both are the same mistake:
+//   * the Crypt was reshaped, so 55 s no longer means "reaches the far end";
+//   * its garrison went from 20 to 200, so a walker holding W with no weapon
+//     drawn now DIES in the Ossuary at about 25 s and respawns at the entrance.
+// The replay compares against the server's last snapshot, so a death midway
+// makes it diverge by six thousand units and the probe reports a desync that is
+// not there. It cried wolf on a realm that was working perfectly.
+//
+// Stopping on the assertion instead of the clock fixes both: the probe finishes
+// as soon as it has seen what it came to see, and gets out before the fight.
+const float SunkEnough = 150f;   // must exceed test D's own 100-unit threshold
+var marched = TimeSpan.FromSeconds(45); // a cap, not a target
+var deepest = float.MaxValue;
+var died = false;
+while (clock.Elapsed < marched)
 {
     net.PollEvents();
     if (welcomed && clock.Elapsed >= nextInput)
@@ -118,9 +134,28 @@ while (clock.Elapsed < TimeSpan.FromSeconds(55))
             new InputPacket { MoveX = 1f, Sequence = ++sequence }), 0, DeliveryMethod.ReliableOrdered);
         nextInput = clock.Elapsed + TimeSpan.FromMilliseconds(33);
     }
+
+    if (latestPos is { } here && spawnY is { } startY)
+    {
+        deepest = MathF.Min(deepest, here.Y);
+        // A raider who is suddenly BEHIND where they were is a raider who died
+        // and respawned. Say so rather than reporting it as a prediction fault.
+        if (here.X < lastX - 200f)
+        {
+            died = true;
+            break;
+        }
+        lastX = MathF.Max(lastX, here.X);
+        if (startY - here.Y >= SunkEnough)
+            break;
+    }
     Thread.Sleep(5);
 }
 net.Stop();
+Console.WriteLine(died
+    ? $"[probe] the walker was killed and respawned after {clock.Elapsed.TotalSeconds:0} s — " +
+      "the realm's garrison outlasts a probe that cannot fight; shortening the march"
+    : $"[probe] marched {clock.Elapsed.TotalSeconds:0} s, {sequence} inputs, deepest y={deepest:0}");
 
 var terrainOk = geometryPacket is { } gp && gp.SoupTriangles.Length > 0 && realm?.Soup is not null;
 var spawnGroundY = movement is not null && realm is not null
@@ -156,6 +191,6 @@ Console.WriteLine($"C spawn stands on the floor:   {(spawnOk ? "PASS" : $"FAIL (
 Console.WriteLine($"D the walk sank into the deep: {(sank ? "PASS" : $"FAIL (spawn Y={spawnY}, floor Y={floorY})")}");
 Console.WriteLine($"E client replay agrees:        {(replayOk ? "PASS" : "FAIL")}");
 
-var pass = welcomed && terrainOk && spawnOk && sank && replayOk;
+var pass = welcomed && terrainOk && spawnOk && sank && replayOk && !died;
 Console.WriteLine(pass ? "[probe] ALL CHECKS PASSED" : "[probe] FAILURES — see above");
 return pass ? 0 : 1;
