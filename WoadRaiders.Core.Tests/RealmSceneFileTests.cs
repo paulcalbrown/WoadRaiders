@@ -71,6 +71,8 @@ public class RealmSceneFileTests
         Assert.Equal(new Vector3(100, 1, 200), geometry.SpawnPoint);
         Assert.Equal(new Vector3(400, 9, 500), geometry.BossSpawn);
         Assert.Equal("res://maps/Realm.tscn", geometry.ScenePath);
+        // This realm authors no exit — the way out opens where the boss stood.
+        Assert.Null(geometry.PortalSpawn);
 
         Assert.Equal(
             new[] { EnemyType.Rogue, EnemyType.Mage, EnemyType.Minion },
@@ -293,5 +295,45 @@ public class RealmSceneFileTests
             transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, 4)
             """);
         Assert.Equal(new Vector3(3, 0, 4), geometry.SpawnPoint);
+    }
+
+    // A realm whose ending is somewhere other than its last fight says so, and
+    // the marker composes through its parent's transform like any other.
+    [Fact]
+    public void An_authored_portal_marker_moves_the_way_out_off_the_boss()
+    {
+        var geometry = RealmSceneFile.Parse("""
+            [gd_scene format=3]
+            [node name="R" type="Node3D"]
+            [node name="PlayerSpawn" type="Marker3D" parent="."]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, 20)
+            [node name="BossSpawn" type="Marker3D" parent="."]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 900, -800, 30)
+            [node name="Markers" type="Node3D" parent="."]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1000, 0, 0)
+            [node name="PortalSpawn" type="Marker3D" parent="Markers"]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -900, 5, 20)
+            """);
+
+        Assert.Equal(new Vector3(900, -800, 30), geometry.BossSpawn);
+        Assert.Equal(new Vector3(100, 5, 20), geometry.PortalSpawn);
+    }
+
+    [Fact]
+    public void The_portal_marker_survives_the_json_the_server_is_handed()
+    {
+        var realm = new RealmDefinition(new Vector3(1, 2, 3), null, Array.Empty<EnemySpawnPoint>())
+        {
+            BossSpawn = new Vector3(40, 50, 60),
+            PortalSpawn = new Vector3(70, 80, 90),
+        };
+
+        var parsed = RealmDefinitionFile.Parse(RealmDefinitionFile.ToJson(realm));
+
+        Assert.Equal(new Vector3(70, 80, 90), parsed.PortalSpawn);
+        // Absent stays absent — the fallback to the boss must not be baked in
+        // as data, or a realm could never go back to having no authored exit.
+        Assert.Null(RealmDefinitionFile.Parse(RealmDefinitionFile.ToJson(
+            new RealmDefinition(Vector3.Zero, null, Array.Empty<EnemySpawnPoint>()))).PortalSpawn);
     }
 }

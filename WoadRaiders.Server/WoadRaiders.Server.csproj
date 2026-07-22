@@ -31,6 +31,9 @@
     <Content Include="..\WoadRaiders.Client\maps\*.json"
              Link="maps\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\WoadRaiders.Client\maps\*.navmesh"
+             Link="maps\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

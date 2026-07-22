@@ -131,4 +131,77 @@ public class WorldSnapshotTests
             Assert.Equal(packet.Power, back.Power);
         }
     }
+
+    // Interest management: what bounds a snapshot is what a raider can SEE, not
+    // what the realm holds. Without this a realm's population is paid for by
+    // every player at 20 Hz, and a big realm's snapshot spans enough unreliable
+    // chunks that losing one — and so all of it — stops being rare.
+    public class Around
+    {
+        private static GameWorld ScatteredWorld()
+        {
+            var world = new GameWorld();
+            world.AddPlayer(1, "Near").Position = Vector3.Zero;
+            world.AddPlayer(2, "Far").Position = new Vector3(9000, 0, 0);
+            world.SpawnEnemy(new Vector3(500, 0, 0), EnemyType.Minion);   // in sight
+            world.SpawnEnemy(new Vector3(0, 0, 900), EnemyType.Rogue);    // in sight
+            world.SpawnEnemy(new Vector3(5000, 0, 0), EnemyType.Minion);  // a realm away
+            world.SpawnEnemy(new Vector3(0, -4000, 0), EnemyType.Mage);   // and far BELOW
+            world.DropGold(9, new Vector3(300, 0, 0));
+            world.DropGold(9, new Vector3(6000, 0, 0));
+            return world;
+        }
+
+        [Fact]
+        public void Sends_only_what_stands_within_sight()
+        {
+            var snap = WorldSnapshot.Around(ScatteredWorld(), Vector3.Zero, 2200f);
+
+            Assert.Equal(2, snap.Enemies.Length);
+            Assert.Single(snap.GroundItems);
+            // Distance is measured in three dimensions, so a chamber far below
+            // costs nothing to a raider who cannot see down into it.
+            Assert.DoesNotContain(snap.Enemies, e => e.Y < -1000);
+        }
+
+        [Fact]
+        public void Never_filters_the_warband()
+        {
+            // The far raider is 9000 away — four times the sight radius — and is
+            // still sent. A warband that cannot see its own scattered members
+            // cannot regroup, and there are only ever eight of them.
+            var snap = WorldSnapshot.Around(ScatteredWorld(), Vector3.Zero, 2200f);
+
+            Assert.Equal(2, snap.Players.Length);
+            Assert.Contains(snap.Players, p => p.Name == "Far");
+        }
+
+        [Fact]
+        public void A_radius_past_the_realm_filters_nothing()
+        {
+            // The Crag is smaller than its own sight radius on purpose: an open
+            // highland under a sky must not pop, so it keeps the whole world.
+            var world = ScatteredWorld();
+            var whole = WorldSnapshot.From(world);
+            var wide = WorldSnapshot.Around(world, Vector3.Zero, 100_000f);
+
+            Assert.Equal(whole.Enemies.Length, wide.Enemies.Length);
+            Assert.Equal(whole.GroundItems.Length, wide.GroundItems.Length);
+        }
+
+        [Fact]
+        public void The_portal_is_told_wherever_it_stands()
+        {
+            // The way out is one point and the run ends on it, so it rides every
+            // snapshot regardless of distance — a raider must always be able to
+            // find it, including from the far side of the realm.
+            var world = ScatteredWorld();
+            world.OpenPortal(new Vector3(7000, 0, 0));
+
+            var snap = WorldSnapshot.Around(world, Vector3.Zero, 2200f);
+
+            Assert.True(snap.PortalOpen);
+            Assert.Equal(7000f, snap.PortalX);
+        }
+    }
 }

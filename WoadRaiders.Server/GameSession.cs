@@ -27,15 +27,23 @@ internal sealed class GameSession
 
         // The session owns the wording of match events so the transport layer never has
         // to know about the boss (its name, its respawn timing) — it just relays Notice.
-        // The boss falling opens the exit portal where he stood; walking into it ends a
-        // player's run (GameWorld detects the step-through; ConsumePortalExits reports it).
+        // The boss falling opens the exit portal; walking into it ends a player's run
+        // (GameWorld detects the step-through; ConsumePortalExits reports it).
+        //
+        // WHERE it opens is the realm's to say. A realm that authors a PortalSpawn is
+        // staging its own ending — a walk back through ground it has cleared — and the
+        // wording follows, since "where he stood" would then be a lie. A realm that
+        // says nothing gets the portal on the corpse, which is right when the boss
+        // chamber IS the ending.
         _director.BossFell += () =>
         {
-            if (_realm.BossSpawn is { } bossPos)
-                _world.OpenPortal(bossPos);
-            Raise(SessionEventKind.BossFell,
-                $"The lord of this realm has fallen! A portal tears open where he stood — " +
-                $"he returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.");
+            var portal = _realm.PortalSpawn ?? _realm.BossSpawn;
+            if (portal is { } position)
+                _world.OpenPortal(position);
+            var returns = $"he returns in {SpawnDirector.BossRespawnDelayTicks / SimConstants.TickRate}s.";
+            Raise(SessionEventKind.BossFell, _realm.PortalSpawn is null
+                ? $"The lord of this realm has fallen! A portal tears open where he stood — {returns}"
+                : $"The lord of this realm has fallen! Somewhere behind you, a way out tears open — {returns}");
         };
         _director.BossRose += () => Raise(SessionEventKind.BossRose, "The lord of this realm rises again.");
     }
@@ -115,8 +123,24 @@ internal sealed class GameSession
         _director.Update();
     }
 
-    /// <summary>Project the current world into a broadcastable snapshot packet.</summary>
+    /// <summary>Project the whole world into a snapshot packet — every entity,
+    /// unfiltered. What the tests read; the server sends <see cref="SnapshotFor"/>.</summary>
     public WorldSnapshotPacket Snapshot() => WorldSnapshot.From(_world);
+
+    /// <summary>
+    /// One raider's view of the world: the whole warband, and everything else
+    /// within <paramref name="sightRadius"/> of where they stand.
+    ///
+    /// A player the world no longer holds — they stepped through the portal on
+    /// this very tick, or their join has not landed yet — gets the unfiltered
+    /// world rather than an empty one. Guessing an eye position for someone who
+    /// is not standing anywhere would be a fiction, and a snapshot too FULL is
+    /// merely expensive where a snapshot wrongly empty looks like a bug.
+    /// </summary>
+    public WorldSnapshotPacket SnapshotFor(int playerId, float sightRadius) =>
+        _world.Players.TryGetValue(playerId, out var player)
+            ? WorldSnapshot.Around(_world, player.Position, sightRadius)
+            : WorldSnapshot.From(_world);
 
     /// <summary>Loot collected since the last call, for the server to deliver to each player.</summary>
     public IReadOnlyList<LootPickup> ConsumePickups() => _world.ConsumePickups();

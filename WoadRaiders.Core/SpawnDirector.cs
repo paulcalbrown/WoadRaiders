@@ -17,6 +17,28 @@ public sealed class SpawnDirector
     /// <summary>Top the regular population up by one enemy at most this often.</summary>
     public const int RepopIntervalTicks = 6 * SimConstants.TickRate;
 
+    /// <summary>
+    /// The most regular enemies a realm may hold at once. A CEILING, not a
+    /// target: the population a realm actually keeps is its own marker count
+    /// (see the constructor), so raising this changes nothing for a realm that
+    /// does not place more markers.
+    ///
+    /// It stands at 300 because interest management removed what used to bound
+    /// it. Snapshots ride Unreliable, split across MTU-sized chunks, and losing
+    /// any one chunk discards the whole update — so before each raider was sent
+    /// only what is within sight of them, every extra enemy was paid for by
+    /// every player at 20 Hz, and a few hundred of them turned a lossy link into
+    /// a stutter. Filtered, the wire cost tracks what a raider can SEE rather
+    /// than what the realm holds, and eight players fighting in a crypt is the
+    /// same handful of chunks whether the realm holds forty foes or four
+    /// hundred. What binds now is the client's concurrent character count, which
+    /// the same filter also bounds.
+    /// </summary>
+    public const int MaxLiveEnemies = 300;
+
+    /// <summary>Below this a map is not a raid; a realm with too few markers is topped up to it.</summary>
+    public const int MinLiveEnemies = 4;
+
     /// <summary>The boss returns this long after it is slain, so the fight repeats.</summary>
     public const int BossRespawnDelayTicks = 120 * SimConstants.TickRate;
 
@@ -45,7 +67,7 @@ public sealed class SpawnDirector
         _realm = realm;
         _rng = rng;
         // Map-driven density: target one enemy per typed marker, clamped to a sane band.
-        TargetEnemyCount = Math.Clamp(realm.EnemySpawns.Count, 4, 40);
+        TargetEnemyCount = Math.Clamp(realm.EnemySpawns.Count, MinLiveEnemies, MaxLiveEnemies);
     }
 
     /// <summary>The regular (non-boss) enemy population the director maintains.</summary>

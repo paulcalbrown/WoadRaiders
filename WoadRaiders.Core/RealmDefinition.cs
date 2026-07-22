@@ -39,6 +39,19 @@ public sealed class RealmDefinition
     public Vector3? BossSpawn { get; init; }
 
     /// <summary>
+    /// Where the exit portal tears open once the boss falls, if the realm says.
+    /// Optional, and the fallback is deliberate: with none authored the portal
+    /// opens where the boss stood, which is the honest default for a realm whose
+    /// last room IS its ending.
+    ///
+    /// A realm states this when its ending is somewhere else — a walk back
+    /// through cleared ground to a lit threshold, a shaft to the surface, the
+    /// porch you broke in through. That falling-action beat is otherwise
+    /// impossible to author: the run simply stops at the moment of the kill.
+    /// </summary>
+    public Vector3? PortalSpawn { get; init; }
+
+    /// <summary>
     /// Identity of the map's authored visuals, if any (a res:// scene path).
     /// Presentation metadata — the simulation never reads it.
     /// </summary>

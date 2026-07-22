@@ -6,364 +6,478 @@ using Aabb = WoadRaiders.Core.Aabb;
 namespace WoadRaiders.Client;
 
 /// <summary>
-/// The Sunken Crypt's DESIGN — a TRUE interior: rooms with flat stone floors,
-/// standing walls, linteled doorways, and real roofs overhead, sinking chamber
-/// by chamber into the earth. No landscape anywhere; the necropolis is masonry
-/// all the way down.
+/// The Sunken Crypt — a souterrain-and-charnel complex driven down into a
+/// passage tomb that was old before anyone thought to bury Christians in it.
+/// Each era cut into the last, and the deepest cut is not human work.
 ///
-///   undercroft (0) → descent stair → hall of the dead → processional stair →
-///   the span over the chasm (a bridge, and a long stair back out of the pit)
-///   → east landing → deep stair → the catacombs → the low gallery → the
-///   Mausoleum
+/// Built FROM docs/realms/crypt.md, which is normative: the chamber table, the
+/// metrics, the camp mix and the budgets all live there, and this file is what
+/// realises them. Read the spec before changing a number here.
 ///
-/// Dropping off the span into the chasm is a legal fall — the chasm stair
-/// climbs back to the landing, so the fall is a detour, never a grave.
+///   the Broken Porch → the Minster nave → the Stair of the Dead → the Ossuary
+///   → the Cut → THE FAULT, revealed → down the west stair, across the span →
+///   the east landing → the deep stair → the Deep Gallery → the Descent →
+///   the Forecourt (and the boss, seen) → the Passage → the Chamber of the Wheel
 ///
-/// THE PLAN IS DRAWN SMALL AND BUILT LARGE. Every chamber below is stated in
-/// PLAN units — the realm's original, legible floor plan — and <see cref="S"/>
-/// multiplies them out to world units, giving ten times the floor area of the
-/// first cut. Architecture (wall thickness, doors, ceilings, pillars) is stated
-/// in WORLD units instead and does NOT scale with the plan: a grander hall
-/// wants a grander door, but a wall is still a wall and a raider is still 44
-/// units tall. Wanting a different size of crypt means changing <see cref="S"/>
-/// alone — the dressing rides along, because it is laid out from the chambers
-/// this file records rather than from coordinates of its own.
+/// with two loops off it: a fall into the Fault, which two wall-hugging stairs
+/// climb back out of, and a creepway to a sealed cubiculum that breaks through
+/// into the Forecourt one way.
+///
+/// THREE ERAS, AND THEY DO NOT MIX (spec SPACE-003). Era III is mortared ashlar
+/// and voussoired arches; Era II is drystone, lintels and corbels; Era I is
+/// orthostats, trilithons and a corbelled dome. Every junction between them is a
+/// visible BREACH — later work cut through earlier — never a blend. That rule is
+/// the whole legibility of the realm: you always know how deep in time you are,
+/// and never need a word of text to know it.
+///
+/// The other spine is the CAMERA. Ceiling height decides the shot
+/// (CameraRig fits itself to the space), so compression and release here are not
+/// a metaphor: a 140-high crawl pins the camera behind the raider's shoulder and
+/// an unroofed hall lets it swing right out. Every beat is authored against that.
 /// </summary>
 public sealed partial class CryptDesign : IRealmDesign
 {
     public string Name => "Crypt";
 
-    /// <summary>Plan units to world units. 3.16 ≈ √10, so ten times the floor area.</summary>
-    private const float Scale = 3.16f;
+    // --- The metrics chart (spec §3). Nothing here invents a dimension. -----
 
-    // Architecture, in WORLD units — deliberately not scaled with the plan.
-    private const float WallThickness = 60f;
-    private const float RoomHeight = 620f;      // chambers stand tall; the chase camera comes inside
-    private const float CorridorHeight = 380f;  // passages stay lower, and press in
-    private const float DoorWidth = 420f;
-    private const float DoorHeight = 300f;
-    private const float PillarHalf = 65f;
-    private const float PillarSpacing = 620f;
+    /// <summary>The realm's grid: one KayKit Dungeon tile at scale 20, so kit
+    /// props drop in 1:1. Everything snaps to half of it.</summary>
+    private const float Module = 80f;      // 3.33 m
+    private const float Snap = Module / 2f;
 
-    /// <summary>
-    /// How high the boss's dais stands off the Mausoleum floor. A WORLD
-    /// constant, and it MUST stay under <see cref="SimConstants.StepHeight"/>
-    /// (18): the dais is a low plate the raider walks onto, and a dais taller
-    /// than a step is a plinth that entombs the boss — nothing can climb it,
-    /// and every cell in the realm reports as stranded.
-    /// </summary>
+    private const float StoreyIII = 80f;   // Era III wall height per storey
+    private const float DoorWidthIII = 120f;
+    private const float DoorHeadIII = 96f;
+    private const float TrilithonWidth = 160f;
+    private const float TrilithonHead = 128f;
+    private const float WallThick = 40f;
+    private const float DrystoneThick = 60f;
+    private const float OrthostatThick = 80f;
+    private const float PierHalf = 40f;
+    private const float PierSpacing = 320f;
+    private const float VaultBay = 320f;
+    private const float TreadRise = 16f;   // < SimConstants.StepHeight (18)
+    private const float LaneMin = 160f;
+    private const float CreepwayWidth = 120f;
+
+    private const float CeilCrawl = 140f;  // camera pinned
+    private const float CeilPress = 240f;  // camera at loose tight-fit
+    private const float CeilOpen = 480f;   // camera fully open
+    private const float Unroofed = 0f;     // the dark closes it; the camera opens right out
+
+    /// <summary>How high the boss's cist stands off the chamber floor. MUST stay
+    /// under SimConstants.StepHeight (18) — a dais taller than a step is a plinth
+    /// that entombs whoever stands on it, and every cell in the realm then reports
+    /// as stranded.</summary>
     private const float DaisRise = 16f;
 
-    private static readonly Color OldStone = new(0.34f, 0.34f, 0.38f);
-    private static readonly Color DarkStone = new(0.24f, 0.24f, 0.29f);
-    private static readonly Color BoneWhite = new(0.58f, 0.56f, 0.50f);
-
-    private RealmScene _scene = null!;
-    private Material _floor = null!;
-    private Material _wall = null!;
-    private Material _bone = null!;
+    /// <summary>Which age built a piece of stone. The number is the era's own
+    /// name — Era I is the oldest — so the enum reads the way the fiction does.</summary>
+    private enum Era
+    {
+        Cairn = 1,       // pre-Christian, megalithic
+        Souterrain = 2,  // early medieval, drystone
+        Minster = 3,     // latest, mortared ashlar
+    }
 
     /// <summary>
-    /// A chamber the plan laid down, in WORLD units, kept so the dressing and
-    /// the lighting can walk the rooms instead of restating their coordinates.
+    /// One space from the spec's chamber table, in WORLD units. Connectors carry
+    /// a second floor height and ramp between the two.
     /// </summary>
-    private readonly record struct Chamber(
-        string Name, float X0, float Z0, float X1, float Z1, float FloorY, float TopY)
+    private readonly record struct Space(
+        string Id, Era Era, float X0, float X1, float Z0, float Z1,
+        float FloorY, float Ceiling, float FloorEndY = float.NaN)
     {
         public float MidX => (X0 + X1) * 0.5f;
         public float MidZ => (Z0 + Z1) * 0.5f;
         public float Width => X1 - X0;
         public float Depth => Z1 - Z0;
+        public bool Descends => !float.IsNaN(FloorEndY) && !Mathf.IsEqualApprox(FloorEndY, FloorY);
+        public float EndY => float.IsNaN(FloorEndY) ? FloorY : FloorEndY;
     }
 
-    /// <summary>A stair corridor between chambers, likewise in WORLD units.</summary>
-    private readonly record struct Passage(
-        float X0, float Z0, float X1, float Z1, float LowY, float TopY, bool AlongZ);
+    private RealmScene _scene = null!;
+    private readonly List<Space> _spaces = new();
+    private readonly Dictionary<Era, Material> _stone = new();
+    private readonly Dictionary<Era, Material> _ground = new();
+    private Material _soffit = null!;
+    private Material _bone = null!;
+    private Material _quartz = null!;
 
-    private readonly List<Chamber> _chambers = new();
-    private readonly List<Passage> _passages = new();
+    /// <summary>The space recorded under this id — how the lighting and the cast
+    /// walk the realm instead of restating its coordinates.</summary>
+    private Space Named(string id) => _spaces.Find(s => s.Id == id);
 
-    /// <summary>The bridge deck over the chasm — the realm's one STACKED spot,
-    /// where "the floor here" has two honest answers. Kept so the dressing and
-    /// the camps can name the level they belong to (its top face, or the pit
-    /// floor beneath it) rather than dodging its footprint.</summary>
-    private Aabb _spanDeck;
+    private Material Stone(Era era) => _stone[era];
 
-    /// <summary>The chamber the plan recorded under this name.</summary>
-    private Chamber Named(string name) => _chambers.Find(c => c.Name == name);
-
-    /// <summary>Plan units → world units.</summary>
-    private static float S(float plan) => plan * Scale;
+    /// <summary>What an era walks on. A floor is worn where a wall is not.</summary>
+    private Material Ground(Era era) => _ground[era];
 
     public RealmScene Build()
     {
         _scene = new RealmScene();
-        _floor = StoneSurfaces.Cut(OldStone, grain: 340f, seed: 1301, roughness: 0.94f, relief: 1.1f);
-        _wall = StoneSurfaces.Cut(DarkStone, grain: 470f, seed: 1607, roughness: 0.96f, relief: 1.8f);
-        _bone = StoneSurfaces.Cut(BoneWhite, grain: 220f, seed: 1913, roughness: 0.82f, relief: 0.9f);
+        Surfaces();
 
-        // ------------------------------------------------------- the chambers
-        // The undercroft — the way in.
-        Room("undercroft", 200, 1500, 900, 2100, floorY: 0, doorEast: 1800);
-        // The descent stair, walled like the corridor it is.
-        Corridor(900, 1700, 1500, 1900, fromY: 0, toY: -80);
-        // The hall of the dead.
-        Room("hall", 1500, 1400, 2500, 2200, floorY: -80, doorWest: 1800, doorEast: 1800);
-        PillarRows(1700, 1600, 2300, 2000, floorY: -80);
-        // The processional stair down.
-        Corridor(2500, 1700, 3100, 1900, fromY: -80, toY: -160);
-        // The span: a chasm chamber, its bridge, and the long stair out of the
-        // pit — climbing the south air to land back ON the bridge itself.
-        Room("span", 3100, 1200, 3700, 2400, floorY: -300, wallTopY: -60,
-                doorWest: 1800, doorWestY: -160, doorEast: 1800, doorEastY: -160);
-        // Recorded, not restated: the dressing and the camps read the deck's
-        // own extent from here, so moving the bridge moves everything that
-        // belongs to it instead of silently stranding a hand-copied z-band.
-        _spanDeck = Box(S(3100), S(-172), S(1740), S(3700), S(-160), S(1860));
-        BoxKit.Floor(_scene, _spanDeck, _bone, "Span");
-        // Two climbs out, one at each end, and BOTH laid along the west wall.
-        // That last part is the whole lesson of this pit. A flight rising 442
-        // units is a wall for most of its length, so one struck diagonally
-        // across the floor does not just climb — it partitions, pinning a
-        // margin against the stone that can be walked forever and left never.
-        // The south stair used to run that way, and the strip it cut off was a
-        // dead corner from the day it was laid. The clean bake passed only
-        // because nothing could reach the corner to find out; the kit props
-        // opened a way in and it surfaced. Laid along the wall instead, each
-        // flight IS the margin rather than walling one off, and the whole
-        // chasm floor stays a single room with a way up at either end.
-        BoxKit.Stairs(_scene, new Vector3(S(3160), S(-300), S(2300)), new Vector3(S(3160), S(-160), S(1860)),
-                         S(120), _floor);
-        BoxKit.Stairs(_scene, new Vector3(S(3160), S(-300), S(1300)), new Vector3(S(3160), S(-160), S(1740)),
-                         S(120), _floor);
-        // The east landing beyond the span.
-        Room("landing", 3700, 1500, 3900, 2100, floorY: -160, doorWest: 1800, doorSouth: 3800);
-        // The deep stair south.
-        Corridor(3700, 2100, 3900, 2700, fromY: -160, toY: -240, alongZ: true);
-        // The catacombs — a pillared maze.
-        Room("catacombs", 3200, 2700, 3900, 3300, floorY: -240, doorNorth: 3800, doorWest: 3000);
-        PillarRows(3280, 2800, 3840, 3220, floorY: -240, spacing: 400f); // a maze wants them close
-        // The low gallery westward, easing down the last twenty. Its ends are
-        // stated to MATCH the floors it joins — west is the Mausoleum (-260),
-        // east the catacombs (-240) — so the walk is flush at both mouths
-        // rather than a drop the raider cannot climb back up.
-        Corridor(2600, 2900, 3200, 3100, fromY: -260, toY: -240);
-        // The Mausoleum — the boss's tall chamber.
-        Room("mausoleum", 1800, 2600, 2600, 3400, floorY: -260, wallTopY: -40, doorEast: 3000);
-        var dais = Named("mausoleum");
-        BoxKit.Floor(_scene, Box(dais.MidX - 474f, dais.FloorY, dais.MidZ - 474f,
-                            dais.MidX + 474f, dais.FloorY + DaisRise, dais.MidZ + 474f), _bone, "BossDais");
+        // ---------------------------------------------------------- Era III
+        // The Minster: a burial church driven into the hillside. Human
+        // proportions throughout — 4 m doors, 3.3 m storeys — because humans
+        // built it and the realm's scale has to start somewhere honest.
+        Room("B1", Era.Minster, 0, 720, 1840, 2560, 0, CeilPress + 40f, doorEast: 2200);
+        Corridor("C1", Era.Minster, 720, 800, 2120, 2280, 0, 200f, alongZ: false);
+        Nave();
+        Corridor("C2", Era.Minster, 3040, 3600, 2080, 2320, 0, 220f, alongZ: false, floorAtEnd: -160);
 
+        // ----------------------------------------------------------- Era II
+        // The souterrain the Minster's builders broke into, widened into a
+        // charnel. Deliberately LOW for its size: 47 × 40 m under a 10 m
+        // corbelled roof is oppressive, and the camera says so.
+        Ossuary();
+        Corridor("C3", Era.Souterrain, 5280, 5520, 2080, 2240, -160, CeilCrawl, alongZ: false);
+
+        Fault();
+
+        Corridor("C5", Era.Souterrain, 7040, 7200, 1440, 2320, -400, CeilPress, alongZ: true);
+        Corridor("C5a", Era.Souterrain, 7040, 7200, 2320, 2880, -400, 200f, alongZ: true, floorAtEnd: -560);
+        DeepGallery();
+        // −640 at the CUBICULUM end (x0), −560 at the gallery end (x1).
+        Corridor("B6", Era.Souterrain, 4880, 5920, 3520, 3680, -640, CeilCrawl, alongZ: false, floorAtEnd: -560);
+        Room("B7", Era.Souterrain, 4400, 4880, 3440, 3840, -640, 380f, doorEast: 3600, doorNorth: 4560);
+        // Travel is EAST-WEST here even though the space is deeper than it is wide.
+        Corridor("C6", Era.Souterrain, 4720, 4960, 3040, 3360, -720, 220f, alongZ: false, floorAtEnd: -560);
+
+        // ------------------------------------------------------------ Era I
+        // The cairn the souterrain's diggers broke into. Megalithic: nobody
+        // with hands and rope built this at this size, which is the payoff the
+        // whole descent has been earning.
+        Room("B8", Era.Cairn, 4160, 4720, 2960, 3600, -720, CeilOpen,
+             doorEast: 3200, doorWest: 3280, doorSouth: 4560);
+        Corridor("C7", Era.Cairn, 3520, 4160, 3200, 3360, -880, 150f, alongZ: false, floorAtEnd: -720);
+        Wheel();
+
+        // The dead, then the living, then the light. Burials come last of the
+        // structure because the state a wall wears depends on where it stands on
+        // the route, which no room knows while it is still being laid.
+        Burials();
+        Dressing();
         Cast();
-        Relics(); // the imported kit pass (CryptDesign.Relics.cs) — pure scenery
         Gloom();
         return _scene;
     }
 
+    // ------------------------------------------------------------ the spaces
+
     /// <summary>
-    /// The garrison. Camps are laid out as FRACTIONS of the chamber they hold,
-    /// so widening the plan spreads them through the new floor instead of
-    /// leaving them huddled at the old coordinates. The server caps live
-    /// enemies at 40 (SpawnDirector), which is what this fills.
+    /// The Minster nave: an arcade of piers down a tall central vessel with
+    /// groin-vaulted aisles either side. The aisles are PRESS and the nave is
+    /// OPEN, so the camera lifts as a raider steps out of the flanks into the
+    /// middle — the first release the realm offers, and the reason the fight
+    /// here reads as a hall rather than a corridor.
     /// </summary>
-    private void Cast()
+    private void Nave()
     {
-        var entry = Named("undercroft");
-        _scene.SetPlayerSpawn(_scene.OnFloor(new Vector3(S(350), entry.FloorY, S(1800))));
+        var space = Room("B2", Era.Minster, 800, 3040, 1360, 2960, 0, Unroofed,
+                         doorWest: 2200, doorEast: 2200);
 
-        // A camp at a fraction across a chamber — (0,0) its north-west corner.
-        // Pass nearY where the chamber STACKS (the chasm) to say which level
-        // the camp stands on; without it the topmost floor wins.
-        void Camp(EnemyType type, string room, float u, float v, float? nearY = null)
-        {
-            var c = Named(room);
-            var x = c.X0 + c.Width * u;
-            var z = c.Z0 + c.Depth * v;
-            _scene.AddEnemy(type, _scene.OnFloor(new Vector3(x, nearY ?? c.FloorY, z)));
-        }
+        // Aisles: vaulted low against the outer walls.
+        foreach (var (z0, z1) in new[] { (1360f, 1760f), (2560f, 2960f) })
+            Roof(Era.Minster, space with { Z0 = z0, Z1 = z1 }, CeilPress + 40f);
 
-        // The undercroft: a thin picket, so the way in stays survivable.
-        Camp(EnemyType.Minion, "undercroft", 0.55f, 0.25f);
-        Camp(EnemyType.Minion, "undercroft", 0.55f, 0.75f);
-        Camp(EnemyType.Minion, "undercroft", 0.80f, 0.50f);
-
-        // The hall of the dead: the realm's first real fight, spread wide
-        // between the pillar lines with casters holding the far end.
-        Camp(EnemyType.Minion, "hall", 0.20f, 0.22f);
-        Camp(EnemyType.Minion, "hall", 0.20f, 0.78f);
-        Camp(EnemyType.Minion, "hall", 0.38f, 0.50f);
-        Camp(EnemyType.Rogue, "hall", 0.55f, 0.20f);
-        Camp(EnemyType.Rogue, "hall", 0.55f, 0.80f);
-        Camp(EnemyType.Minion, "hall", 0.70f, 0.35f);
-        Camp(EnemyType.Minion, "hall", 0.70f, 0.65f);
-        Camp(EnemyType.Mage, "hall", 0.86f, 0.24f);
-        Camp(EnemyType.Mage, "hall", 0.86f, 0.76f);
-
-        // The span: sentries on the bridge, and the drowned garrison below.
-        // Each states the LEVEL it belongs to, so a sentry stands on the deck
-        // and the garrison in the pit because the camp says so — not because
-        // its fraction happened to fall outside the bridge's footprint.
-        var deckY = _spanDeck.Max.Y;
-        var pitY = Named("span").FloorY;
-        Camp(EnemyType.Rogue, "span", 0.50f, 0.48f, nearY: deckY);
-        Camp(EnemyType.Rogue, "span", 0.72f, 0.52f, nearY: deckY);
-        Camp(EnemyType.Minion, "span", 0.30f, 0.14f, nearY: pitY);
-        Camp(EnemyType.Minion, "span", 0.70f, 0.12f, nearY: pitY);
-        Camp(EnemyType.Minion, "span", 0.35f, 0.88f, nearY: pitY);
-        Camp(EnemyType.Minion, "span", 0.68f, 0.86f, nearY: pitY);
-
-        // The east landing — a squeeze on the shelf.
-        Camp(EnemyType.Rogue, "landing", 0.50f, 0.22f);
-        Camp(EnemyType.Rogue, "landing", 0.50f, 0.78f);
-        Camp(EnemyType.Minion, "landing", 0.50f, 0.50f);
-
-        // The catacombs: the maze is the point — many, and scattered.
-        Camp(EnemyType.Minion, "catacombs", 0.18f, 0.20f);
-        Camp(EnemyType.Minion, "catacombs", 0.18f, 0.80f);
-        Camp(EnemyType.Rogue, "catacombs", 0.35f, 0.50f);
-        Camp(EnemyType.Minion, "catacombs", 0.50f, 0.18f);
-        Camp(EnemyType.Minion, "catacombs", 0.50f, 0.82f);
-        Camp(EnemyType.Rogue, "catacombs", 0.66f, 0.34f);
-        Camp(EnemyType.Rogue, "catacombs", 0.66f, 0.66f);
-        Camp(EnemyType.Mage, "catacombs", 0.84f, 0.22f);
-        Camp(EnemyType.Mage, "catacombs", 0.84f, 0.78f);
-        Camp(EnemyType.Minion, "catacombs", 0.82f, 0.50f);
-
-        // The Mausoleum: the boss's court, its honour guard drawn around the
-        // dais rather than on it.
-        Camp(EnemyType.Minion, "mausoleum", 0.22f, 0.24f);
-        Camp(EnemyType.Minion, "mausoleum", 0.22f, 0.76f);
-        Camp(EnemyType.Rogue, "mausoleum", 0.32f, 0.50f);
-        Camp(EnemyType.Mage, "mausoleum", 0.16f, 0.50f);
-        Camp(EnemyType.Mage, "mausoleum", 0.50f, 0.16f);
-        Camp(EnemyType.Mage, "mausoleum", 0.50f, 0.84f);
-        Camp(EnemyType.Rogue, "mausoleum", 0.78f, 0.28f);
-        Camp(EnemyType.Rogue, "mausoleum", 0.78f, 0.72f);
-
-        // The boss stands on his dais, so the spawn asks at the DAIS's height,
-        // not the court's — the plinth is what he is meant to be standing on.
-        var court = Named("mausoleum");
-        _scene.SetBossSpawn(_scene.OnFloor(new Vector3(court.MidX, court.FloorY + DaisRise, court.MidZ)));
+        // The arcade: pairs of piers either side of the centre line, never on
+        // it. A pillared hall has aisles — and the route walker runs the middle,
+        // so a pier standing in it stalls the build outright.
+        for (var x = space.X0 + PierSpacing; x <= space.X1 - PierSpacing; x += PierSpacing)
+            foreach (var z in new[] { 1760f, 2560f })
+                Place(Pier(StoreyIII * 2.2f), new Vector3(x, 0, z), 0f, Stone(Era.Minster));
     }
 
-    // ----------------------------------------------------------- vocabulary
+    /// <summary>
+    /// The Ossuary: a drystone charnel whose walls ARE the burial. Loculus banks
+    /// tier the long walls, piers on a wide grid carry a corbelled roof only ten
+    /// metres up over a room forty across — the realm's biggest fight in its
+    /// most oppressive space.
+    /// </summary>
+    private void Ossuary()
+    {
+        Room("B3", Era.Souterrain, 3600, 5280, 1360, 2880, -160, CeilPress,
+             doorWest: 2200, doorEast: 2160);
+
+        // The burial itself — banks, revetment and the one arch — is laid by
+        // Burials(), after every space exists, because the states it grades
+        // depend on where a room sits on the route rather than on its walls.
+
+        var space = Named("B3");
+        for (var x = space.X0 + PierSpacing; x <= space.X1 - PierSpacing; x += PierSpacing)
+            for (var z = space.Z0 + PierSpacing; z <= space.Z1 - PierSpacing; z += PierSpacing)
+                Place(Pier(CeilPress), new Vector3(x, -160, z), 0f, Stone(Era.Souterrain));
+    }
+
+    /// <summary>
+    /// The Fault — a natural cut the builders bridged, and the realm's one
+    /// STACKED space, where "the floor here" has two honest answers.
+    ///
+    /// The order matters more than the geometry. The Cut arrives at the OSSUARY's
+    /// own level and opens onto a shelf jutting over a drop of 720 with nothing
+    /// overhead: crawl to release in one step, the whole chasm and the span
+    /// below it in frame at once. Only THEN does the stair take you down.
+    /// Descending after the reveal is what makes the reveal mean anything.
+    /// </summary>
+    private void Fault()
+    {
+        // The pit floor and the rock it is cut into. West and east strips are
+        // SOLID (the shelf and landings sit on them), so only three small
+        // footprints ever stack over the void.
+        // The pit stops at z 2880, where the Deep Gallery begins. The spec's
+        // table overlapped them by 160, which put this chamber's south wall
+        // straight through the gallery's floor — an unroofed pit and a roofed
+        // gallery cannot share plan area without one of them cutting the other.
+        var pit = Room("B4", Era.Souterrain, 5680, 7040, 1120, 2880, -880, Unroofed);
+        // The cut rock, but only up to DECK level. Above −400 the fault is open
+        // air: carrying the wall higher would run it straight through the
+        // landings' doorways and seal the climbs out, which is precisely what it
+        // did — the stairs reached the top and met stone.
+        for (var y = -880f; y < -400f; y += 240f)
+        {
+            WallRun(Era.Souterrain, pit.X0, pit.Z0, pit.X0, pit.Z1, y, 240f);
+            WallRun(Era.Souterrain, pit.X1, pit.Z0, pit.X1, pit.Z1, y, 240f);
+            WallRun(Era.Souterrain, pit.X0, pit.Z1, pit.X1, pit.Z1, y, 240f);
+        }
+
+        // The shelf: a ledge at the Ossuary's level, jutting 80 over the drop.
+        Ledge("B4a", Era.Souterrain, 5520, 5760, 1920, 2240, -160);
+        // Down the west wall, along it rather than across the pit.
+        // High end at the SHELF (z 1920), low at the landing (z 1360).
+        Stair("C4", Era.Souterrain, 5520, 5680, 1920, 1360, -160, -400);
+        Ledge("B4b", Era.Souterrain, 5520, 5920, 1120, 1440, -400);
+
+        // The span: the Minster's own masonry, thrown across a hole older than
+        // it. The one place Era III appears below its own storey.
+        var deck = Ledge("B4c", Era.Minster, 5920, 7040, 1200, 1360, -400);
+        foreach (var z in new[] { deck.Z0 + 8f, deck.Z1 - 8f })
+            for (var x = deck.X0; x < deck.X1; x += Module)
+                Place(Kerbstone((int)(x / Module) % 5), new Vector3(x + Snap, -400, z), 0f,
+                      Stone(Era.Minster));
+
+        Room("B4d", Era.Souterrain, 7040, 7200, 1120, 1440, -400, 320f,
+             doorWest: 1280, doorSouth: 7120);
+
+        // A way up at EACH end of the span, both hugging a wall. A flight rising
+        // 480 is a wall for most of its length: one struck diagonally across the
+        // floor would not merely climb, it would partition the pit and pin a
+        // margin against the stone that can be walked forever and left never.
+        // That is exactly the defect the first Crypt shipped.
+        Stair("B4w", Era.Souterrain, 5700, 5820, 2800, 1440, -880, -400);
+        // Tops out ON the deck rather than beside it: a stair that merely
+        // touches its landing is a stair the navmesh may decline to join.
+        Stair("B4e", Era.Souterrain, 6920, 7040, 2600, 1300, -880, -400);
+    }
+
+    /// <summary>
+    /// The Deep Gallery: the transition made visible. Drystone at its east end,
+    /// and at the west the first orthostats of something far older, with a monk's
+    /// wall built up against a stone that was already there.
+    /// </summary>
+    private void DeepGallery()
+    {
+        var space = Room("B5", Era.Souterrain, 4960, 7200, 2880, 3520, -560, 260f,
+                         doorNorth: 7120, doorWest: 3200, doorSouth: 5760);
+
+        // The stone changes as you walk west: drystone bays give way to
+        // orthostats over the last third, and nothing announces it but the wall.
+        var breach = Mathf.Lerp(space.X0, space.X1, 0.34f);
+        for (var x = space.X0 + Snap; x < breach; x += Module)
+            foreach (var z in new[] { space.Z0 + 30f, space.Z1 - 30f })
+                Place(Orthostat(240f, (int)(x / Module) % 3), new Vector3(x, -560, z), 0f, Stone(Era.Cairn));
+    }
+
+    /// <summary>
+    /// The Chamber of the Wheel: a cruciform passage-tomb chamber under a
+    /// corbelled beehive dome, with three shallow recesses and the cist at its
+    /// centre. Deliberately over-scaled — 53 × 37 m, above what co-op arena
+    /// guidance gives for eight players — because the fiction's whole payoff is
+    /// that this is not human work and must not look as though it could be.
+    ///
+    /// The recesses are kept SHALLOW (160) and one step up, so a raider standing
+    /// in one still sees the middle: a deep alcove under a chase camera is a
+    /// place a player cannot read the fight from.
+    /// </summary>
+    private void Wheel()
+    {
+        var space = Room("B9", Era.Cairn, 2240, 3520, 2880, 3760, -880, Unroofed, doorEast: 3280);
+
+        // An orthostat ring inside the walls — the chamber proper, standing
+        // within the cairn's mass. TWELVE, not more: a ring is a colonnade only
+        // if a raider can walk between its stones, and at eighteen the gaps came
+        // to 119 before the navmesh eroded 14 off each side. Stones are also
+        // held clear of the entry axis, so the way in is a way in.
+        const int Stones = 12;
+        for (var i = 0; i < Stones; i++)
+        {
+            var a = Mathf.Tau * (i + 0.5f) / Stones; // +0.5 keeps one off the door's line
+            var x = space.MidX + Mathf.Cos(a) * (space.Width / 2f - Module * 1.5f);
+            var z = space.MidZ + Mathf.Sin(a) * (space.Depth / 2f - Module * 1.5f);
+            Place(Orthostat(300f, i % 3), new Vector3(x, -880, z), -a, Stone(Era.Cairn));
+        }
+
+        // The corbelled dome over it, and the quartz that catches what light
+        // there is — the one bright accent in a realm of grey-brown sandstone.
+        Roof(Era.Cairn, space, 900f);
+
+        // The cist: a low plate the raider walks onto, never a plinth.
+        BoxKit.Floor(_scene, Box(space.MidX - 200f, -880, space.MidZ - 200f,
+                                 space.MidX + 200f, -880 + DaisRise, space.MidZ + 200f), _quartz, "TheCist");
+
+        // Kerbstones mark the THRESHOLD of the monument, so they flank the way
+        // into the passage rather than ringing anything. Twice now a ring has
+        // sealed a room: at 14 stones the gaps came to 124, and the navmesh eats
+        // 14 off each side of a lane before a raider of radius 14 tries it. A
+        // ring inside a room a fight happens in is a wall with hopeful holes.
+        var court = Named("B8");
+        foreach (var side in new[] { -1f, 1f })
+            for (var i = 0; i < 2; i++)
+                Place(Kerbstone(i % 5),
+                      new Vector3(court.X0 + Snap + i * Module, court.FloorY,
+                                  court.MidZ + side * (TrilithonWidth + 60f + i * 40f)),
+                      0f, Stone(Era.Cairn));
+    }
+
+    // -------------------------------------------------------- the vocabulary
 
     private static Aabb Box(float x0, float y0, float z0, float x1, float y1, float z1) =>
         new(new System.Numerics.Vector3(x0, y0, z0), new System.Numerics.Vector3(x1, y1, z1));
 
+    private void Surfaces()
+    {
+        // One palette per era, and the difference is VALUE and ROUGHNESS rather
+        // than hue: at ~1900 K almost no colour survives, so dressed-versus-rough
+        // and dry-versus-damp are what the eye actually has to read.
+        // WALLS — photographed stone (LOOK-001), one vendored CC0 set per era.
+        // The tint survives the swap: it is what keeps the eras apart in VALUE
+        // when almost no colour survives 1900 K firelight, and three different
+        // photographs of grey rock do not separate on their own.
+        _stone[Era.Minster] = StoneSurfaces.Photographic("ashlar_wall", seed: 1301,
+                                                         grain: 260f, relief: 1.0f,
+                                                         tint: new Color(0.78f, 0.75f, 0.70f));
+        _stone[Era.Souterrain] = StoneSurfaces.Photographic("drystone", seed: 1607,
+                                                            grain: 300f, relief: 2.0f,
+                                                            tint: new Color(0.62f, 0.61f, 0.58f));
+        _stone[Era.Cairn] = StoneSurfaces.Photographic("orthostat", seed: 1913,
+                                                       grain: 420f, relief: 2.4f,
+                                                       tint: new Color(0.58f, 0.55f, 0.53f));
+
+        // FLOORS and SOFFITS are their own surfaces, because they are in reality:
+        // a floor is worn where a wall is not, and a vault's underside is the one
+        // face in a church nobody ever touched. Same triplanar projection, so a
+        // wall meeting a floor keeps its texel density across the joint.
+        _ground[Era.Minster] = StoneSurfaces.Photographic("ashlar_floor", seed: 1319,
+                                                          grain: 300f, relief: 0.8f,
+                                                          tint: new Color(0.74f, 0.72f, 0.68f));
+        _ground[Era.Souterrain] = StoneSurfaces.Photographic("flagstone", seed: 1613,
+                                                             grain: 340f, relief: 1.4f,
+                                                             tint: new Color(0.60f, 0.59f, 0.57f));
+        _ground[Era.Cairn] = StoneSurfaces.Photographic("cairn_rubble", seed: 1931,
+                                                        grain: 200f, relief: 1.8f,
+                                                        tint: new Color(0.56f, 0.54f, 0.51f));
+        _soffit = StoneSurfaces.Photographic("vault_soffit", seed: 1327,
+                                             grain: 240f, relief: 0.7f,
+                                             tint: new Color(0.80f, 0.78f, 0.74f));
+        _bone = StoneSurfaces.Cut(new Color(0.60f, 0.57f, 0.49f), seed: 2311,
+                                  roughness: 0.80f, relief: 1.2f, grain: 90f);
+        _quartz = StoneSurfaces.Cut(new Color(0.80f, 0.82f, 0.86f), seed: 2617,
+                                    roughness: 0.34f, relief: 0.6f, grain: 120f);
+    }
+
     /// <summary>
-    /// A rectangular chamber, stated in PLAN units: a thick floor, four
-    /// walls (each with an optional linteled doorway at a given coordinate),
-    /// and a roof. Door Y defaults to the floor; a chasm chamber passes the
-    /// height its doors open at instead. Recorded in <see cref="_chambers"/>
-    /// under <paramref name="name"/> for the dressing and lighting to find.
+    /// A rectangular chamber: a floor slab, four walls in the era's grammar with
+    /// optional openings, and a roof (or none, where the dark closes it).
+    /// Recorded under its id for the lighting and the cast to find.
     /// </summary>
-    private void Room(string name, float x0, float z0, float x1, float z1, float floorY,
-                      float? wallTopY = null,
-                      float? doorNorth = null, float? doorSouth = null,
-                      float? doorWest = null, float? doorEast = null,
-                      float? doorWestY = null, float? doorEastY = null)
+    private Space Room(string id, Era era, float x0, float x1, float z0, float z1, float floorY, float ceiling,
+                       float? doorNorth = null, float? doorSouth = null,
+                       float? doorWest = null, float? doorEast = null)
     {
-        float wx0 = S(x0), wz0 = S(z0), wx1 = S(x1), wz1 = S(z1), wFloor = S(floorY);
-        var top = wallTopY is { } t ? S(t) : wFloor + RoomHeight;
+        var space = new Space(id, era, x0, x1, z0, z1, floorY, ceiling);
+        _spaces.Add(space);
 
-        BoxKit.Floor(_scene, Box(wx0, wFloor - 90f, wz0, wx1, wFloor, wz1), _floor);
-        // North/south walls run along X (z fixed); west/east along Z.
-        WallX(wx0, wx1, wz0, wFloor, top, Door(doorNorth), wFloor);
-        WallX(wx0, wx1, wz1 - WallThickness, wFloor, top, Door(doorSouth), wFloor);
-        WallZ(wz0, wz1, wx0, wFloor, top, Door(doorWest), doorWestY is { } w ? S(w) : wFloor);
-        WallZ(wz0, wz1, wx1 - WallThickness, wFloor, top, Door(doorEast), doorEastY is { } e ? S(e) : wFloor);
-        BoxKit.Structure(_scene, Box(wx0, top, wz0, wx1, top + WallThickness, wz1), _wall); // the roof
-
-        _chambers.Add(new Chamber(name, wx0, wz0, wx1, wz1, wFloor, top));
+        BoxKit.Floor(_scene, Box(x0, floorY - 40f, z0, x1, floorY, z1), Ground(era), $"{id}_Floor");
+        var height = ceiling > 0f ? ceiling : StoreyIII * 3f;
+        var width = era == Era.Cairn ? TrilithonWidth : DoorWidthIII;
+        WallRun(era, x0, z0, x1, z0, floorY, height, doorNorth, width);
+        WallRun(era, x0, z1, x1, z1, floorY, height, doorSouth, width);
+        WallRun(era, x0, z0, x0, z1, floorY, height, doorWest, width);
+        WallRun(era, x1, z0, x1, z1, floorY, height, doorEast, width);
+        Roof(era, space, ceiling);
+        return space;
     }
 
-    private static float? Door(float? planAt) => planAt is { } d ? S(d) : null;
-
-    /// <summary>A wall along X at a fixed Z, split around a doorway when one is given.</summary>
-    private void WallX(float x0, float x1, float z, float floorY, float topY, float? doorAt, float doorY)
+    /// <summary>
+    /// A walled passage, open at both ends, level or descending.
+    ///
+    /// <paramref name="alongZ"/> is STATED, never inferred from which dimension
+    /// is longer. A short wide threshold is wider than it is deep, so guessing
+    /// would run its walls across the way through — and the symptom is not a
+    /// broken wall, it is a validator reporting a whole wing of the realm as
+    /// unreachable, a long way from the cause.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="floorAtStart"/> is the height at the x0/z0 CORNER and
+    /// <paramref name="floorAtEnd"/> at x1/z1 — NOT in the order a raider walks
+    /// them. Four of these were written route-first and so descended the wrong
+    /// way, each meeting its chamber 160 out; the realm still built, still
+    /// looked right, and reported a whole wing unreachable.
+    /// </remarks>
+    private Space Corridor(string id, Era era, float x0, float x1, float z0, float z1, float floorAtStart,
+                           float ceiling, bool alongZ, float? floorAtEnd = null)
     {
-        if (doorAt is { } d)
+        var space = new Space(id, era, x0, x1, z0, z1, floorAtStart, ceiling, floorAtEnd ?? float.NaN);
+        _spaces.Add(space);
+
+        if (space.Descends)
         {
-            BoxKit.Structure(_scene, Box(x0, floorY, z, d - DoorWidth / 2, topY, z + WallThickness), _wall);
-            BoxKit.Structure(_scene, Box(d + DoorWidth / 2, floorY, z, x1, topY, z + WallThickness), _wall);
-            BoxKit.Structure(_scene, Box(d - DoorWidth / 2, doorY + DoorHeight, z, d + DoorWidth / 2, topY,
-                                    z + WallThickness), _wall);
+            var from = alongZ ? new Vector3(space.MidX, floorAtStart, z0) : new Vector3(x0, floorAtStart, space.MidZ);
+            var to = alongZ ? new Vector3(space.MidX, space.EndY, z1) : new Vector3(x1, space.EndY, space.MidZ);
+            BoxKit.Stairs(_scene, from, to, alongZ ? x1 - x0 : z1 - z0, Stone(era));
         }
         else
         {
-            BoxKit.Structure(_scene, Box(x0, floorY, z, x1, topY, z + WallThickness), _wall);
+            BoxKit.Floor(_scene, Box(x0, floorAtStart - 40f, z0, x1, floorAtStart, z1), Ground(era), $"{id}_Floor");
         }
-    }
 
-    /// <summary>A wall along Z at a fixed X, split around a doorway when one is given.</summary>
-    private void WallZ(float z0, float z1, float x, float floorY, float topY, float? doorAt, float doorY)
-    {
-        if (doorAt is { } d)
-        {
-            BoxKit.Structure(_scene, Box(x, floorY, z0, x + WallThickness, topY, d - DoorWidth / 2), _wall);
-            BoxKit.Structure(_scene, Box(x, floorY, d + DoorWidth / 2, x + WallThickness, topY, z1), _wall);
-            BoxKit.Structure(_scene, Box(x, doorY + DoorHeight, d - DoorWidth / 2, x + WallThickness, topY,
-                                    d + DoorWidth / 2), _wall);
-        }
-        else
-        {
-            BoxKit.Structure(_scene, Box(x, floorY, z0, x + WallThickness, topY, z1), _wall);
-        }
-    }
-
-    /// <summary>A walled, roofed stair corridor between two chambers, in PLAN units.</summary>
-    private void Corridor(float x0, float z0, float x1, float z1, float fromY, float toY, bool alongZ = false)
-    {
-        float wx0 = S(x0), wz0 = S(z0), wx1 = S(x1), wz1 = S(z1), wFrom = S(fromY), wTo = S(toY);
-        var top = Mathf.Max(wFrom, wTo) + CorridorHeight;
-        var bottom = Mathf.Min(wFrom, wTo);
+        // Side walls only — the ends are the doorways it joins.
+        var low = Mathf.Min(floorAtStart, space.EndY);
         if (alongZ)
         {
-            BoxKit.Stairs(_scene, new Vector3((wx0 + wx1) / 2, wFrom, wz0), new Vector3((wx0 + wx1) / 2, wTo, wz1),
-                             wx1 - wx0, _floor);
-            BoxKit.Structure(_scene, Box(wx0 - WallThickness, bottom, wz0, wx0, top, wz1), _wall);
-            BoxKit.Structure(_scene, Box(wx1, bottom, wz0, wx1 + WallThickness, top, wz1), _wall);
+            WallRun(era, x0, z0, x0, z1, low, ceiling + (floorAtStart - low));
+            WallRun(era, x1, z0, x1, z1, low, ceiling + (floorAtStart - low));
         }
         else
         {
-            BoxKit.Stairs(_scene, new Vector3(wx0, wFrom, (wz0 + wz1) / 2), new Vector3(wx1, wTo, (wz0 + wz1) / 2),
-                             wz1 - wz0, _floor);
-            BoxKit.Structure(_scene, Box(wx0, bottom, wz0 - WallThickness, wx1, top, wz0), _wall);
-            BoxKit.Structure(_scene, Box(wx0, bottom, wz1, wx1, top, wz1 + WallThickness), _wall);
+            WallRun(era, x0, z0, x1, z0, low, ceiling + (floorAtStart - low));
+            WallRun(era, x0, z1, x1, z1, low, ceiling + (floorAtStart - low));
         }
-        BoxKit.Structure(_scene, Box(wx0, top, wz0, wx1, top + WallThickness, wz1), _wall); // roofed all the way
-        _passages.Add(new Passage(wx0, wz0, wx1, wz1, bottom, top, alongZ));
+        return space;
     }
 
-    /// <summary>
-    /// Rows of square pillars holding a chamber's roof up, over a PLAN-unit
-    /// rectangle. Spacing is a WORLD constant, so a wider hall gets MORE
-    /// pillars rather than the same few stretched further apart.
-    /// </summary>
-    private void PillarRows(float x0, float z0, float x1, float z1, float floorY,
-                            float spacing = PillarSpacing)
+    /// <summary>A shelf or deck standing over open air — floor only, no walls,
+    /// because what surrounds it is the drop.</summary>
+    private Space Ledge(string id, Era era, float x0, float x1, float z0, float z1, float floorY)
     {
-        float wx0 = S(x0), wz0 = S(z0), wx1 = S(x1), wz1 = S(z1), wFloor = S(floorY);
-        var midX = (wx0 + wx1) * 0.5f;
-        var midZ = (wz0 + wz1) * 0.5f;
+        var space = new Space(id, era, x0, x1, z0, z1, floorY, Unroofed);
+        _spaces.Add(space);
+        BoxKit.Floor(_scene, Box(x0, floorY - 40f, z0, x1, floorY, z1), Ground(era), $"{id}_Floor");
+        return space;
+    }
 
-        // Rows are laid in PAIRS either side of the chamber's middle, never on
-        // it, so the hall keeps a clear cross aisle down both centre lines.
-        // That is architecture — a pillared hall has aisles — and it is also
-        // load-bearing for the build: the intended route runs the centre line,
-        // and a pillar standing in it stalls the route walker outright.
-        var reachX = (wx1 - wx0) * 0.5f - PillarHalf;
-        var reachZ = (wz1 - wz0) * 0.5f - PillarHalf;
-        for (var i = 0; (i + 0.5f) * spacing <= reachX; i++)
-            for (var j = 0; (j + 0.5f) * spacing <= reachZ; j++)
-                foreach (var sx in new[] { -1f, 1f })
-                    foreach (var sz in new[] { -1f, 1f })
-                    {
-                        var x = midX + sx * (i + 0.5f) * spacing;
-                        var z = midZ + sz * (j + 0.5f) * spacing;
-                        BoxKit.Structure(_scene, Box(x - PillarHalf, wFloor, z - PillarHalf,
-                                                x + PillarHalf, wFloor + RoomHeight, z + PillarHalf), _wall);
-                    }
+    /// <summary>A flight of treads, each rising less than a step so feet flow up
+    /// it. Runs from one point to another — lay it ALONG a wall, never across a
+    /// floor.</summary>
+    private Space Stair(string id, Era era, float x0, float x1, float z0, float z1, float fromY, float toY)
+    {
+        var space = new Space(id, era, Mathf.Min(x0, x1), Mathf.Max(x0, x1),
+                              Mathf.Min(z0, z1), Mathf.Max(z0, z1), fromY, Unroofed, toY);
+        _spaces.Add(space);
+        BoxKit.Stairs(_scene, new Vector3((x0 + x1) / 2f, fromY, z0),
+                      new Vector3((x0 + x1) / 2f, toY, z1), Mathf.Abs(x1 - x0), Stone(era));
+        return space;
     }
 }

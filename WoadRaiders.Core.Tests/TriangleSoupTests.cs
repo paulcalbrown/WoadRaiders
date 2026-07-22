@@ -151,14 +151,39 @@ public class TriangleSoupTests
         var rng = new Random(9);
         var lo = soup.BoundsMin;
         var span = soup.BoundsMax - soup.BoundsMin;
-        Vector3 Somewhere() => new(
+        var triangles = soup.Triangles.Length / 3;
+
+        Vector3 Anywhere() => new(
             lo.X + (float)rng.NextDouble() * span.X,
             lo.Y + (float)rng.NextDouble() * span.Y,
             lo.Z + (float)rng.NextDouble() * span.Z);
 
-        for (var i = 0; i < 1500; i++)
+        // Near an actual VERTEX, jittered. A realm 7264 units across is mostly
+        // air, so a uniformly random point is almost always nowhere near
+        // anything and the ray from it tests the empty half of the tree. Anchored
+        // sampling puts nearly every probe in contact with real geometry, which
+        // is where the index and the brute force can actually disagree — so
+        // FEWER rays here cover more than more rays did before.
+        Vector3 NearGeometry()
         {
-            var from = Somewhere();
+            var v = rng.Next(soup.Vertices.Length / 3) * 3;
+            return new Vector3(soup.Vertices[v], soup.Vertices[v + 1], soup.Vertices[v + 2])
+                 + new Vector3((float)rng.NextDouble() - 0.5f,
+                               (float)rng.NextDouble() - 0.5f,
+                               (float)rng.NextDouble() - 0.5f) * 120f;
+        }
+
+        // The brute force is O(triangles) and runs five times an iteration, so a
+        // fixed sample count makes this test cost whatever the realm happens to
+        // weigh — it was ~10 s when the Crypt held 2,280 triangles and four
+        // MINUTES at 325,594, which is a test people stop running. Budget the
+        // WORK instead of the samples, and the cost stays flat as realms grow.
+        const long TriangleTestBudget = 120_000_000;
+        var samples = (int)Math.Clamp(TriangleTestBudget / (5L * Math.Max(1, triangles)), 150, 1500);
+
+        for (var i = 0; i < samples; i++)
+        {
+            var from = i % 2 == 0 ? NearGeometry() : Anywhere();
             var to = from + new Vector3(
                 ((float)rng.NextDouble() - 0.5f) * span.X * 0.3f,
                 ((float)rng.NextDouble() - 0.5f) * span.Y * 0.3f,
@@ -167,7 +192,7 @@ public class TriangleSoupTests
             Assert.Equal(BruteSegmentHits(soup, from, to, false), soup.SegmentHits(from, to));
             Assert.Equal(BruteSegmentHits(soup, from, to, true), soup.SegmentHits(from, to, blockersOnly: true));
 
-            var p = Somewhere();
+            var p = i % 3 == 0 ? Anywhere() : NearGeometry();
             Assert.Equal(BruteGroundBelow(soup, p.X, p.Z, p.Y, SimConstants.StepHeight),
                          soup.GroundBelow(p.X, p.Z, p.Y, SimConstants.StepHeight));
             Assert.Equal(BruteGroundBelow(soup, p.X, p.Z, float.PositiveInfinity, 0f),

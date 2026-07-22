@@ -70,6 +70,22 @@ Step("godot-mono", "--headless --path WoadRaiders.Client -s res://tools/bake_rea
 
 var definition = RealmDefinitionFile.Load(jsonPath);
 
+// ------------------------------------------------------------- bake the navmesh
+// The navmesh is a BUILD ARTIFACT, not something either end works out at run
+// time. That is what lets a client play its own copy of a realm instead of
+// waiting for the server to send one: identical bytes because they are the SAME
+// bytes, rather than because two machines were trusted to bake alike. It also
+// spares the server a Recast bake per map at startup.
+//
+// Character width only. The boss moves on a wider mesh, but only the SERVER
+// moves the boss, so that one stays server-side and is baked there.
+if (definition.Soup is { } navSoup)
+{
+    var navPath = Path.ChangeExtension(jsonPath, ".navmesh");
+    File.WriteAllBytes(navPath, NavMeshBuilder.Serialize(NavMeshBuilder.BuildMeshData(navSoup)));
+    Console.WriteLine($"  baked {Path.GetFileName(navPath)}: {new FileInfo(navPath).Length / 1024} KB");
+}
+
 // The shared realm checks (Core.RealmValidator): comfortable reachability of
 // every camp and the boss, sealed borders, no stranding pits.
 var issues = RealmValidator.Validate(definition);
@@ -82,18 +98,6 @@ if (issues.Count > 0)
 // Crypt's descent must lose it. Realms with no route here skip the walk —
 // RealmValidator's reachability proof stands on its own, so a new realm owes
 // this only if it has an intended path.
-// The Crypt is DRAWN in plan units and BUILT 3.16x larger (CryptDesign.Scale —
-// keep the two in step; if they drift, the walk below misses the realm and
-// fails loudly rather than silently proving nothing).
-const float CryptScale = 3.16f;
-static Vector2[] Scaled(float k, Vector2[] plan)
-{
-    var world = new Vector2[plan.Length];
-    for (var i = 0; i < plan.Length; i++)
-        world[i] = plan[i] * k;
-    return world;
-}
-
 var routes = new Dictionary<string, (Vector2[] Path, float MinFinalHeight, float MaxFinalHeight)>(StringComparer.OrdinalIgnoreCase)
 {
     // The Crag: gate court → stairs → the processional → stairs → the high
@@ -105,18 +109,28 @@ var routes = new Dictionary<string, (Vector2[] Path, float MinFinalHeight, float
     new(3400, 3000), new(3400, 3400), new(3400, 3650),
     ], 250f, float.MaxValue),
 
-    // The Crypt: undercroft → descent stair → the hall of the dead →
-    // processional stair → the span → the east landing → the deep stair →
-    // the catacombs → the low gallery → the Mausoleum. Ends DEEP or the
-    // descent is broken. Stated in the design's PLAN units and multiplied out
-    // by the same 3.16 CryptDesign builds with, so the route follows the realm
-    // when the plan is rescaled instead of pointing at where it used to be.
-    ["Crypt"] = (Scaled(CryptScale, [
-    new(600, 1800), new(1200, 1800), new(1800, 1800), new(2400, 1800),
-    new(2800, 1800), new(3300, 1800), new(3600, 1800), new(3800, 1800),
-    new(3800, 2400), new(3800, 2650), new(3550, 3000), new(3000, 3000),
-    new(2600, 3000), new(2200, 3000),
-    ]), float.MinValue, -230f * CryptScale),
+    // The Crypt v2 (docs/realms/crypt.md): the Broken Porch → the Minster
+    // nave → the Stair of the Dead → the Ossuary → the Cut → the Fault,
+    // revealed from the shelf → down the west stair and across the span → the
+    // east landing → the deep stair → the Deep Gallery → the Descent → the
+    // Forecourt → the Passage → the Chamber of the Wheel. Ends DEEP or the
+    // descent is broken.
+    //
+    // Stated in WORLD units, because v2 is authored in them: v1 drew its plan
+    // small and multiplied by 3.16, which meant this route had to know the
+    // scale factor and would silently point at where the realm used to be if
+    // the two ever drifted.
+    ["Crypt"] = ([
+    new(200, 2200), new(760, 2200), new(1200, 2200), new(2000, 2200),
+    new(2900, 2200), new(3320, 2200), new(3700, 2200), new(4400, 2180),
+    new(5200, 2160), new(5400, 2160), new(5640, 2120),
+    new(5600, 1800), new(5600, 1500), new(5760, 1280),
+    new(6200, 1280), new(6800, 1280), new(7120, 1280),
+    new(7120, 1700), new(7120, 2200), new(7120, 2700), new(7100, 3100),
+    new(6400, 3200), new(5400, 3200), new(5000, 3200),
+    new(4840, 3260), new(4600, 3280), new(4300, 3280),
+    new(3900, 3280), new(3600, 3280), new(3200, 3280), new(2900, 3300),
+    ], float.MinValue, -860f),
 };
 if (!routes.TryGetValue(realm, out var route))
 {
@@ -197,8 +211,12 @@ static void Step(string exe, string args, string what)
     if (process.ExitCode != 0)
         throw new InvalidOperationException($"{what} failed (exit {process.ExitCode}):\n{output}");
     foreach (var line in output.Split('\n'))
+        // "no_collide" is here deliberately: the bake counts aloud what it was
+        // told to wave through, and a realm quietly excusing more and more of
+        // itself from collision is invisible unless that count reaches a human.
+        // Swallowing it here would have silenced the only symptom there is.
         if (line.Contains("built ") || line.Contains("baked ") || line.Contains("sampled ")
-            || line.Contains("scattered ") || line.Contains("warning:"))
+            || line.Contains("no_collide") || line.Contains("scattered ") || line.Contains("warning:"))
             Console.WriteLine("  " + line.Trim());
 }
 
@@ -208,6 +226,16 @@ static void Step(string exe, string args, string what)
 // random-per-save attributes (both optional — the editor regenerates them on
 // its next save), so regenerating an unchanged realm rewrites nothing. Ids
 // are opaque references — any Godot reads the result identically.
+//
+// EXT-resource ids are normalized too, and the reason is worth stating because
+// it looks unnecessary: an ext_resource pointing at an IMPORTED asset already
+// gets a stable id, derived from the uid its .import file pins. One pointing at
+// a resource the build itself wrote — a realm's sculpted mesh library — has no
+// such uid, so Godot mints a fresh random suffix on every save and the scene
+// stops regenerating identically. Measured on 4.7 with
+// WoadRaiders.Client/tools/probe_extresource.gd. Normalizing both kinds means
+// the guarantee rests on this function rather than on which flavour of resource
+// a realm happens to reference.
 static void NormalizeSceneIds(string path)
 {
     var text = File.ReadAllText(path);
@@ -216,13 +244,24 @@ static void NormalizeSceneIds(string path)
 
     var counters = new Dictionary<string, int>();
     var renames = new Dictionary<string, string>();
-    foreach (Match match in Regex.Matches(text, @"\[sub_resource type=""([^""]+)"" id=""([^""]+)""\]"))
+
+    // Document order is the ordering, for both kinds: Godot writes these blocks
+    // in a stable order, which is what makes the numbering reproducible.
+    // Distinct prefixes keep the two namespaces from ever colliding.
+    Rename(@"\[ext_resource type=""([^""]+)"" [^\]]*id=""([^""]+)""\]", "ext");
+    Rename(@"\[sub_resource type=""([^""]+)"" id=""([^""]+)""\]", "");
+
+    void Rename(string pattern, string kind)
     {
-        var type = match.Groups[1].Value;
-        var old = match.Groups[2].Value;
-        counters[type] = counters.GetValueOrDefault(type) + 1;
-        renames[old] = $"{type}_{counters[type]}";
+        foreach (Match match in Regex.Matches(text, pattern))
+        {
+            var type = match.Groups[1].Value;
+            var key = kind + type;
+            counters[key] = counters.GetValueOrDefault(key) + 1;
+            renames[match.Groups[2].Value] = $"{type}_{kind}{counters[key]}";
+        }
     }
+
     var builder = new StringBuilder(text);
     foreach (var (old, fresh) in renames)
         builder.Replace($"\"{old}\"", $"\"{fresh}\"");

@@ -32,3 +32,9 @@ project/assembly_name="WoadRaiders.Client"
 [rendering]
 
 textures/vram_compression/import_etc2_astc=true
+; Realms are many small stone rooms, which is the case Godot documents occlusion
+; culling as most effective for. Without it every light, decal and particle
+; system in chambers the raider cannot see is still submitted. The occluders
+; themselves are emitted by the realm designs (BoxKit.Structure), not baked in
+; the editor, so this switch is all that is needed to turn them on.
+occlusion_culling/use_occlusion_culling=true

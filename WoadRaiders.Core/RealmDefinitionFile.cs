@@ -20,7 +20,9 @@ namespace WoadRaiders.Core;
 ///   "enemySpawns": [ [x,y,z], ... ],
 ///   "enemySpawnTypes": [ 0, 1, 2, ... ],         (optional — parallel to enemySpawns;
 ///                                                 EnemyType values, missing → all Minion)
-///   "bossSpawn": [x, y, z]                       (optional — the map's boss)
+///   "bossSpawn": [x, y, z],                      (optional — the map's boss)
+///   "portalSpawn": [x, y, z]                     (optional — where the exit portal opens;
+///                                                 absent → wherever the boss stood)
 /// }
 /// </summary>
 public static class RealmDefinitionFile
@@ -67,6 +69,7 @@ public static class RealmDefinitionFile
         {
             ScenePath = string.IsNullOrWhiteSpace(doc.Scene) ? null : doc.Scene,
             BossSpawn = doc.BossSpawn is null ? null : ToVec(doc.BossSpawn, "bossSpawn"),
+            PortalSpawn = doc.PortalSpawn is null ? null : ToVec(doc.PortalSpawn, "portalSpawn"),
         };
     }
 
@@ -98,6 +101,7 @@ public static class RealmDefinitionFile
             EnemySpawns = g.EnemySpawns.Select(s => new[] { s.Position.X, s.Position.Y, s.Position.Z }).ToArray(),
             EnemySpawnTypes = g.EnemySpawns.Select(s => (int)s.Type).ToArray(),
             BossSpawn = g.BossSpawn is { } b ? new[] { b.X, b.Y, b.Z } : null,
+            PortalSpawn = g.PortalSpawn is { } p ? new[] { p.X, p.Y, p.Z } : null,
         };
         return JsonSerializer.Serialize(doc, Options);
     }
@@ -115,6 +119,7 @@ public static class RealmDefinitionFile
         public float[][]? EnemySpawns { get; set; }
         public int[]? EnemySpawnTypes { get; set; }
         public float[]? BossSpawn { get; set; }
+        public float[]? PortalSpawn { get; set; }
     }
 
     private sealed class SoupDoc

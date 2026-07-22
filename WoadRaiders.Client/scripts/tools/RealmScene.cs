@@ -38,6 +38,7 @@ public sealed class RealmScene
 {
     private Node3D? _ground;
     private Node3D? _structure;
+    private Node3D? _occluders;
 
     // A monotonic ordinal that gives every unnamed role node a unique default
     // name ("Floor_0", "Structure_1", ...). Load-bearing: those names land
@@ -62,6 +63,7 @@ public sealed class RealmScene
     public int EnemyCount { get; private set; }
     public bool HasPlayerSpawn { get; private set; }
     public bool HasBoss { get; private set; }
+    public bool HasPortal { get; private set; }
 
     // ----------------------------------------------------------- the geometry
 
@@ -211,6 +213,139 @@ public sealed class RealmScene
         return Attach(new Marker3D { Position = position }, "BossSpawn");
     }
 
+    /// <summary>
+    /// Where the way out tears open once the boss falls. Optional: say nothing
+    /// and it opens where the boss stood, which is right for a realm whose last
+    /// chamber IS its ending. State it when the ending is somewhere else — a
+    /// walk back through ground you have cleared, a shaft to the surface, the
+    /// door you broke in through. That falling-action beat has nowhere else to
+    /// live, because the run otherwise stops on the tick of the kill.
+    /// </summary>
+    public Marker3D SetPortalSpawn(Vector3 position)
+    {
+        HasPortal = true;
+        return Attach(new Marker3D { Position = position }, "PortalSpawn");
+    }
+
+    // ------------------------------------------------------- the mesh library
+
+    /// <summary>Where a realm's sculpted pieces are written, beside its scene.</summary>
+    private const string LibraryRoot = "res://maps";
+
+    /// <summary>Every library file this build wrote. What is NOT in here after a
+    /// build is a piece the design no longer makes — see <see cref="SweepLibrary"/>.</summary>
+    private readonly HashSet<string> _libraryWritten = new();
+
+    /// <summary>
+    /// Delete library pieces the design stopped making.
+    ///
+    /// Without this the directory only ever GROWS: rename a piece, or give one a
+    /// parameter it did not have, and the old file stays on disk forever — the
+    /// scene stops referencing it, nothing complains, and it ships inside the
+    /// client anyway. That is exactly how <c>loculi_210.res</c> outlived the
+    /// signature that made it. The scene is the authority on what the library is,
+    /// so anything beside it that this build did not write is dead.
+    ///
+    /// Returns how many were swept, for the build log — a silent deletion of a
+    /// file in the user's source tree is not something a build should do quietly.
+    /// </summary>
+    public int SweepLibrary(string realm)
+    {
+        var dir = $"{LibraryRoot}/{realm}";
+        if (!DirAccess.DirExistsAbsolute(dir))
+            return 0;
+
+        var swept = 0;
+        foreach (var file in DirAccess.GetFilesAt(dir))
+        {
+            // Godot's own import sidecars are not ours to judge.
+            if (!file.EndsWith(".res") || _libraryWritten.Contains(file))
+                continue;
+            if (DirAccess.RemoveAbsolute($"{dir}/{file}") == Error.Ok)
+                swept++;
+        }
+        return swept;
+    }
+
+    /// <summary>
+    /// Register a sculpted piece the realm will place many times, saved BESIDE
+    /// the scene rather than inside it. Hands back the disk-backed mesh; every
+    /// <see cref="MeshInstance3D"/> given it serializes as a one-line
+    /// ExtResource, so the scene holds placements and nothing else.
+    ///
+    /// This is about CHURN, not size. A realm regenerates whole on every design
+    /// change and must come out byte-identical (Core's determinism rule), so an
+    /// inlined library is rewritten in full every time a single wall moves —
+    /// and base64 vertex blobs do not delta-compress, so each rewrite is a fresh
+    /// copy in history. Split out, a layout change rewrites a small text file
+    /// you can read the diff of, and the geometry blob changes only when the
+    /// geometry does.
+    ///
+    /// Measured on 4.7 (WoadRaiders.Client/tools/probe_scene_cost.gd): a scene
+    /// costs ~41 bytes per unique triangle inlined and ~217 bytes per placement;
+    /// splitting the library moves 100% of the former out. Instancing itself is
+    /// free on disk either way — 2,000 placements cost the same whether the
+    /// mesh they share holds 12 triangles or 12,000.
+    ///
+    /// <paramref name="name"/> must be unique within the realm and stable across
+    /// runs: it is the file name, and a name that moved would rewrite the scene
+    /// for no reason.
+    /// </summary>
+    public ArrayMesh SharedMesh(string realm, string name, ArrayMesh mesh)
+    {
+        var dir = $"{LibraryRoot}/{realm}";
+        if (!DirAccess.DirExistsAbsolute(dir))
+            DirAccess.MakeDirRecursiveAbsolute(dir);
+
+        var path = $"{dir}/{name}.res";
+        _libraryWritten.Add($"{name}.res");
+        var error = ResourceSaver.Save(mesh, path);
+        if (error != Error.Ok)
+            throw new InvalidOperationException($"could not save the mesh library piece '{name}': {error}");
+
+        // Load it BACK. The in-memory mesh knows nothing of the file; only the
+        // loaded resource carries the path that makes Godot write an
+        // ExtResource instead of inlining every vertex again.
+        return GD.Load<ArrayMesh>(path)
+               ?? throw new InvalidOperationException($"saved '{path}' but could not load it back");
+    }
+
+    // ---------------------------------------------------------- the occluders
+
+    /// <summary>
+    /// A solid volume the renderer may cull behind — a wall slab, a roof, a
+    /// closed door. Godot's occlusion culling is documented as most effective
+    /// in exactly this shape of world (many small indoor rooms), and without it
+    /// every torch, decal and particle system in chambers you cannot see is
+    /// still submitted.
+    ///
+    /// This is DERIVED, not authored, which is why it takes a box rather than
+    /// an author's opinion: the editor's "bake occluders" step is not available
+    /// headless, but a design that lays a wall already knows its exact extent,
+    /// so there is nothing to guess. The one rule is that an occluder must be
+    /// CONSERVATIVE — never larger than the solid it stands for, or it culls
+    /// what is really visible — and a box's own bounds satisfy that exactly.
+    ///
+    /// Contributes no collision: an <see cref="OccluderInstance3D"/> bears no
+    /// mesh, so the bake never sees it (Core.RealmSceneFile's rule stands —
+    /// what is served is every MESH in the scene).
+    /// </summary>
+    public OccluderInstance3D AddOccluder(Vector3 centre, Vector3 size, string? name = null)
+    {
+        var node = new OccluderInstance3D
+        {
+            Position = centre,
+            Occluder = new BoxOccluder3D { Size = size },
+        };
+        node.Name = name ?? $"Occluder_{OccluderCount}";
+        OccluderCount++;
+        (_occluders ??= Attach(new Node3D(), "Occluders")).AddChild(node);
+        return node;
+    }
+
+    /// <summary>How many solids the design offered the renderer to cull behind.</summary>
+    public int OccluderCount { get; private set; }
+
     // ------------------------------------------------------------- free-form
 
     /// <summary>Hang anything else off the root — a light, a sky, a sound, a
@@ -238,8 +373,9 @@ public sealed class RealmScene
     public string Describe()
     {
         var pieces = (_ground?.GetChildCount() ?? 0) + (_structure?.GetChildCount() ?? 0);
-        return $"{pieces} geometry pieces, {EnemyCount} enemy markers" +
-               (HasBoss ? " + boss" : " (no boss)");
+        return $"{pieces} geometry pieces, {OccluderCount} occluders, {EnemyCount} enemy markers" +
+               (HasBoss ? " + boss" : " (no boss)") +
+               (HasPortal ? " + an authored exit portal" : "");
     }
 
     // ------------------------------------------------------------- plumbing

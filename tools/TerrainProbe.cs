@@ -35,6 +35,9 @@ var welcomed = false;
 RealmDefinition? realm = null;
 IRealmGeometry? movement = null; // the shipped navmesh — what prediction (and this replay) moves on
 RealmGeometryPacket? geometryPacket = null;
+// Realms arrive chunked since v21 (Shared.GeometryChunks) — a realm may now
+// outgrow what one fragmented reliable message can carry.
+var geometryChunks = new GeometryAssembler();
 float? spawnY = null;
 float peakY = float.MinValue;
 Vector3? latestPos = null;
@@ -59,12 +62,14 @@ listener.NetworkReceiveEvent += (peer, reader, channel, delivery) =>
     switch ((MessageType)reader.GetByte())
     {
         case MessageType.RealmGeometry:
-            geometryPacket = new RealmGeometryPacket();
-            geometryPacket.Deserialize(reader);
-            realm = RealmSnapshot.ToDefinition(geometryPacket);
-            movement = RealmSnapshot.ToMovementGeometry(geometryPacket);
-            Console.WriteLine($"[probe] geometry: {geometryPacket.SoupTriangles.Length / 3} triangles " +
-                              $"{geometryPacket.NavMesh.Length / 1024} KB navmesh");
+            if (geometryChunks.TryAdd(reader, out var wholeRealm))
+            {
+                geometryPacket = wholeRealm;
+                realm = RealmSnapshot.ToDefinition(geometryPacket);
+                movement = RealmSnapshot.ToMovementGeometry(geometryPacket);
+                Console.WriteLine($"[probe] geometry: {geometryPacket.SoupTriangles.Length / 3} triangles " +
+                                  $"{geometryPacket.NavMesh.Length / 1024} KB navmesh");
+            }
             break;
 
         case MessageType.Welcome:

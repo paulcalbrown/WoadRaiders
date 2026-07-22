@@ -22,4 +22,15 @@ func _init() -> void:
 		push_error("RealmSceneBuilder not available — build the client first: dotnet build WoadRaiders.Client")
 		quit(1)
 		return
-	quit(builder.Run(OS.get_cmdline_user_args()))
+	# A C# exception inside Run() is LOGGED by Godot's bridge and swallowed —
+	# the call simply returns null. Passing that straight to quit() made a
+	# failed design exit ZERO, so the pipeline would carry on and bake the
+	# STALE .tscn still sitting on disk: a realm that silently did not change,
+	# which is the worst way for a build to fail. Treat a missing code as a
+	# failure and say why.
+	var code = builder.Run(OS.get_cmdline_user_args())
+	if typeof(code) != TYPE_INT:
+		push_error("the realm design threw — see the exception above; the .tscn was NOT rewritten")
+		quit(1)
+		return
+	quit(code)

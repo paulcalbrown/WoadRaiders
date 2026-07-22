@@ -84,8 +84,19 @@ public static class NetConfig
     ///       instead of repeating each triangle's three corners. The realm is
     ///       the biggest thing the protocol sends and it goes out reliably, so
     ///       its size is the raid's opening wait: the Crypt fell 411 → 78 KB.
+    /// v20 = identity-first joins: JoinRequest carries a digest of the realm the
+    ///       client already ships, WelcomePacket says whether the server accepted
+    ///       it, and the geometry is sent only on a mismatch. The realm's navmesh
+    ///       became a build artifact (maps/<Realm>.navmesh) so the client HAS one
+    ///       to offer — it was 88% of the Crypt's join payload and the only part
+    ///       a client could not already have.
+    /// v21 = the fallback realm is CHUNKED (Shared.GeometryChunks), so a realm may
+    ///       outgrow one fragmented reliable message. That ceiling is 65535
+    ///       fragments x the negotiated MTU — measured 62 MB intact / 64 MB
+    ///       TooBigPacketException on loopback — and it moves with the path, so
+    ///       it was never a number a realm could be designed against.
     /// </summary>
-    public const string ConnectionKey = "WoadRaiders.v19";
+    public const string ConnectionKey = "WoadRaiders.v21";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";
