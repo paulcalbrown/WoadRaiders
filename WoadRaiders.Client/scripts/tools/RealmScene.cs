@@ -291,6 +291,27 @@ public sealed class RealmScene
     /// runs: it is the file name, and a name that moved would rewrite the scene
     /// for no reason.
     /// </summary>
+    /// <summary>
+    /// Any generated resource, saved beside the scene and referenced rather than
+    /// inlined — the same bargain <see cref="SharedMesh"/> makes, for the things
+    /// that are not meshes. An equirectangular sky is four million pixels; inline
+    /// it would dwarf every other line in the .tscn put together.
+    /// </summary>
+    public T SharedResource<T>(string realm, string name, T resource) where T : Resource
+    {
+        var dir = $"{LibraryRoot}/{realm}";
+        if (!DirAccess.DirExistsAbsolute(dir))
+            DirAccess.MakeDirRecursiveAbsolute(dir);
+
+        var path = $"{dir}/{name}.res";
+        _libraryWritten.Add($"{name}.res");
+        var error = ResourceSaver.Save(resource, path);
+        if (error != Error.Ok)
+            throw new InvalidOperationException($"could not save the resource '{name}': {error}");
+        return GD.Load<T>(path)
+               ?? throw new InvalidOperationException($"saved '{path}' but could not load it back");
+    }
+
     public ArrayMesh SharedMesh(string realm, string name, ArrayMesh mesh)
     {
         var dir = $"{LibraryRoot}/{realm}";

@@ -61,10 +61,33 @@ public sealed partial class CryptDesign : IRealmDesign
     private const float LaneMin = 160f;
     private const float CreepwayWidth = 120f;
 
-    private const float CeilCrawl = 140f;  // camera pinned
-    private const float CeilPress = 240f;  // camera at loose tight-fit
-    private const float CeilOpen = 480f;   // camera fully open
-    private const float Unroofed = 0f;     // the dark closes it; the camera opens right out
+    /// <summary>
+    /// The clearance above a raider at which the chase camera stops ducking,
+    /// derived from CameraRig rather than chosen: at fit 0 the boom stands
+    /// <c>OpenBoomLength(430) * sin(OpenPitchDegrees(40)) = 276</c> above the aim
+    /// point, and the rig holds <c>CeilingClearance(25)</c> under the roof.
+    /// Below this the camera tightens in toward the raider's shoulder.
+    /// </summary>
+    private const float CameraFreeAt = 302f;
+
+    // CEILINGS. These were 140 / 240 / 480, named for the camera states they
+    // produced - CRAWL pinned it, PRESS gave a tight fit, OPEN let it out -
+    // because compression and release were meant to be the realm's whole spine.
+    //
+    // Played, that spine is unbearable. A camera pinned behind the shoulder in a
+    // fight is not tension, it is a fight you cannot read, and 10% of this
+    // realm's walkable floor did exactly that. Every roofed space now clears
+    // CameraFreeAt wherever a raider can stand, and the names state height
+    // rather than mood.
+    //
+    // A NOMINAL ceiling is not clearance. A groin vault's soffit hangs to about
+    // 0.58 of nominal - a 280 bay measured 162 - and a corbelled roof steps in
+    // from its walls. So these sit well above 302 and the result is MEASURED
+    // (tools/MeasureHeadroom.cs) rather than trusted.
+    private const float CeilLow = 460f;    // passages and creepways
+    private const float CeilMid = 560f;    // chambers
+    private const float CeilHigh = 820f;   // the halls that were always meant to soar
+    private const float Unroofed = 0f;     // no roof at all; the camera is free by definition
 
     /// <summary>How high the boss's cist stands off the chamber floor. MUST stay
     /// under SimConstants.StepHeight (18) — a dais taller than a step is a plinth
@@ -114,6 +137,15 @@ public sealed partial class CryptDesign : IRealmDesign
     /// <summary>What an era walks on. A floor is worn where a wall is not.</summary>
     private Material Ground(Era era) => _ground[era];
 
+    /// <summary>Half a wall's thickness, per era — how far the fitted walls inset
+    /// so their corners butt rather than overlap.</summary>
+    private static float WallHalf(Era era) => era switch
+    {
+        Era.Minster => WallThick / 2f,
+        Era.Souterrain => DrystoneThick / 2f,
+        _ => OrthostatThick / 2f,
+    };
+
     public RealmScene Build()
     {
         _scene = new RealmScene();
@@ -123,36 +155,44 @@ public sealed partial class CryptDesign : IRealmDesign
         // The Minster: a burial church driven into the hillside. Human
         // proportions throughout — 4 m doors, 3.3 m storeys — because humans
         // built it and the realm's scale has to start somewhere honest.
-        Room("B1", Era.Minster, 0, 720, 1840, 2560, 0, CeilPress + 40f, doorEast: 2200);
-        Corridor("C1", Era.Minster, 720, 800, 2120, 2280, 0, 200f, alongZ: false);
+        Room("B1", Era.Minster, 0, 720, 1840, 2560, 0, CeilMid, doorEast: 2200);
+        Corridor("C1", Era.Minster, 720, 800, 2120, 2280, 0, CeilLow, alongZ: false);
         Nave();
-        Corridor("C2", Era.Minster, 3040, 3600, 2080, 2320, 0, 220f, alongZ: false, floorAtEnd: -160);
+        Corridor("C2", Era.Minster, 3040, 3600, 2080, 2320, 0, CeilLow, alongZ: false, floorAtEnd: -160);
 
         // ----------------------------------------------------------- Era II
         // The souterrain the Minster's builders broke into, widened into a
         // charnel. Deliberately LOW for its size: 47 × 40 m under a 10 m
         // corbelled roof is oppressive, and the camera says so.
         Ossuary();
-        Corridor("C3", Era.Souterrain, 5280, 5520, 2080, 2240, -160, CeilCrawl, alongZ: false);
+        Corridor("C3", Era.Souterrain, 5280, 5520, 2080, 2240, -160, CeilLow, alongZ: false);
 
         Fault();
 
-        Corridor("C5", Era.Souterrain, 7040, 7200, 1440, 2320, -400, CeilPress, alongZ: true);
-        Corridor("C5a", Era.Souterrain, 7040, 7200, 2320, 2880, -400, 200f, alongZ: true, floorAtEnd: -560);
+        Corridor("C5", Era.Souterrain, 7040, 7200, 1440, 2320, -400, CeilMid, alongZ: true);
+        Corridor("C5a", Era.Souterrain, 7040, 7200, 2320, 2880, -400, CeilLow, alongZ: true, floorAtEnd: -560);
         DeepGallery();
         // −640 at the CUBICULUM end (x0), −560 at the gallery end (x1).
-        Corridor("B6", Era.Souterrain, 4880, 5920, 3520, 3680, -640, CeilCrawl, alongZ: false, floorAtEnd: -560);
-        Room("B7", Era.Souterrain, 4400, 4880, 3440, 3840, -640, 380f, doorEast: 3600, doorNorth: 4560);
+        // The gallery enters the creepway at x=5880, NOT at the 5760 the chamber
+        // table said. A corridor that descends meets a side door at whatever
+        // height its ramp happens to be at that point, and at 5760 the creepway
+        // sits 17 below the gallery floor against a StepHeight of 18. It worked,
+        // by one unit, until the ceilings moved and the tread quantisation with
+        // them. At 5880 the ramp is within 3 of the gallery, which is a threshold
+        // rather than a coin toss.
+        Corridor("B6", Era.Souterrain, 4880, 5920, 3520, 3680, -640, CeilLow, alongZ: false, floorAtEnd: -560,
+                 sideDoorAt: 5880);
+        Room("B7", Era.Souterrain, 4400, 4880, 3440, 3840, -640, CeilMid, doorEast: 3600, doorNorth: 4560);
         // Travel is EAST-WEST here even though the space is deeper than it is wide.
-        Corridor("C6", Era.Souterrain, 4720, 4960, 3040, 3360, -720, 220f, alongZ: false, floorAtEnd: -560);
+        Corridor("C6", Era.Souterrain, 4720, 4960, 3040, 3360, -720, CeilLow, alongZ: false, floorAtEnd: -560);
 
         // ------------------------------------------------------------ Era I
         // The cairn the souterrain's diggers broke into. Megalithic: nobody
         // with hands and rope built this at this size, which is the payoff the
         // whole descent has been earning.
-        Room("B8", Era.Cairn, 4160, 4720, 2960, 3600, -720, CeilOpen,
+        Room("B8", Era.Cairn, 4160, 4720, 2960, 3600, -720, CeilHigh,
              doorEast: 3200, doorWest: 3280, doorSouth: 4560);
-        Corridor("C7", Era.Cairn, 3520, 4160, 3200, 3360, -880, 150f, alongZ: false, floorAtEnd: -720);
+        Corridor("C7", Era.Cairn, 3520, 4160, 3200, 3360, -880, CeilLow, alongZ: false, floorAtEnd: -720);
         Wheel();
 
         // The dead, then the living, then the light. Burials come last of the
@@ -160,6 +200,7 @@ public sealed partial class CryptDesign : IRealmDesign
         // the route, which no room knows while it is still being laid.
         Burials();
         Dressing();
+        Surface();
         Cast();
         Gloom();
         return _scene;
@@ -181,14 +222,17 @@ public sealed partial class CryptDesign : IRealmDesign
 
         // Aisles: vaulted low against the outer walls.
         foreach (var (z0, z1) in new[] { (1360f, 1760f), (2560f, 2960f) })
-            Roof(Era.Minster, space with { Z0 = z0, Z1 = z1 }, CeilPress + 40f);
+            Roof(Era.Minster, space with { Z0 = z0, Z1 = z1 }, CeilHigh);
 
         // The arcade: pairs of piers either side of the centre line, never on
         // it. A pillared hall has aisles — and the route walker runs the middle,
         // so a pier standing in it stalls the build outright.
         for (var x = space.X0 + PierSpacing; x <= space.X1 - PierSpacing; x += PierSpacing)
             foreach (var z in new[] { 1760f, 2560f })
+            {
                 Place(Pier(StoreyIII * 2.2f), new Vector3(x, 0, z), 0f, Stone(Era.Minster));
+                Standing(new Vector3(x, 0, z), PierHalf + SimConstants.CharacterRadius + 20f);
+            }
     }
 
     /// <summary>
@@ -199,7 +243,7 @@ public sealed partial class CryptDesign : IRealmDesign
     /// </summary>
     private void Ossuary()
     {
-        Room("B3", Era.Souterrain, 3600, 5280, 1360, 2880, -160, CeilPress,
+        Room("B3", Era.Souterrain, 3600, 5280, 1360, 2880, -160, CeilMid,
              doorWest: 2200, doorEast: 2160);
 
         // The burial itself — banks, revetment and the one arch — is laid by
@@ -209,7 +253,10 @@ public sealed partial class CryptDesign : IRealmDesign
         var space = Named("B3");
         for (var x = space.X0 + PierSpacing; x <= space.X1 - PierSpacing; x += PierSpacing)
             for (var z = space.Z0 + PierSpacing; z <= space.Z1 - PierSpacing; z += PierSpacing)
-                Place(Pier(CeilPress), new Vector3(x, -160, z), 0f, Stone(Era.Souterrain));
+            {
+                Place(Pier(CeilMid), new Vector3(x, -160, z), 0f, Stone(Era.Souterrain));
+                Standing(new Vector3(x, -160, z), PierHalf + SimConstants.CharacterRadius + 20f);
+            }
     }
 
     /// <summary>
@@ -258,7 +305,7 @@ public sealed partial class CryptDesign : IRealmDesign
                 Place(Kerbstone((int)(x / Module) % 5), new Vector3(x + Snap, -400, z), 0f,
                       Stone(Era.Minster));
 
-        Room("B4d", Era.Souterrain, 7040, 7200, 1120, 1440, -400, 320f,
+        Room("B4d", Era.Souterrain, 7040, 7200, 1120, 1440, -400, CeilMid,
              doorWest: 1280, doorSouth: 7120);
 
         // A way up at EACH end of the span, both hugging a wall. A flight rising
@@ -279,8 +326,8 @@ public sealed partial class CryptDesign : IRealmDesign
     /// </summary>
     private void DeepGallery()
     {
-        var space = Room("B5", Era.Souterrain, 4960, 7200, 2880, 3520, -560, 260f,
-                         doorNorth: 7120, doorWest: 3200, doorSouth: 5760);
+        var space = Room("B5", Era.Souterrain, 4960, 7200, 2880, 3520, -560, CeilMid,
+                         doorNorth: 7120, doorWest: 3200, doorSouth: 5880);
 
         // The stone changes as you walk west: drystone bays give way to
         // orthostats over the last third, and nothing announces it but the wall.
@@ -303,7 +350,15 @@ public sealed partial class CryptDesign : IRealmDesign
     /// </summary>
     private void Wheel()
     {
-        var space = Room("B9", Era.Cairn, 2240, 3520, 2880, 3760, -880, Unroofed, doorEast: 3280);
+        // Grown to out-scale the Fault (the realm's other great void): 2320 x
+        // 1760 against the pit's 1360 x 1760, so the climax reads as the largest
+        // thing in the descent, not a room a third its size. It spreads WEST and
+        // SOUTH into clear rock at -880 — the nearest deep structures (the
+        // Cubiculum, the creepway) all lie east of x 4400. The entrance stays at
+        // the east wall, so a raider now crosses the whole chamber to the cist:
+        // the boss is no longer framed in the doorway but stands across a hall,
+        // which is the trade the size is worth.
+        var space = Room("B9", Era.Cairn, 1200, 3520, 2880, 4640, -880, Unroofed, doorEast: 3280);
 
         // An orthostat ring inside the walls — the chamber proper, standing
         // within the cairn's mass. TWELVE, not more: a ring is a colonnade only
@@ -319,9 +374,10 @@ public sealed partial class CryptDesign : IRealmDesign
             Place(Orthostat(300f, i % 3), new Vector3(x, -880, z), -a, Stone(Era.Cairn));
         }
 
-        // The corbelled dome over it, and the quartz that catches what light
-        // there is — the one bright accent in a realm of grey-brown sandstone.
-        Roof(Era.Cairn, space, 900f);
+        // The corbelled dome over it, at the spec's crown of 1100 — taller than
+        // the old 900 to suit the larger span, and still clearing the surface
+        // grass at 820 (its crown tops out near 320).
+        Roof(Era.Cairn, space, 1100f);
 
         // The cist: a low plate the raider walks onto, never a plinth.
         BoxKit.Floor(_scene, Box(space.MidX - 200f, -880, space.MidZ - 200f,
@@ -402,10 +458,19 @@ public sealed partial class CryptDesign : IRealmDesign
         BoxKit.Floor(_scene, Box(x0, floorY - 40f, z0, x1, floorY, z1), Ground(era), $"{id}_Floor");
         var height = ceiling > 0f ? ceiling : StoreyIII * 3f;
         var width = era == Era.Cairn ? TrilithonWidth : DoorWidthIII;
+
+        // Corners INTERLOCK instead of overlapping. Four full-length walls put
+        // two stones in every corner volume — and their coincidentally coplanar
+        // faces are the realm's worst z-fighting, the stone visibly trading
+        // places as the camera moves. So the north and south walls run the full
+        // width and OWN the corners, and the east and west walls fit BETWEEN
+        // them, inset by the wall's half-thickness so they butt against the inner
+        // face rather than pushing stone through it.
+        var h = WallHalf(era);
         WallRun(era, x0, z0, x1, z0, floorY, height, doorNorth, width);
         WallRun(era, x0, z1, x1, z1, floorY, height, doorSouth, width);
-        WallRun(era, x0, z0, x0, z1, floorY, height, doorWest, width);
-        WallRun(era, x1, z0, x1, z1, floorY, height, doorEast, width);
+        WallRun(era, x0, z0 + h, x0, z1 - h, floorY, height, doorWest, width);
+        WallRun(era, x1, z0 + h, x1, z1 - h, floorY, height, doorEast, width);
         Roof(era, space, ceiling);
         return space;
     }
@@ -426,8 +491,21 @@ public sealed partial class CryptDesign : IRealmDesign
     /// way, each meeting its chamber 160 out; the realm still built, still
     /// looked right, and reported a whole wing unreachable.
     /// </remarks>
+    /// <param name="sideDoorAt">
+    /// Where another space's doorway meets this corridor's SIDE, if one does.
+    ///
+    /// A corridor builds side walls and leaves its ENDS open, which is right when
+    /// it is entered end-on and catastrophic when it is not: the creepway runs
+    /// along z=3520 and the Deep Gallery's south door is at z=3520, so the
+    /// corridor's own north wall sealed the doorway it exists to serve. The
+    /// Cubiculum became an island — every camp in it unreachable — and the only
+    /// reason the realm had ever validated is that a raider could squeeze across
+    /// the three stair treads that happened to top out within a step of the
+    /// gallery floor. That was luck, and raising the ceilings spent it.
+    /// </param>
     private Space Corridor(string id, Era era, float x0, float x1, float z0, float z1, float floorAtStart,
-                           float ceiling, bool alongZ, float? floorAtEnd = null)
+                           float ceiling, bool alongZ, float? floorAtEnd = null,
+                           float? sideDoorAt = null, float sideDoorWidth = 200f)
     {
         var space = new Space(id, era, x0, x1, z0, z1, floorAtStart, ceiling, floorAtEnd ?? float.NaN);
         _spaces.Add(space);
@@ -443,17 +521,34 @@ public sealed partial class CryptDesign : IRealmDesign
             BoxKit.Floor(_scene, Box(x0, floorAtStart - 40f, z0, x1, floorAtStart, z1), Ground(era), $"{id}_Floor");
         }
 
-        // Side walls only — the ends are the doorways it joins.
+        // Side walls; the ends are the doorways it joins end-on. A corridor that
+        // is ALSO entered from the side says so, and that wall is split around it
+        // exactly as a room's is.
         var low = Mathf.Min(floorAtStart, space.EndY);
+        var wall = ceiling + (floorAtStart - low);
+
+        // Where the ramp actually is under the side door, so the opening's head
+        // is measured from the floor a raider stands on rather than from the
+        // corridor's lowest tread.
+        float? doorFloor = null;
+        if (sideDoorAt is { } door)
+        {
+            var t = alongZ
+                ? Mathf.InverseLerp(z0, z1, door)
+                : Mathf.InverseLerp(x0, x1, door);
+            doorFloor = Mathf.Lerp(floorAtStart, space.EndY, Mathf.Clamp(t, 0f, 1f));
+        }
+
+        var doorW = sideDoorAt is null ? 0f : sideDoorWidth;
         if (alongZ)
         {
-            WallRun(era, x0, z0, x0, z1, low, ceiling + (floorAtStart - low));
-            WallRun(era, x1, z0, x1, z1, low, ceiling + (floorAtStart - low));
+            WallRun(era, x0, z0, x0, z1, low, wall, sideDoorAt, doorW, doorFloor);
+            WallRun(era, x1, z0, x1, z1, low, wall);
         }
         else
         {
-            WallRun(era, x0, z0, x1, z0, low, ceiling + (floorAtStart - low));
-            WallRun(era, x0, z1, x1, z1, low, ceiling + (floorAtStart - low));
+            WallRun(era, x0, z0, x1, z0, low, wall, sideDoorAt, doorW, doorFloor);
+            WallRun(era, x0, z1, x1, z1, low, wall);
         }
         return space;
     }

@@ -77,6 +77,7 @@ public sealed partial class CryptDesign
     private const float Standoff = 14f;
 
     private Node3D _lights = null!;
+    private Texture2D _starfield = null!;
     private int _lampCount;
     private int _shadowCount;
 
@@ -91,6 +92,15 @@ public sealed partial class CryptDesign
     /// regenerate byte for byte.
     /// </summary>
     private readonly Dictionary<string, List<(string Name, float Energy)>> _flames = new();
+
+    /// <summary>Is this bay part of this space's own walls? A bay sits ON the
+    /// boundary, so the test is generous by half a module or a room claims none
+    /// of its own stone.</summary>
+    private static bool Inside(Space space, Vector3 at) =>
+        at.X >= space.X0 - Module && at.X <= space.X1 + Module &&
+        at.Z >= space.Z0 - Module && at.Z <= space.Z1 + Module &&
+        at.Y >= Mathf.Min(space.FloorY, space.EndY) - 60f &&
+        at.Y <= Mathf.Max(space.FloorY, space.EndY) + 60f;
 
     private void Flammable(string owner, string name, float energy)
     {
@@ -126,7 +136,9 @@ public sealed partial class CryptDesign
     private void Gloom()
     {
         _lights = _scene.Folder("Lights");
+        _starfield = Starfield();
         _scene.Add(Environment(), "Gloom");
+        FireResources();
 
         foreach (var space in _spaces)
             LightSpace(space);
@@ -149,7 +161,7 @@ public sealed partial class CryptDesign
         // fixes that; the room needed a source scaled to the room.
         var wheel = Named("B9");
         var hero = Lamp(Witchlight, energy: Candela(70f), range: 1400f,
-                        new Vector3(wheel.MidX, wheel.FloorY + 420f, wheel.MidZ), fog: 1f);
+                        new Vector3(wheel.MidX, wheel.FloorY + 420f, wheel.MidZ));
         hero.ShadowEnabled = true;
         hero.LightSize = 24f;
         _shadowCount++;
@@ -164,11 +176,6 @@ public sealed partial class CryptDesign
         for (var i = 0; i < Stones; i++)
         {
             var a = Mathf.Tau * (i + 0.5f) / Stones;
-            // fog: 0. Twelve of these each scattering into the volumetric fog
-            // summed to a white-out — the chamber rendered as a milky blue void
-            // with the orthostats silhouetted against it. Per-light fog energy is
-            // ADDITIVE across every light that touches a froxel, so it is a
-            // budget for one or two lights in a room, not a per-light setting.
             Lamp(Witchlight, Candela(10f), 620f, new Vector3(
                      wheel.MidX + Mathf.Cos(a) * (wheel.Width / 2f - Module * 1.5f),
                      wheel.FloorY + 40f,
@@ -182,9 +189,86 @@ public sealed partial class CryptDesign
         foreach (var (at, colour, energy, range) in _vignetteLights)
             Lamp(colour, Candela(energy), range, at);
 
-        Mist();
+        LightWalls();
         Flicker();
     }
+
+    /// <summary>
+    /// Hang a torch on every wall bay that deserves one — ONCE.
+    ///
+    /// Iterating the BAYS rather than the spaces is the whole point. A bay on a
+    /// shared boundary is inside two rooms, and this realm overlaps spaces on
+    /// purpose (the Cubiculum breaches the Forecourt, the Fault's ledges sit in
+    /// the pit), so asking each space to light its own walls put two brackets on
+    /// the same stone and took the realm to 1,090 lights.
+    /// </summary>
+    private void LightWalls()
+    {
+        foreach (var (at, face, _, wallHeight, bayEra) in _wallBays)
+        {
+            var space = Named(Owning(at));
+            var (colour, energy, range, spacing) = Palette(bayEra);
+
+            // Stride along the run. Bays are one module apart and an era's pitch
+            // is 150–280, so this thins them to the spacing the light was
+            // designed around instead of lighting every single bay.
+            var along = Mathf.Abs(face.X) > 0.5f ? at.Z : at.X;
+            var stride = Mathf.Max(1f, Mathf.Round(spacing / Module));
+            if (Mathf.PosMod(Mathf.Round(along / Module), stride) != 0f)
+                continue;
+
+            // Which side of the bay the room is on: the bay knows its axis, the
+            // space knows where its middle is, and a torch faces the middle.
+            var toward = Mathf.Abs(face.X) > 0.5f ? space.MidX - at.X : space.MidZ - at.Z;
+            if (Mathf.Abs(toward) < 1f)
+                continue;
+            var inward = face * Mathf.Sign(toward);
+            var yaw = Mathf.Atan2(inward.X, inward.Z);
+
+            // Stand the bracket PROUD of the wall face. A bay is placed on the
+            // wall's centre line and is 40 / 60 / 80 thick by era, so a fitting
+            // set at Standoff (14) is inside the stone, not on it — the torch
+            // would be half-swallowed by its own wall. Standoff is what a LIGHT
+            // needs to avoid blowing the surface out; a bracket needs the whole
+            // half-thickness first.
+            var proud = bayEra switch
+            {
+                Era.Minster => WallThick / 2f,
+                Era.Souterrain => DrystoneThick / 2f,
+                _ => OrthostatThick / 2f,
+            } + 8f;
+
+            // A second course, but only in the halls that genuinely soar. At
+            // >= 500 it fired in every 560 chamber too and doubled the realm's
+            // lighting to 939 — past BUDGET-007, and 912 flames is a lot of
+            // emitters to ask a frame for. 700 keeps it to the rooms where a
+            // single course really does leave a wall of black above it.
+            foreach (var lift in new[] { 96f, wallHeight * 0.58f })
+            {
+                if (lift > 100f && wallHeight < 700f)
+                    continue;
+                WallFlame(colour, energy, range,
+                          at + inward * (proud + Standoff) + new Vector3(0f, lift, 0f), yaw, space);
+            }
+        }
+    }
+
+    /// <summary>
+    /// An era's light in ONE place, so a bay and the space around it cannot
+    /// disagree about what colour the fire is.
+    ///
+    /// Energy, range and spacing move together and were tuned as a set once the
+    /// falloff was honest: under a true inverse square a sconce at 3 cd lights
+    /// its own wall and nothing else, so the floor between two of them was black
+    /// and the realm read as a row of unrelated dots. Pools have to OVERLAP.
+    /// </summary>
+    private (Color Colour, float Energy, float Range, float Spacing) Palette(Era era) => era switch
+    {
+        Era.Minster => (Tallow, Candela(9.0f), 300f, 150f),
+        // Era II is DYING light: fewer niches, and most of them out.
+        Era.Souterrain => (Rushlight, Candela(6.0f), 260f, 200f),
+        _ => (Witchlight, Candela(26.0f), 700f, 280f),
+    };
 
     /// <summary>
     /// Light one space in its era's own idiom, laid out FROM the space rather
@@ -193,34 +277,13 @@ public sealed partial class CryptDesign
     /// </summary>
     private void LightSpace(Space space)
     {
-        var (colour, energy, range, spacing) = space.Era switch
-        {
-            // Energy, range and SPACING move together, and they were all tuned
-            // once the falloff was right. Under a true inverse square a sconce
-            // stated at 3 cd lights its own wall and nothing else: at 12.5 m the
-            // next sconce along contributed 0.03, so the floor between any two
-            // flames was black and the realm read as a row of unrelated dots.
-            // Pools have to OVERLAP to describe a room — brighter, further, and
-            // closer together, while the falloff keeps the shape honest.
-            Era.Minster => (Tallow, Candela(9.0f), 260f, 240f),
-            // Era II is DYING light: fewer niches, and most of them out. The
-            // gaps are the point — this is a place people stopped tending.
-            Era.Souterrain => (Rushlight, Candela(6.0f), 220f, 360f),
-            _ => (Witchlight, Candela(26.0f), 700f, 480f),
-        };
+        var (colour, energy, range, spacing) = Palette(space.Era);
+        _ = (colour, range, spacing);   // this method now only lights the FLOOR
 
-        var height = space.FloorY + 96f;
-        // Wall flames, walked along each face so a longer wall gets more.
-        for (var x = space.X0 + spacing / 2f; x < space.X1; x += spacing)
-        {
-            WallFlame(colour, energy, range, new Vector3(x, height, space.Z0 + Standoff), 0f, space);
-            WallFlame(colour, energy, range, new Vector3(x, height, space.Z1 - Standoff), Mathf.Pi, space);
-        }
-        for (var z = space.Z0 + spacing; z < space.Z1 - spacing / 2f; z += spacing)
-        {
-            WallFlame(colour, energy, range, new Vector3(space.X0 + Standoff, height, z), -Mathf.Pi / 2f, space);
-            WallFlame(colour, energy, range, new Vector3(space.X1 - Standoff, height, z), Mathf.Pi / 2f, space);
-        }
+        // Wall torches are NOT laid here. A bay on a shared boundary is inside
+        // two spaces, and asking each space to light its own walls hung two
+        // brackets on the same stone — 1,090 lights where 448 was already
+        // generous. LightWalls() walks the bays once instead.
 
         // Braziers on a GRID, not one in the middle. The nave is 93 × 67 m, and a
         // single fire at its centre lit a circle about 15 m across and left the
@@ -233,7 +296,7 @@ public sealed partial class CryptDesign
         // catches it, which is exactly how the first pass of this looked.
         if (space.Width > 600f && space.Depth > 600f && space.Era != Era.Cairn)
         {
-            const float BrazierSpacing = 760f;
+            const float BrazierSpacing = 520f;
             var columns = Mathf.Max(1, Mathf.RoundToInt(space.Width / BrazierSpacing));
             var rows = Mathf.Max(1, Mathf.RoundToInt(space.Depth / BrazierSpacing));
             for (var i = 0; i < columns; i++)
@@ -242,9 +305,7 @@ public sealed partial class CryptDesign
                 var floor = new Vector3(Mathf.Lerp(space.X0, space.X1, (i + 0.5f) / columns),
                                         space.FloorY,
                                         Mathf.Lerp(space.Z0, space.Z1, (j + 0.5f) / rows));
-                var brazier = Lamp(Ember, Candela(22f), 520f, floor + new Vector3(0f, 60f, 0f),
-                                   // It has a fire in it, so this one may light air.
-                                   fog: 1.2f);
+                var brazier = Lamp(Ember, Candela(22f), 520f, floor + new Vector3(0f, 60f, 0f));
                 // Only the FIRST casts. Shadow passes are the expensive half of a
                 // light, and a hall wants many fires and few shadows.
                 if (i == 0 && j == 0)
@@ -253,7 +314,27 @@ public sealed partial class CryptDesign
                     brazier.LightSize = 8f;
                     _shadowCount++;
                 }
-                Prop(_fireBasket, _scene.OnFloor(floor), 601 + i * 13 + j, yaw: 0f, loose: 8f);
+                // The fire sits ON THE RIM, not at an invented height. It was at
+                // 46 — a foot and a half of clear air above a model whose bowl
+                // tops out at 30.
+                var stand = _scene.OnFloor(floor);
+                // PASSABLE, like the fire basket it replaces. A brazier is a
+                // thing you walk around in life, but Gloom() runs after Cast(),
+                // so anything solid placed here has already missed its chance to
+                // be checked against the camps — and these sit on a 520 grid
+                // through every large room, which put one squarely in the route
+                // walker's way the moment they became collision.
+                var bowl = new MeshInstance3D
+                {
+                    Mesh = Brazier(),
+                    MaterialOverride = Stone(space.Era),
+                    Position = stand,
+                    Rotation = new Vector3(0f, Hash(i * 7 + j, 2, 933) * Mathf.Tau, 0f),
+                    Name = $"Brazier_{space.Id}_{i}_{j}",
+                };
+                _dressing.AddChild(bowl);
+                Fire(stand + new Vector3(0f, BrazierRim, 0f), _brazierFire, 26, 1.25,
+                     new Godot.Aabb(new Vector3(-26f, -12f, -26f), new Vector3(52f, 70f, 52f)), space);
             }
         }
 
@@ -301,23 +382,21 @@ public sealed partial class CryptDesign
             DistanceFadeLength = 400f,
             // Only the hero light of a chamber lights the fog. Every flame doing
             // so gives a uniform glow; one doing it gives defined shafts.
-            LightVolumetricFogEnergy = 0f,
             ShadowEnabled = false,
         };
         light.RotationDegrees = new Vector3(-18f, Mathf.RadToDeg(yaw), 0f);
         light.Name = $"Flame_{space.Id}_{_lampCount++}";
         _lights.AddChild(light);
         Flammable(space.Id, light.Name, energy);
+        TorchFire(at, yaw, space);
     }
 
     /// <summary>
-    /// A lamp. <paramref name="fog"/> defaults to ZERO rather than to Godot's 1.0
-    /// because a bare point light scattering into volumetric fog renders as a
-    /// glowing orb hanging in mid-air — and where the light belongs to a coffin
-    /// or a shrine, there is no lamp modelled there to justify one. Only lights
-    /// with something visibly burning under them, and the lucernaria, light air.
+    /// A lamp. It used to carry a per-light fog contribution; with the fog gone
+    /// (LOOK-012) there is nothing for one to scatter into, so the parameter went
+    /// with it rather than sitting inert and inviting someone to set it.
     /// </summary>
-    private OmniLight3D Lamp(Color colour, float energy, float range, Vector3 at, float fog = 0f)
+    private OmniLight3D Lamp(Color colour, float energy, float range, Vector3 at)
     {
         var light = new OmniLight3D
         {
@@ -334,7 +413,6 @@ public sealed partial class CryptDesign
             DistanceFadeShadow = 320f,
             DistanceFadeBegin = 1800f,
             DistanceFadeLength = 500f,
-            LightVolumetricFogEnergy = fog,
             ShadowEnabled = false,
         };
         light.Name = $"Lamp_{_lampCount++}";
@@ -363,7 +441,6 @@ public sealed partial class CryptDesign
             // THIS one lights the fog, hard — the shaft is the point, and a
             // low global density plus one enormous per-light contribution is
             // how a visible beam is made without a milky screen.
-            LightVolumetricFogEnergy = 48f,
         };
         shaft.RotationDegrees = new Vector3(-90f, 0f, 0f);
         shaft.Name = $"Lucernarium_{space.Id}";
@@ -474,54 +551,46 @@ public sealed partial class CryptDesign
         }
     }
 
-    /// <summary>
-    /// Ground mist: shallow FogVolume boxes lying in the chambers that should
-    /// feel damp. Distinct from the Environment's volumetric fog, which fills the
-    /// whole realm evenly — this is LOCAL, it has a floor and a top, and its
-    /// height falloff is what makes it pool at ankle height rather than fill a
-    /// room like smoke.
-    ///
-    /// Only the deep and the wet get it. Mist everywhere is haze; mist in three
-    /// rooms is three rooms that are colder than the rest.
-    /// </summary>
-    private void Mist()
-    {
-        foreach (var (id, density, height) in new[]
-                 {
-                     ("B3", 0.020f, 150f), // the charnel, and the damp is the smell of it
-                     ("B4", 0.034f, 260f), // the pit — deepest, wettest, and never lit
-                     ("B5", 0.024f, 170f), // the deep gallery
-                     ("B9", 0.007f, 220f), // the wheel — thin, it has 13 lights in it
-                 })
-        {
-            var space = Named(id);
-            _scene.Add(new FogVolume
-            {
-                Position = new Vector3(space.MidX, space.FloorY + height / 2f, space.MidZ),
-                Size = new Vector3(space.Width, height, space.Depth),
-                Material = new FogMaterial
-                {
-                    Density = density,
-                    Albedo = new Color(0.74f, 0.78f, 0.86f),
-                    // 2–4: high enough that the mist thins out well below head
-                    // height, so a raider wades through it instead of swimming.
-                    HeightFalloff = 3f,
-                    // Without this the box has visible straight edges in mid-air,
-                    // which is the single most common way volumetric fog gives
-                    // itself away as a box.
-                    EdgeFade = 0.4f,
-                },
-            }, $"Mist_{id}");
-        }
-    }
+    // Mist() removed with the fog (LOOK-012). Four FogVolume boxes pooled in
+    // the deep chambers; with no volumetric fog for them to modulate they are
+    // inert, and with volumetric fog they were part of why nothing was visible.
 
     private WorldEnvironment Environment() => new()
     {
         Environment = new Godot.Environment
         {
-            // No sky. Underground, the background IS the absence of one.
-            BackgroundMode = Godot.Environment.BGMode.Color,
-            BackgroundColor = new Color(0.008f, 0.008f, 0.012f),
+            // A REAL SKY, because this realm is not sealed. The nave's vessel
+            // is unroofed and the Fault is a pit cut into the open, and both used
+            // to look up into a flat near-black colour — which reads as nothing
+            // at all rather than as night. Seeing stars from the bottom of a
+            // crypt is how a player knows how deep they have come.
+            //
+            // A PURE-SKY panorama: its lower hemisphere is sky rather than a
+            // photographed ground, which is what makes it safe to put our own
+            // grass under it. A ground-bearing HDRI would show its horizon
+            // through the holes in the surface and fight the geometry.
+            BackgroundMode = Godot.Environment.BGMode.Sky,
+            Sky = new Godot.Sky
+            {
+                SkyMaterial = new PanoramaSkyMaterial
+                {
+                    Panorama = _starfield,
+                    // The sky is a BACKDROP, not a light source. At 1.0 the
+                    // generated field is already near-black between its stars;
+                    // this is here so the stars themselves can be dialled without
+                    // touching the generator.
+                    EnergyMultiplier = 1.0f,
+                    // NEAREST, not linear. A star here is a single texel, and
+                    // an equirectangular map crushes longitude to nothing at
+                    // the poles — so bilinear filtering smears every star
+                    // overhead into a radial streak pointing at the zenith.
+                    // Looking straight up out of the nave showed a spoked
+                    // wheel of them. Unfiltered, a texel stays a point.
+                    Filter = false,
+                },
+                ProcessMode = Godot.Sky.ProcessModeEnum.Quality,
+                RadianceSize = Godot.Sky.RadianceSizeEnum.Size128,
+            },
 
             // Near-zero ambient: the probes do the filling. The first Crypt ran
             // 0.42 here, which lit every corner evenly and left the torches
@@ -530,31 +599,22 @@ public sealed partial class CryptDesign
             AmbientLightColor = new Color(0.10f, 0.12f, 0.18f),
             AmbientLightEnergy = 0.20f,
 
-            // FOG IS MEASURED IN THE REALM'S OWN UNITS, and this realm is not
-            // metric: a raider is ~44 units and a 4 m door is 96, so ONE METRE IS
-            // ABOUT 24 UNITS. Every fog number below therefore has to be divided
-            // by 24 from anything an engine tutorial quotes, and the first cut of
-            // this realm did not: at a density of 0.010 the optical depth across
-            // the Ossuary was SIXTEEN, which is a transmission of about 5e-8. The
-            // realm rendered as flat blue-grey with no geometry in it at all, and
-            // every interior screenshot came out a solid black rectangle.
+            // NO FOG. Not tuned down - removed.
             //
-            // The arithmetic that replaces the guess: aim for an optical depth
-            // near 0.6 across a long chamber (1680 units), i.e. density ≈ 0.0004,
-            // and roughly half that again for the exponential fog on top.
-            FogEnabled = true,
-            FogLightColor = new Color(0.04f, 0.05f, 0.09f),
-            FogDensity = 0.00012f,
-
-            // Long enough to cross a chamber, since that is the longest sight
-            // line the realm ever offers. Godot's own default is 64 m, which is
-            // 1536 units here — the 720 this was first set to is under half of
-            // that, and the fog simply stopped in mid-air inside every big room.
-            VolumetricFogEnabled = true,
-            VolumetricFogLength = 1800f,
-            VolumetricFogDensity = 0.0004f,
-            VolumetricFogAnisotropy = 0.6f,
-            VolumetricFogAlbedo = new Color(0.82f, 0.84f, 0.90f),
+            // Both kinds were here and both were wrong in the same direction,
+            // and even at a corrected density the answer from actually playing
+            // it was that you cannot see. Fog in a realm lit by pooled flame is
+            // subtractive twice over: it veils what little the torches reach AND
+            // it lifts the black the whole look depends on, so the picture goes
+            // flat grey in the lit parts and stays black everywhere else.
+            //
+            // The depth it was supposed to buy is bought instead by falloff -
+            // inverse square already fades a hall to nothing - and by the
+            // reflection probes filling the near corners. If atmosphere comes
+            // back it should be LOCAL and motivated (smoke over a brazier), not
+            // a global term over the entire realm.
+            FogEnabled = false,
+            VolumetricFogEnabled = false,
 
             // Glow blooms the FLAME, never the stone: any nonzero bloom lifts
             // the whole screen including the dark, which is the contrast this

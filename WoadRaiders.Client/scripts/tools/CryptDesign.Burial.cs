@@ -102,7 +102,10 @@ public sealed partial class CryptDesign
     private void Ossuary_Burials()
     {
         var space = Named("B3");
-        var height = CeilPress - 30f;
+        // Banks stop well short of the raised ceiling: a wall of niches four
+        // tiers high is a society, and one stretched to nine metres is a
+        // filing cabinet. The room got taller; the burials did not.
+        var height = 210f;
 
         // The one important grave in a room full of anonymous ones. It stands on
         // the south wall at the room's centre, which is where the eye lands from

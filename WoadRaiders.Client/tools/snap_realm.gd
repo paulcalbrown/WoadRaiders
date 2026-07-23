@@ -47,7 +47,11 @@ func _run() -> void:
 		[Vector3(4850, -510, 3630), Vector3(4450, -620, 3630)], # 9 the Cubiculum
 		[Vector3(4660, -560, 3280), Vector3(4200, -700, 3280)], # 10 the Forecourt
 		[Vector3(4150, -620, 3290), Vector3(2900, -840, 3300)], # 11 through the trilithon to the Wheel
-		[Vector3(3450, -620, 3320), Vector3(2880, -860, 3320)], # 12 the Chamber of the Wheel
+		[Vector3(3450, -560, 3280), Vector3(2360, -860, 3760)], # 12 the enlarged Chamber of the Wheel
+		[Vector3(1900, 120, 2160), Vector3(1900, 900, 2160)],  # 13 the nave, looking UP at the sky
+		[Vector3(6300, -820, 2000), Vector3(6300, 400, 2000)], # 14 the Fault's pit, looking up out of it
+		[Vector3(300, 120, 1980), Vector3(0, 110, 1980)],     # 15 CLOSE on a Minster ashlar wall
+		[Vector3(3820, -60, 1520), Vector3(3820, -80, 1360)], # 16 CLOSE on an Ossuary drystone wall
 	]
 	var i := 0
 	for shot in shots:

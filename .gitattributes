@@ -1,0 +1,23 @@
+# Line endings for the generated realm artefacts.
+#
+# A realm's .tscn, .json and .navmesh are written by a tool and asserted to
+# regenerate BYTE-IDENTICALLY (REALM-C-010), and CI now regenerates every realm
+# on Linux and fails on any difference (.github/workflows/realms.yml). That gate
+# is only meaningful if a Windows author and a Linux runner agree byte for byte.
+#
+# Today they do, but by accident: this checkout happens to have core.autocrlf
+# true, so the blobs are LF while the working tree is CRLF. Nothing in the repo
+# said so, and a contributor with a different setting would have made the check
+# fail on every single run — a gate everyone learns to ignore, which is worse
+# than no gate.
+*.tscn   text eol=lf
+*.json   text eol=lf
+*.gd     text eol=lf
+
+# Binary, and must never be line-ending converted: a mangled navmesh or mesh
+# library is not a diff, it is a corrupt realm.
+*.navmesh binary
+*.res     binary
+*.glb     binary
+*.png     binary
+*.jpg     binary

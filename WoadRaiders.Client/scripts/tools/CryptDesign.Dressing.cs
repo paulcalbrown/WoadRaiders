@@ -126,7 +126,12 @@ public sealed partial class CryptDesign
         _urnSquare = Kit.Load("kenney_graveyard/urn-square.glb", 40f);
         _candles = Kit.Load("kenney_graveyard/candle-multiple.glb", 40f);
         _lanternIron = Kit.Load("kenney_graveyard/lantern-candle.glb", 40f);
-        _fireBasket = Kit.Load("kenney_graveyard/fire-basket.glb", 42f);
+        // NOT Kenney's fire-basket. Its atlas is painted for a daylit
+        // graveyard and the basket samples a GRASS-GREEN patch of it, so every
+        // brazier in the realm had a bright green blob sitting beside its
+        // flame. Same failure as that kit's columns, which came out banded in
+        // orange and blue. KayKit's dungeon torch is lit for a dungeon.
+        _fireBasket = Kit.Load("../../addons/kaykit_dungeon_remastered/Assets/gltf/torch.gltf.glb", 20f);
         _debris = Kit.Load("kenney_graveyard/debris.glb", 45f);
         _fence = Kit.Load("kenney_graveyard/iron-fence.glb", 40f);
         _fenceBroken = Kit.Load("kenney_graveyard/iron-fence-damaged.glb", 40f);

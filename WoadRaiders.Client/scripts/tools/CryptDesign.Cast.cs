@@ -6,10 +6,12 @@ namespace WoadRaiders.Client;
 /// <summary>
 /// The Crypt's garrison, its lord, and the way out.
 ///
-/// Two hundred camps, in the mix the spec's beat chart states (Minion 105,
-/// Rogue 55, Mage 40) — five times the first Crypt's population, and it costs
-/// the wire nothing, because each raider is now sent only what stands within
-/// their realm's sight radius rather than everything the realm holds.
+/// ONE HUNDRED camps (Minion 53, Rogue 27, Mage 20). It was two hundred, and
+/// two hundred is not a difficulty setting — it is a wall. A single raider
+/// cannot cross the Ossuary alive, which makes the second half of the realm
+/// unreachable and every beat past it unauthored in practice. Halved until
+/// the realm can be walked end to end solo; the wire never bounded this
+/// number and does not bound it now, playability does.
 ///
 /// Camps are laid as FRACTIONS of the space that holds them, never as
 /// coordinates, so reshaping a chamber spreads its garrison through the new
@@ -30,50 +32,50 @@ public sealed partial class CryptDesign
 
         // Beat 2 — the nave. Two types: minions in the vessel, rogues working
         // the aisles where the arcade breaks the sight lines.
-        Camps("B2", EnemyType.Minion, 20, 0.10f, 0.30f, 0.90f, 0.70f, salt: 101);
+        Camps("B2", EnemyType.Minion, 10, 0.10f, 0.30f, 0.90f, 0.70f, salt: 101);
         // Rogues in the AISLES, one band each side — and both bands stop short
         // of the arcade lines, because a pier is 92 across and a camp placed in
         // one is not a flanker, it is a validator failure.
-        Camps("B2", EnemyType.Rogue, 5, 0.15f, 0.02f, 0.85f, 0.20f, salt: 103);
-        Camps("B2", EnemyType.Rogue, 5, 0.15f, 0.80f, 0.85f, 0.98f, salt: 105);
+        Camps("B2", EnemyType.Rogue, 3, 0.15f, 0.02f, 0.85f, 0.20f, salt: 103);
+        Camps("B2", EnemyType.Rogue, 2, 0.15f, 0.80f, 0.85f, 0.98f, salt: 105);
 
         // Beat 4 — the bone gallery, the realm's biggest horde and its most
         // oppressive room. Three types: the crescendo of the upper crypt.
-        Camps("B3", EnemyType.Minion, 30, 0.08f, 0.10f, 0.92f, 0.90f, salt: 107);
-        Camps("B3", EnemyType.Rogue, 10, 0.12f, 0.06f, 0.88f, 0.94f, salt: 109);
-        Camps("B3", EnemyType.Mage, 10, 0.55f, 0.12f, 0.94f, 0.88f, salt: 113);
+        Camps("B3", EnemyType.Minion, 15, 0.08f, 0.10f, 0.92f, 0.90f, salt: 107);
+        Camps("B3", EnemyType.Rogue, 5, 0.12f, 0.06f, 0.88f, 0.94f, salt: 109);
+        Camps("B3", EnemyType.Mage, 5, 0.55f, 0.12f, 0.94f, 0.88f, salt: 113);
 
         // Beat 6 — the span. ONE type, and every one of them a rogue: a
         // deliberate valley in the palette, and the enemy that punishes anyone
         // who drifts off a bridge 160 wide.
-        Camps("B4c", EnemyType.Rogue, 15, 0.06f, 0.20f, 0.94f, 0.80f, salt: 127);
+        Camps("B4c", EnemyType.Rogue, 7, 0.06f, 0.20f, 0.94f, 0.80f, salt: 127);
 
         // Beat 6b — the pit, optional. Everyone the bridge has ever dropped.
         // Named at the pit's own floor, or they would seat on the deck above.
-        Camps("B4", EnemyType.Minion, 15, 0.10f, 0.08f, 0.90f, 0.92f, salt: 131);
-        Camps("B4", EnemyType.Mage, 5, 0.20f, 0.55f, 0.80f, 0.92f, salt: 137);
+        Camps("B4", EnemyType.Minion, 8, 0.10f, 0.08f, 0.90f, 0.92f, salt: 131);
+        Camps("B4", EnemyType.Mage, 2, 0.20f, 0.55f, 0.80f, 0.92f, salt: 137);
 
         // Beat 9 — the gallery. One type again: a valley before the Forecourt,
         // and contrast is what makes the next accent land.
-        Camps("B5", EnemyType.Minion, 20, 0.06f, 0.15f, 0.94f, 0.85f, salt: 139);
+        Camps("B5", EnemyType.Minion, 10, 0.06f, 0.15f, 0.94f, 0.85f, salt: 139);
 
         // Beat 9c — the cubiculum, sealed, optional, and paid for. Its band is
         // held to the SOUTHERN half: the Cubiculum and the Forecourt share plan
         // area (that overlap IS the breach between them), so the Forecourt's own
         // south wall stands inside this room's northern strip.
-        Camps("B7", EnemyType.Rogue, 10, 0.14f, 0.56f, 0.86f, 0.96f, salt: 149);
-        Camps("B7", EnemyType.Mage, 5, 0.20f, 0.60f, 0.80f, 0.94f, salt: 151);
+        Camps("B7", EnemyType.Rogue, 5, 0.14f, 0.56f, 0.86f, 0.96f, salt: 149);
+        Camps("B7", EnemyType.Mage, 3, 0.20f, 0.60f, 0.80f, 0.94f, salt: 151);
 
         // Beat 10 — the forecourt, in sight of the boss. Mages on the flanks so
         // the approach is under fire while the trilithon is still ahead.
-        Camps("B8", EnemyType.Minion, 10, 0.15f, 0.15f, 0.85f, 0.85f, salt: 157);
-        Camps("B8", EnemyType.Mage, 10, 0.08f, 0.10f, 0.92f, 0.90f, salt: 163);
+        Camps("B8", EnemyType.Minion, 5, 0.15f, 0.15f, 0.85f, 0.85f, salt: 157);
+        Camps("B8", EnemyType.Mage, 5, 0.08f, 0.10f, 0.92f, 0.90f, salt: 163);
 
         // Beat 12 — the Wheel. All three types, the realm's only crescendo,
         // drawn around the cist rather than standing on it.
-        Camps("B9", EnemyType.Minion, 10, 0.12f, 0.12f, 0.88f, 0.88f, salt: 167);
-        Camps("B9", EnemyType.Rogue, 10, 0.06f, 0.20f, 0.94f, 0.80f, salt: 173);
-        Camps("B9", EnemyType.Mage, 10, 0.10f, 0.06f, 0.90f, 0.94f, salt: 179);
+        Camps("B9", EnemyType.Minion, 5, 0.12f, 0.12f, 0.88f, 0.88f, salt: 167);
+        Camps("B9", EnemyType.Rogue, 5, 0.06f, 0.20f, 0.94f, 0.80f, salt: 173);
+        Camps("B9", EnemyType.Mage, 5, 0.10f, 0.06f, 0.90f, 0.94f, salt: 179);
 
         // The lord of the realm stands ON the cist, so the spawn asks at the
         // cist's height rather than the chamber's — the plate is what he is
@@ -136,7 +138,7 @@ public sealed partial class CryptDesign
                 space.FloorY,
                 Band(space.Z0, space.Z1, space.Z0 + space.Depth * v0, space.Z0 + space.Depth * v1,
                      (v - v0) / Mathf.Max(1e-4f, v1 - v0)));
-            _scene.AddEnemy(type, _scene.OnFloor(at));
+            _scene.AddEnemy(type, _scene.OnFloor(ClearOfStanding(at)));
         }
     }
 }

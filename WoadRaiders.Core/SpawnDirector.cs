@@ -14,6 +14,22 @@ namespace WoadRaiders.Core;
 /// </summary>
 public sealed class SpawnDirector
 {
+    /// <summary>
+    /// Whether the regular population is topped back up as it is killed.
+    ///
+    /// OFF. A realm you cannot finish clearing is a realm you cannot finish: at
+    /// one enemy every six seconds a lone raider was refilling rooms behind
+    /// themselves faster than they could advance, so a cleared chamber stopped
+    /// meaning anything and the descent had no sense of progress in it at all.
+    ///
+    /// This is a stopgap, not a design decision — it is the endless-dungeon
+    /// behaviour switched off while the realm is being tuned for a single
+    /// player, and it belongs behind a per-realm or per-mode setting rather than
+    /// a constant. The boss is unaffected: it still returns, because the portal
+    /// and the end of a run hang off that cycle.
+    /// </summary>
+    public const bool RepopulateRegularsByDefault = false;
+
     /// <summary>Top the regular population up by one enemy at most this often.</summary>
     public const int RepopIntervalTicks = 6 * SimConstants.TickRate;
 
@@ -45,6 +61,8 @@ public sealed class SpawnDirector
     /// <summary>Regular respawns keep at least this far from the player spawn.</summary>
     public const float MinRespawnDistanceFromPlayerSpawn = 200f;
 
+    private readonly bool _repopulateRegulars;
+
     private static readonly float MinRespawnDistanceSq =
         MinRespawnDistanceFromPlayerSpawn * MinRespawnDistanceFromPlayerSpawn;
 
@@ -61,11 +79,13 @@ public sealed class SpawnDirector
     /// <summary>Raised the tick the boss respawns.</summary>
     public event Action? BossRose;
 
-    public SpawnDirector(GameWorld world, RealmDefinition realm, Random rng)
+    public SpawnDirector(GameWorld world, RealmDefinition realm, Random rng,
+                         bool repopulateRegulars = RepopulateRegularsByDefault)
     {
         _world = world;
         _realm = realm;
         _rng = rng;
+        _repopulateRegulars = repopulateRegulars;
         // Map-driven density: target one enemy per typed marker, clamped to a sane band.
         TargetEnemyCount = Math.Clamp(realm.EnemySpawns.Count, MinLiveEnemies, MaxLiveEnemies);
     }
@@ -100,7 +120,7 @@ public sealed class SpawnDirector
     /// <summary>Advance spawn policy. Call exactly once per <see cref="GameWorld.Step"/>.</summary>
     public void Update()
     {
-        if (_world.Tick >= _nextRepopTick)
+        if (_repopulateRegulars && _world.Tick >= _nextRepopTick)
         {
             _nextRepopTick = _world.Tick + RepopIntervalTicks;
             if (RegularEnemyCount() < TargetEnemyCount)
