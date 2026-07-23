@@ -600,7 +600,7 @@ transform = Transform3D(42, 0, 0, 0, 42, 0, 0, 0, 42, 3530, 256, 3780)
 transform = Transform3D(20.411823, 0, 40.104332, 0, 45, 0, -40.104332, 0, 20.411823, 600, 0, 2350)
 
 [node name="Scenery17" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext3")]
-transform = Transform3D(-33.18272, 0, 30.395842, 0, 45, 0, -30.395842, 0, -33.18272, 950, 0, 1550)
+transform = Transform3D(-33.18272, 0, 30.39583, 0, 45, 0, -30.39583, 0, -33.18272, 950, 0, 1550)
 
 [node name="Scenery18" type="Node3D" parent="Scenery" instance=ExtResource("PackedScene_ext3")]
 transform = Transform3D(37.140102, 0, 25.408913, 0, 45, 0, -25.408913, 0, 37.140102, 1600, 120, 2300)

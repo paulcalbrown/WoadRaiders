@@ -34,7 +34,13 @@ Vendored 2026-07-21 under `WoadRaiders.Client/assets/crypt/pbr/<surface>/`, one
 directory per surface in `LOOK-001`'s manifest. Every Poly Haven file was checked
 against the md5 its API publishes; the ambientCG sets arrive as zips and only the
 four maps the realm uses were kept, so their directories are smaller than the
-download. Two surfaces in the manifest stay **procedural** on purpose — `bone`,
+download. The NIGHT SKY is procedural too, and was not always: a CC0 HDRI panorama
+(Poly Haven `qwantani_night_puresky`) was vendored and then removed, because a
+photograph of the night sky is mostly airglow and that broad glow leaked
+through every crack in the masonry as grey daylight. A generated starfield
+separates the stars from the sky behind them, which an image cannot.
+
+Two surfaces in the manifest stay **procedural** on purpose — `bone`,
 because no CC0 bone material exists (searched), and `quartz`, which wants faint
 emission no photograph carries.
 
@@ -57,7 +63,8 @@ the sidecar the first time a texture is used in 3D.
 | `lintel` | ambientCG | [`Rocks025`](https://ambientcg.com/view?id=Rocks025) | 1K | ao+diff+nor+rough | 4.8 MB | — not yet bound |
 | `cairn_rubble` | ambientCG | [`Gravel043`](https://ambientcg.com/view?id=Gravel043) | 1K | ao+diff+nor+rough | 5.3 MB | Era I floors |
 | `moss` | ambientCG | [`Moss001`](https://ambientcg.com/view?id=Moss001) | 1K | ao+diff+nor+rough | 5.9 MB | — not yet bound |
-| | | | | **13 sets** | **63.3 MB** | |
+| `grass` | ambientCG | [`Grass004`](https://ambientcg.com/view?id=Grass004) | 1K | ao+diff+nor+rough | 5.8 MB | the night surface the Crypt is sunk into |
+| | | | | **14 sets** | **69.1 MB** | |
 
 Sources, verified 2026-07-21:
 

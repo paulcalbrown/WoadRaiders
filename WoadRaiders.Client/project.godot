@@ -32,6 +32,12 @@ project/assembly_name="WoadRaiders.Client"
 [rendering]
 
 textures/vram_compression/import_etc2_astc=true
+; 16x anisotropic (Godot's default is 4x). A chase camera looks down long stone
+; halls at grazing angles, the worst case for the procedural surface detail —
+; without high anisotropy the joints and pitting shimmer and crawl as you move.
+; Near-free on desktop. NOTE: this helps texture ALIASING; it does nothing for
+; z-fighting between coplanar faces, which is geometry (see tools/DebugZFight.cs).
+textures/default_filters/anisotropic_filtering_level=4
 ; Realms are many small stone rooms, which is the case Godot documents occlusion
 ; culling as most effective for. Without it every light, decal and particle
 ; system in chambers the raider cannot see is still submitted. The occluders

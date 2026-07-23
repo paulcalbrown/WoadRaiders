@@ -30,8 +30,9 @@ public sealed partial class CragDesign
         {
             var node = Scene.Instantiate<Node3D>();
             node.Position = position;
-            node.Rotation = new Vector3(0f, yaw, 0f);
-            node.Scale = new Vector3(scale, scale, scale);
+            // Deterministic basis (see Det): a boulder's random yaw would otherwise
+            // serialise host-dependent bytes through Godot's libm Euler→Basis.
+            node.Basis = Det.EulerScale(0f, yaw, 0f, new Vector3(scale, scale, scale));
             return node;
         }
     }

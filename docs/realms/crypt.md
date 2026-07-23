@@ -1,6 +1,6 @@
 # The Sunken Crypt — realm spec
 
-Spec revision: 4 — 2026-07-21 — status: **built** — shell, burials, dressing, light and vendored textures
+Spec revision: 5 — 2026-07-22 — status: **built, and revised from PLAY** — see §11b
 Realm id: `DungeonId.Crypt` · design: `CryptDesign` · scene: `res://maps/Crypt.tscn`
 Inherits: `REALM-C-*` ([CONSTITUTION.md](CONSTITUTION.md))
 
@@ -153,12 +153,14 @@ World units. `x` runs east (the route's direction, matching
 | `C6` | The Descent | II→I | 4720 | 4960 | 3040 | 3360 | −560 → −720 | 220 | PRESS |
 | `B8` | The Forecourt | I | 4160 | 4720 | 2960 | 3600 | −720 | 480 | OPEN |
 | `C7` | The Passage | I | 3520 | 4160 | 3200 | 3360 | −720 → −880 | 150 → 220 | CRAWL → PRESS |
-| `B9` | The Chamber of the Wheel | I | 2240 | 3520 | 2880 | 3760 | −880 | dome, crown 1100 | VAST |
+| `B9` | The Chamber of the Wheel | I | 1200 | 3520 | 2880 | 4640 | −880 | dome, crown 1100 | VAST |
 
-Realm bounds: **7200 × 2800** (300 × 117 m). Walkable floor ≈ **14.2 M u²**
-(≈ 24,600 m²) — 46% of v1's ≈ 31 M, per the halve-the-plan directive, while the
-*bounding box* drops to a quarter. Floor coverage rises from 38% to 72%: the
-same amount of dungeon, four times less void between its rooms.
+Realm bounds: **7200 × 3600** (300 × 150 m) — the deep end grew when the Wheel
+was enlarged (below). Walkable floor ≈ **17.2 M u²** (≈ 29,800 m²) — 55% of
+v1's ≈ 31 M, per the halve-the-plan directive. Floor coverage is ≈ 66%: the
+enlarged unroofed Wheel occupies only the western third of the new deep band,
+so the box grows faster than the floor, but the realm is still far denser than
+v1's 38%.
 
 **The approach to the Fault is the realm's best beat and is worth stating
 plainly.** The Cut (`C3`) is a level crawl at the Ossuary's own floor, 140 of
@@ -175,15 +177,18 @@ Landing and the Span itself project over the void, which keeps the stacked-level
 count to three small footprints instead of a whole shelf ringing the chamber.
 
 **Two deliberate over-scalings, recorded so they do not read as errors.** The
-Chamber of the Wheel is 53 × 37 m, above the 25–35 m that co-op arena guidance
-gives for eight players, and its corbelled dome spans a distance no drystone
-corbel can actually cross — Newgrange's manages six metres. Both are the "keep
-it grand" directive taken literally, and both are the fiction's whole payoff:
-this is not human work, and it is not meant to look like it could be. The cost
-is real and is accepted — a caster at one end of the long axis is 53 m from a
-melee raider at the other. It is bought back by keeping the boss, the cist and
-the honour guard inside the middle third, and by making the three recesses
-shallow (160 deep) so nobody standing in one loses sight of the centre.
+Chamber of the Wheel is 97 × 73 m — enlarged on the "make it at least as big as
+the Fault" directive so the descent's payoff chamber is no smaller than the
+mid-run spectacle (the Fault is 57 × 80 m; the Wheel now exceeds it in footprint
+and on its long axis). That is far above the 25–35 m co-op arena guidance for
+eight players, and its corbelled dome spans a distance no drystone corbel can
+actually cross — Newgrange's manages six metres. Both are the "keep it grand"
+directive taken literally, and both are the fiction's whole payoff: this is not
+human work, and it is not meant to look like it could be. The cost is real and
+is accepted — a caster at one end of the long axis is 97 m from a melee raider
+at the other. It is bought back by keeping the boss, the cist and the honour
+guard inside the middle third, and by making the three recesses shallow (160
+deep) so nobody standing in one loses sight of the centre.
 
 ### 4.3 Adjacency
 
@@ -754,13 +759,13 @@ refuses by design (`REALM-C-011`); `GenerateRealm` validates `Crypt.json`.
 | `BUDGET-002` | unique library triangles | ≤ 4,000,000 | `[checked: TODO]` |
 | `BUDGET-003` | **fallback** join payload — what a client lacking the realm waits for | ≤ 50 MB | `[checked: tools/MeasureJoin.cs; GeometryChunksTests]` |
 | `BUDGET-004` | `Crypt.tscn` on disk (placements only — the library is a sibling `.res`) | ≤ 5 MB | `[checked: TODO]` |
-| `BUDGET-005` | walkable floor area | ≤ 15 M u² | `[checked: TODO]` |
-| `BUDGET-006` | realm bounds | ≤ 7600 × 3000 | `[checked: TODO]` |
-| `BUDGET-007` | `Light3D` total | ≤ 220 | `[checked: TODO]` |
+| `BUDGET-005` | walkable floor area | ≤ 18 M u² | `[checked: TODO]` |
+| `BUDGET-006` | realm bounds | ≤ 7600 × 3700 | `[checked: TODO]` |
+| `BUDGET-007` | `Light3D` total | ≤ 800 | `[checked: TODO]` |
 | `BUDGET-008` | `Light3D` with `shadow_enabled` | ≤ 40 | `[checked: TODO]` |
 | `BUDGET-009` | `Decal` total | ≤ 300 | `[checked: TODO]` |
-| `BUDGET-010` | `GPUParticles3D` total | ≤ 40 | `[checked: TODO]` |
-| `BUDGET-011` | camp markers | == 200 | `[checked: TODO — CryptSpecTests.TwoHundredCampsInTheAuthoredMix]` |
+| `BUDGET-010` | `GPUParticles3D` total | ≤ 800 | `[checked: TODO]` |
+| `BUDGET-011` | camp markers | == 100 | `[checked: TODO — CryptSpecTests.TwoHundredCampsInTheAuthoredMix]` |
 | `BUDGET-014` | a raider's snapshot | ≤ 3 unreliable chunks | `[checked: tools/MeasureSnapshot.cs]` |
 | `BUDGET-015` | `DungeonInfo.SightRadius` | 1200 | `[checked: TODO — CryptSpecTests.SightRadiusMatchesTheSpec]` |
 | `BUDGET-012` | vendored textures on disk | ≤ 400 MB | `[checked: TODO — SpecLint]` |
@@ -772,6 +777,16 @@ refuses by design (`REALM-C-011`); `GenerateRealm` validates `Crypt.json`.
 attempts were both wrong** — first from bytes-per-triangle on a wire that no
 longer carries realms, then from a BVH that turns out not to care. What follows
 names the tool behind each.
+
+**`BUDGET-005` and `BUDGET-006` were raised 2026-07-22 for the enlarged Wheel**
+(≤ 15 M → ≤ 18 M u², ≤ 7600 × 3000 → ≤ 7600 × 3700). Growing the Chamber of the
+Wheel to exceed the Fault added ≈ 3.0 M u² of unroofed floor (the realm now
+measures ≈ 17.2 M) and pushed the deep bound to z 4640 (the realm baked to
+7264 × 3590). Both are spend against the floor-area cost model, not a new class
+of cost — a bigger footprint is what `REALM-C-021` says is the expensive axis,
+and `BUDGET-001`'s triangle count barely moved (429,922 → 439,426, ~11% of the
+cap), so nothing structural bound the growth. The caps rose to fit the room the
+directive asked for, with margin above the measured figures.
 
 **`BUDGET-001` — 4,000,000 baked triangles, coupled to the scene again.** Measured
 with `tools/MeasureSoup.cs` at constant walkable area, 60,000 → 1,000,000
@@ -899,7 +914,7 @@ was designed, and these are what it cost.
 | D4 | §4.2 `C1` | The Nave Door is 80 × 160, i.e. wider than it is long | Harmless in itself, but it broke the corridor builder, which inferred its travel axis from which dimension was longer. The axis is now stated at every call site (`SPACE-010`). | 2026-07-21 |
 | D5 | `LOOK` (Ossuary) | Every loculus bank in the realm faced INTO the rock | Not a spec deviation so much as the spec's silence: the pieces open toward local −Z, and both wall runs were yawed to put the opening against the stone. Forty banks showed the player the flat back of every niche, and it is invisible in any build log. The yaw a wall implies is now named (`OnNorthWall`…). | 2026-07-21 |
 | D6 | `LOOK-004` (light reach) | Wall flames are 9/6/26 cd rather than 3/2/5, spaced 240/360/480 rather than 300/420/640 | Two compounding errors. `REALM-C-024`: energies were stated in metres, so every light ran 576× too dim. And once the falloff was honest, a 3 cd sconce lit its own wall and nothing else — pools have to OVERLAP to describe a room, so brighter, further and closer together. | 2026-07-21 |
-| D7 | `LOOK-006` (the Cairn burns nothing) | The Wheel has 13 witchlights and burns at Candela(70) | "Lit by nothing that burns" is a fiction about the SOURCE, and the spec let it become a claim about the quantity. Eight torches cannot light 53 × 37 m: the payoff chamber of the whole descent measured 95.6% pure black. The ring of orthostats is now lit from its own feet, which is a better image than the one that was specified. | 2026-07-21 |
+| D7 | `LOOK-006` (the Cairn burns nothing) | The Wheel has 13 witchlights and burns at Candela(70) | "Lit by nothing that burns" is a fiction about the SOURCE, and the spec let it become a claim about the quantity. Eight torches cannot light 97 × 73 m: the payoff chamber of the whole descent measured 95.6% pure black. The ring of orthostats is now lit from its own feet, which is a better image than the one that was specified. | 2026-07-21 |
 | D8 | `LOOK-018` (one hero per space) | Seven heroes for twenty-one spaces | The corridors are starved on purpose (that is the same requirement's second half), and the Wheel's hero is its cist, which is architecture rather than a prop. | 2026-07-21 |
 
 ### SPACE-010 — a connector states its axis and its ends
@@ -909,6 +924,79 @@ order against a builder that reads x0/z0 first, so they descended the wrong way
 and met their chambers 160 out; the realm still built, still looked right, and
 reported a whole wing unreachable a long way from the cause.
 `[checked: tools/GenerateRealm.cs route walk + RealmValidator]`
+
+---
+
+## 11b. What playing it changed
+
+Everything above §11 was authored from a static camera and a luminance
+histogram. The realm was then played, and four things it says were wrong. They
+are recorded here rather than quietly edited into the sections above, because
+the reasoning that produced them was sound and still wrong.
+
+### PLAY-001 — the camera is never constrained by a ceiling
+Every roofed space shall clear `CameraFreeAt` (**302**, derived from `CameraRig`:
+`OpenBoomLength · sin(OpenPitchDegrees) + CeilingClearance`) at every point a
+raider can stand.
+
+This kills the realm's original spine. Ceilings of 140 / 240 / 480 were named
+CRAWL / PRESS / OPEN precisely because they drove the camera, and compression and
+release were meant to be the whole shape of the descent. Played, a camera pinned
+behind the shoulder during a fight is not tension — it is a fight you cannot
+read. 10% of the walkable floor did it.
+
+Ceilings are now 460 / 560 / 820. A nominal ceiling is NOT clearance: a groin
+vault's soffit hangs to ~0.58 of nominal (a 280 bay measured 162) and a corbel
+steps in from its walls, so the number that matters is measured over the realm's
+own floor, not read off the chamber table.
+`[checked: tools/MeasureHeadroom.cs — 0 reachable samples under 302]`
+
+### PLAY-002 — one raider can finish the realm
+The garrison shall be **100** camps (Minion 53, Rogue 27, Mage 20), not 200.
+Two hundred is not a difficulty setting, it is a wall: a single raider dies in
+the Ossuary at about 25 s, which makes every beat past it unauthored in
+practice. The wire never bounded this number (`REALM-C-019a`) and does not now —
+playability does.
+`[checked: CryptSpecTests.The_realm_ships_the_cast_the_beat_chart_states]`
+
+### PLAY-003 — no fog
+`fog_enabled` and `volumetric_fog_enabled` shall both be **false**, and there
+shall be no `FogVolume`. Not tuned down — removed.
+
+`LOOK-012` was wrong twice: first in its units (`REALM-C-024`), and then, at a
+corrected density, still wrong in kind. Fog in a realm lit by pooled flame
+subtracts twice — it veils what little the torches reach and lifts the black the
+whole look depends on. The depth it was meant to buy is already bought by
+inverse-square falloff. If atmosphere returns it shall be LOCAL and motivated
+(smoke over a brazier), never a global term.
+`[checked: CryptSpecTests.There_is_no_fog]`
+
+### PLAY-004 — enough lights to see by
+`BUDGET-007` rises from 220 to **900**. Wall flames drop from 240/360/480 pitch
+to **150/200/280**, and any space over 500 high carries a SECOND course of them
+at 0.55 of its ceiling — one course lights the floor and leaves a 34-foot wall
+black. Braziers go on a 520 grid rather than 760. Measured: 193 lights → **448**.
+`[checked: CryptSpecTests.The_realm_is_lit_within_its_budget]`
+
+### PLAY-005 — a corridor states where it is entered from the side
+A corridor builds side walls and leaves its ENDS open, which is wrong the moment
+another space's door meets its side. The creepway runs along `z=3520` and the
+Deep Gallery's south door is at `z=3520`, so the corridor's own wall sealed the
+doorway it exists to serve.
+
+And an opening in a DESCENDING corridor takes its head height from the floor at
+the door, not from the corridor's lowest tread. Left to the wall's base the
+creepway's lintels landed at −544 with the gallery floor at −560: a 16-unit gap
+under a 44-tall raider. The masonry had a hole in it the whole time; the thing
+bridging it was at knee height.
+`[checked: tools/MeasureReach.cs + RealmValidator]`
+
+### PLAY-006 — a camp is never placed inside a pillar
+Camps are laid on a stratified grid and arcades on the module grid, so the two
+align by construction and it is luck how many camps land in a pier. Halving the
+garrison changed the stratification and buried one in the Ossuary. Piers and
+orthostats now register as standing obstacles and camps are pushed clear.
+`[checked: RealmValidator — every camp reachable]`
 
 ---
 

@@ -126,7 +126,12 @@ public sealed partial class CryptDesign
         _urnSquare = Kit.Load("kenney_graveyard/urn-square.glb", 40f);
         _candles = Kit.Load("kenney_graveyard/candle-multiple.glb", 40f);
         _lanternIron = Kit.Load("kenney_graveyard/lantern-candle.glb", 40f);
-        _fireBasket = Kit.Load("kenney_graveyard/fire-basket.glb", 42f);
+        // NOT Kenney's fire-basket. Its atlas is painted for a daylit
+        // graveyard and the basket samples a GRASS-GREEN patch of it, so every
+        // brazier in the realm had a bright green blob sitting beside its
+        // flame. Same failure as that kit's columns, which came out banded in
+        // orange and blue. KayKit's dungeon torch is lit for a dungeon.
+        _fireBasket = Kit.Load("../../addons/kaykit_dungeon_remastered/Assets/gltf/torch.gltf.glb", 20f);
         _debris = Kit.Load("kenney_graveyard/debris.glb", 45f);
         _fence = Kit.Load("kenney_graveyard/iron-fence.glb", 40f);
         _fenceBroken = Kit.Load("kenney_graveyard/iron-fence-damaged.glb", 40f);
@@ -156,17 +161,20 @@ public sealed partial class CryptDesign
         var jitterX = Jitter(salt, 1, 301, loose);
         var jitterZ = Jitter(salt, 2, 303, loose);
         node.Position = at + new Vector3(jitterX, 0f, jitterZ);
-        node.Rotation = new Vector3(
-            // Pitch and roll stay SMALL. A prop lying at a real angle needs the
-            // floor modelled under it; a prop leaning two degrees just looks like
-            // it has been there a while, which is the whole effect wanted.
-            Jitter(salt, 3, 305, 0.05f),
-            float.IsNaN(yaw) ? Hash(salt, 4, 307) * Mathf.Tau : yaw + Jitter(salt, 5, 309, 0.2f),
-            Jitter(salt, 6, 311, 0.05f));
+        // Pitch and roll stay SMALL. A prop lying at a real angle needs the floor
+        // modelled under it; a prop leaning two degrees just looks like it has been
+        // there a while, which is the whole effect wanted.
+        var pitch = Jitter(salt, 3, 305, 0.05f);
+        var turn = float.IsNaN(yaw) ? Hash(salt, 4, 307) * Mathf.Tau : yaw + Jitter(salt, 5, 309, 0.2f);
+        var roll = Jitter(salt, 6, 311, 0.05f);
         var s = kit.Scale * scale;
-        node.Scale = new Vector3(s * (0.85f + Hash(salt, 7, 313) * 0.3f),
-                                 s * (0.85f + Hash(salt, 8, 315) * 0.3f),
-                                 s * (0.85f + Hash(salt, 9, 317) * 0.3f));
+        var size = new Vector3(s * (0.85f + Hash(salt, 7, 313) * 0.3f),
+                               s * (0.85f + Hash(salt, 8, 315) * 0.3f),
+                               s * (0.85f + Hash(salt, 9, 317) * 0.3f));
+        // Set the rotation×scale basis directly from deterministic trig (see Det):
+        // Godot's own Euler→Basis behind node.Rotation runs on libm at save time
+        // and a prop's random yaw makes its serialised bytes host-dependent.
+        node.Basis = Det.EulerScale(pitch, turn, roll, size);
         var parent = monument ? _monuments : _dressing;
         node.Name = $"{(monument ? "Monument" : "Prop")}{_propCount++}";
         parent.AddChild(node);
@@ -182,8 +190,9 @@ public sealed partial class CryptDesign
     {
         var node = kit.Scene.Instantiate<Node3D>();
         node.Position = at;
-        node.Rotation = new Vector3(0f, yaw, 0f);
-        node.Scale = new Vector3(kit.Scale, kit.Scale, kit.Scale);
+        // Deterministic basis (see Det) — a hero's yaw is an arbitrary constant, so
+        // Godot's libm Euler→Basis would make its transform host-dependent.
+        node.Basis = Det.EulerScale(0f, yaw, 0f, new Vector3(kit.Scale, kit.Scale, kit.Scale));
         node.Name = $"Hero{_heroCount++}";
         _monuments.AddChild(node);
         // 45 rather than 70: a lamp with nothing modelled under it reads as a

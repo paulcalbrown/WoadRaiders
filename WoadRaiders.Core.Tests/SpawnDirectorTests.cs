@@ -23,10 +23,17 @@ public class SpawnDirectorTests
         BossSpawn = new Vector3(900, 0, 900),
     };
 
-    private static SpawnDirector Directed(out GameWorld world, RealmDefinition? realm = null, int seed = 1)
+    /// <param name="repop">
+    /// Whether the regular population tops itself back up. OFF by default, as it
+    /// now is in the game: a realm that refills behind a lone raider cannot be
+    /// cleared, and so cannot be finished. The behaviour still exists and is
+    /// still covered — the tests that care ask for it.
+    /// </param>
+    private static SpawnDirector Directed(out GameWorld world, RealmDefinition? realm = null, int seed = 1,
+                                          bool repop = false)
     {
         world = new GameWorld();
-        return new SpawnDirector(world, realm ?? MakeRealm(), new Random(seed));
+        return new SpawnDirector(world, realm ?? MakeRealm(), new Random(seed), repopulateRegulars: repop);
     }
 
     [Fact]
@@ -57,7 +64,11 @@ public class SpawnDirectorTests
     [Fact]
     public void Population_is_topped_back_up_after_an_enemy_dies()
     {
-        var director = Directed(out var world);
+        // Asks for the top-up: it is off by default now, because a realm that
+        // refills behind a lone raider cannot be cleared and so cannot be
+        // finished. The behaviour is dormant, not deleted, and this keeps it
+        // honest for whenever it comes back behind a per-realm setting.
+        var director = Directed(out var world, repop: true);
         director.SpawnInitial();
 
         // Kill one regular; Step removes it, leaving us one under target.
@@ -133,7 +144,10 @@ public class SpawnDirectorTests
             new EnemySpawnPoint(new Vector3(500, 0, 500), EnemyType.Rogue), // > 200 — the only safe respawn
         });
         var world = new GameWorld();
-        var director = new SpawnDirector(world, realm, new Random(3));
+        // Asks for the top-up explicitly: it is OFF by default now, because a
+        // realm that refills behind a lone raider cannot be cleared and so
+        // cannot be finished. The logic is still here and still under test.
+        var director = new SpawnDirector(world, realm, new Random(3), repopulateRegulars: true);
         director.SpawnInitial();
 
         // Kill a near enemy so the director must top the population up.

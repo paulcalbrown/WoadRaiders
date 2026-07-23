@@ -129,7 +129,11 @@ var routes = new Dictionary<string, (Vector2[] Path, float MinFinalHeight, float
     new(7120, 1700), new(7120, 2200), new(7120, 2700), new(7100, 3100),
     new(6400, 3200), new(5400, 3200), new(5000, 3200),
     new(4840, 3260), new(4600, 3280), new(4300, 3280),
-    new(3900, 3280), new(3600, 3280), new(3200, 3280), new(2900, 3300),
+    new(3900, 3280), new(3600, 3280), new(3200, 3300),
+    // The Wheel grew west and south, so the cist moved with it: the walker now
+    // crosses the enlarged chamber to (2360, 3760) rather than stopping near the
+    // old centre at (2900, 3300).
+    new(2800, 3500), new(2360, 3760),
     ], float.MinValue, -860f),
 };
 if (!routes.TryGetValue(realm, out var route))

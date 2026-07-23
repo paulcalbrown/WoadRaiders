@@ -168,19 +168,42 @@ public class CryptSpecTests
     }
 
     [Fact]
-    public void Ground_mist_pools_rather_than_filling() // LOOK-012
+    public void There_is_no_fog() // PLAY-003
     {
         if (Scene() is not { } scene)
             return;
 
-        Assert.Contains("type=\"FogVolume\"", scene);
-        var falloffs = Regex.Matches(scene, @"height_falloff = ([\d.]+)")
-                            .Select(m => float.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture))
-                            .ToList();
-        Assert.NotEmpty(falloffs);
-        // Below 2 the mist fills the room like smoke; above 4 it is a film on the
-        // floor. A raider should wade through it, not swim in it.
-        Assert.All(falloffs, f => Assert.InRange(f, 2f, 4f));
+        // This test used to assert the OPPOSITE — that ground mist existed and
+        // pooled at the right height. Playing the realm retired the whole idea:
+        // fog in a place lit by pooled flame veils what little the torches reach
+        // AND lifts the black the look depends on, so it subtracts twice. Kept as
+        // a test rather than deleted, because "add some atmospheric fog" is a
+        // thing someone will reasonably try again.
+        // ABSENCE is the proof, not a `= false`. Godot's serializer omits any
+        // property still at its default, and both fog flags default to false —
+        // so setting them false writes nothing whatsoever. Asserting on the
+        // presence of "fog_enabled = false" fails against a scene that is
+        // perfectly correct, which is exactly how this test failed first time.
+        Assert.DoesNotContain("type=\"FogVolume\"", scene);
+        Assert.DoesNotContain("fog_enabled = true", scene);
+        Assert.DoesNotContain("volumetric_fog_enabled = true", scene);
+        Assert.DoesNotContain("fog_density", scene);
+    }
+
+    [Fact]
+    public void The_realm_is_lit_within_its_budget() // PLAY-004, BUDGET-007
+    {
+        if (Scene() is not { } scene)
+            return;
+
+        var lights = Regex.Matches(scene, @"type=""(Spot|Omni|Directional)Light3D""").Count;
+        // Lower bound as well as upper. A realm that is under-lit fails just as
+        // surely as one that is too expensive, and 193 lights was not enough to
+        // see the room you were fighting in.
+        Assert.InRange(lights, 300, 900);
+
+        var shadowed = Regex.Matches(scene, @"^shadow_enabled = true", RegexOptions.Multiline).Count;
+        Assert.InRange(shadowed, 0, 40);
     }
 
     // ------------------------------------------------------------- the burials
@@ -258,7 +281,18 @@ public class CryptSpecTests
         // is what keeps it auditable: one line to read, one decision to argue
         // with. A realm sprinkling no_collide over individual meshes is a realm
         // whose collision is no longer knowable by looking.
-        Assert.Single(Regex.Matches(scene, @"groups=\[""no_collide""\]"));
+        // Every declaration is on a FOLDER, never on a mesh. This used to assert
+        // exactly one folder, which was really a proxy for "not sprinkled" — and
+        // it broke the moment a second legitimate one appeared (the night sky's
+        // grass surface). Assert the property that actually matters instead of a
+        // count that happened to be 1.
+        var declarations = Regex.Matches(scene, @"\[node name=""[^""]+"" type=""([^""]+)""[^\]]*groups=\[""no_collide""\]");
+        Assert.NotEmpty(declarations);
+        Assert.All(declarations, m => Assert.Equal("Node3D", m.Groups[1].Value));
+
+        // And a handful at most: one per layer that is genuinely scenery. Many
+        // would mean it had become a way to silence the validator piecemeal.
+        Assert.InRange(Regex.Matches(scene, @"groups=\[""no_collide""\]").Count, 1, 4);
     }
 
     [Fact]
@@ -284,15 +318,17 @@ public class CryptSpecTests
         if (Baked() is not { } realm)
             return;
 
-        Assert.Equal(200, realm.EnemySpawns.Count);
+        Assert.Equal(100, realm.EnemySpawns.Count);
         Assert.NotNull(realm.BossSpawn);
 
-        // Minion 105 / Rogue 55 / Mage 40 — the accents are what the valleys in
+        // Minion 53 / Rogue 27 / Mage 20 — halved from 200 because one raider
+        // could not cross the Ossuary alive, which made every beat past it
+        // unauthored in practice (PLAY-002). The accents are what the valleys in
         // between are for, so the mix is as load-bearing as the count.
         var mix = realm.EnemySpawns.GroupBy(s => s.Type).ToDictionary(g => g.Key, g => g.Count());
-        Assert.Equal(105, mix[EnemyType.Minion]);
-        Assert.Equal(55, mix[EnemyType.Rogue]);
-        Assert.Equal(40, mix[EnemyType.Mage]);
+        Assert.Equal(53, mix[EnemyType.Minion]);
+        Assert.Equal(27, mix[EnemyType.Rogue]);
+        Assert.Equal(20, mix[EnemyType.Mage]);
     }
 
     [Fact]

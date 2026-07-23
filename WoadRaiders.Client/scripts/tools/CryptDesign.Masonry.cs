@@ -43,6 +43,61 @@ public sealed partial class CryptDesign
     /// <summary>How many placements the realm has made, for the build log.</summary>
     private int _placements;
 
+    /// <summary>
+    /// Standing obstacles a camp must not be placed inside, as (centre, radius)
+    /// in plan. Piers and orthostats register themselves here.
+    ///
+    /// Camps are laid on a stratified grid and the arcade is laid on the module
+    /// grid, so the two align by construction and it is only luck how many camps
+    /// land in a pillar. Halving the garrison changed the stratification and
+    /// buried a minion inside a 92-wide pier in the Ossuary — a camp the
+    /// validator correctly called unreachable, a long way from anything that
+    /// looked like a cause.
+    /// </summary>
+    private readonly List<(Vector3 At, float Radius)> _standing = new();
+
+    private void Standing(Vector3 at, float radius) => _standing.Add((at, radius));
+
+    /// <summary>
+    /// Every wall bay that was actually built, with the way its face points.
+    ///
+    /// Wall furniture used to be laid round a space's RECTANGLE — walk the
+    /// perimeter, drop a light every so often. That was invisible while a torch
+    /// was only a light, and the moment the torches got a model the realm filled
+    /// with brackets bolted to thin air: over doorways, across ledges and stairs
+    /// that have no walls at all, and along the open sides of spaces that only
+    /// ever had two. A rectangle is where a room was DRAWN, not where its stone
+    /// ended up.
+    /// </summary>
+    private readonly List<(Vector3 At, Vector3 Face, float FloorY, float Height, Era Era)> _wallBays = new();
+
+    /// <summary>
+    /// The nearest spot to <paramref name="at"/> that is not inside a pillar.
+    /// Pushes straight out along the line from the obstacle's centre, which is
+    /// the shortest way clear and keeps the scatter's shape.
+    /// </summary>
+    private Vector3 ClearOfStanding(Vector3 at)
+    {
+        for (var pass = 0; pass < 4; pass++)
+        {
+            var moved = false;
+            foreach (var (centre, radius) in _standing)
+            {
+                var away = new Vector3(at.X - centre.X, 0f, at.Z - centre.Z);
+                var d = away.Length();
+                if (d >= radius)
+                    continue;
+                // Dead centre gives no direction to push, so pick one.
+                away = d < 1e-3f ? Vector3.Right : away / d;
+                at += away * (radius - d + 4f);
+                moved = true;
+            }
+            if (!moved)
+                break;
+        }
+        return at;
+    }
+
     // ------------------------------------------------------------- the library
 
     /// <summary>
@@ -165,26 +220,77 @@ public sealed partial class CryptDesign
     {
         const float half = Module / 2f;
         var t = WallThick;
-        Stone(tool, -half, 0, -t / 2 - 4, half, 14, t / 2 + 4, 0.78f);          // plinth, proud of the face
+
+        // THE CORE OWNS THE EDGES; the facing sits inside them. This is the fix
+        // for the realm's worst z-fighting: a bay used to cap its ends with the
+        // plinth, the core AND the blocks all at the exact same plane, three
+        // coincident faces fighting for the same pixels — invisible mid-wall
+        // (buried in the next bay) but glaring at every door jamb and corner. So
+        // only the CORE reaches the bay edge (+-half); the plinth, blocks and
+        // string all inset from it, capping at their own planes. Nothing coincides.
+        //
+        // The core is the full solid box the joints are grooves in — set 3 back
+        // from the face so a joint self-shadows into a defined line.
+        Stone(tool, -half, 0, -t / 2 + 3, half, height, t / 2 - 3, 0.58f);
+        Stone(tool, -half + 2, 0, -t / 2 - 4, half - 2, 14, t / 2 + 4, 0.78f);   // plinth, inset from the edge
+
         var courses = Mathf.Max(2, Mathf.RoundToInt((height - 26f) / 26f));
         for (var c = 0; c < courses; c++)
         {
             var y0 = 14 + c * 26f;
-            var y1 = Mathf.Min(height - 12f, y0 + 24f);
+            // 25 of a 26 pitch: a 1-unit bed joint, not the 2 that read as a gap.
+            var y1 = Mathf.Min(height - 12f, y0 + 25f);
             // Three blocks a course, their joints staggered course to course —
             // a running bond, which is what makes ashlar read as laid rather
-            // than poured.
+            // than poured. Clamped to half-1, so the block ends never reach the
+            // core's edge and cannot fight it there.
             var offset = c % 2 == 0 ? 0f : Module / 6f;
             for (var s = -1; s <= 1; s++)
             {
-                var x0 = Mathf.Max(-half, s * Module / 3f - Module / 6f + offset);
-                var x1 = Mathf.Min(half, x0 + Module / 3f - 2f);
+                var x0 = Mathf.Max(-half + 1f, s * Module / 3f - Module / 6f + offset);
+                var x1 = Mathf.Min(half - 1f, x0 + Module / 3f - 1f); // 1-unit perpend, tight
                 if (x1 - x0 < 6f)
                     continue;
                 Stone(tool, x0, y0, -t / 2, x1, y1, t / 2, 0.86f + Jitter(c, s, 11, 0.10f));
             }
         }
-        Stone(tool, -half, height - 12f, -t / 2 - 5, half, height, t / 2 + 5, 0.80f); // string course
+        Stone(tool, -half + 2, height - 12f, -t / 2 - 5, half - 2, height, t / 2 + 5, 0.80f); // string, inset
+        return "";
+    });
+
+    /// <summary>
+    /// The panel of wall above a doorway's arch, sized to the gap EXACTLY.
+    ///
+    /// It used to be tiled from Module-wide bays, `ceil(width/Module)` of them —
+    /// so whenever the gap was not a clean multiple of the module the tiling
+    /// overspilled it and drove its stones through the wall bays either side,
+    /// which was the doorway z-fighting. This is one piece the width of the gap:
+    /// it abuts the wall bays rather than overlapping them, and its own facing
+    /// insets from the edge so the core alone caps the sides.
+    /// </summary>
+    private ArrayMesh Spandrel(float width, float height) => Piece($"spandrel_{width:0}x{height:0}", tool =>
+    {
+        var t = WallThick;
+        var half = width / 2f;
+        Stone(tool, -half, 0, -t / 2 + 3, half, height, t / 2 - 3, 0.58f);   // core owns the edges
+
+        var courses = Mathf.Max(1, Mathf.RoundToInt(height / 26f));
+        var per = Mathf.Max(1, Mathf.RoundToInt(width / 30f));               // ~30-wide blocks
+        var bw = width / per;
+        for (var c = 0; c < courses; c++)
+        {
+            var y0 = c * (height / courses);
+            var y1 = y0 + height / courses - 1f;
+            var offset = c % 2 == 0 ? 0f : bw / 2f;                          // running bond
+            for (var k = -1; k <= per; k++)
+            {
+                var x0 = Mathf.Max(-half + 1f, -half + k * bw + offset);
+                var x1 = Mathf.Min(half - 1f, x0 + bw - 1f);
+                if (x1 - x0 < 6f)
+                    continue;
+                Stone(tool, x0, y0, -t / 2, x1, y1, t / 2, 0.86f + Jitter(c, k, 11, 0.10f));
+            }
+        }
         return "";
     });
 
@@ -205,19 +311,21 @@ public sealed partial class CryptDesign
             var inner = radius + Jitter(i, 0, 21, 1.5f);
             var outer = inner + depth;
             var mid = (a0 + a1) / 2f;
-            var wide = radius * (a1 - a0) * 0.52f;
+            // 0.46, not 0.52: a straight box standing in for a curved wedge
+            // overlaps its neighbours near the inner radius when cut to touch, and
+            // those overlaps z-fight. Narrowing it leaves a thin joint between
+            // voussoirs — which is what mortar is — and they stop fighting.
+            var wide = radius * (a1 - a0) * 0.46f;
             var tone = 0.84f + Jitter(i, 1, 23, 0.09f);
-            var centre = new Vector3(-Mathf.Cos(mid) * (inner + outer) / 2f, Mathf.Sin(mid) * (inner + outer) / 2f, 0);
-            var basis = new Basis(new Vector3(0, 0, 1), mid);
-            var box = new[]
-            {
-                new Vector3(-wide, -(outer - inner) / 2f, -WallThick / 2f),
-                new Vector3(wide, (outer - inner) / 2f, WallThick / 2f),
-            };
-            // Rotate the wedge into place around Z, keeping it a stone rather
-            // than a segment of a smooth tube.
-            var lo = centre + basis * box[0];
-            var hi = centre + basis * box[1];
+            // Rotate the wedge into place around Z, keeping it a stone rather than
+            // a segment of a smooth tube — the Z-rotation of the box about the arc
+            // midpoint, in deterministic arithmetic (see Det.CosSin) not a Basis.
+            var (c, s) = Det.CosSin(mid);
+            var mr = (inner + outer) / 2f;
+            Vector3 P(double x, double y, double z) =>
+                new((float)(c * (x - mr) - s * y), (float)(s * (mr + x) + c * y), (float)z);
+            var lo = P(-wide, -(outer - inner) / 2f, -WallThick / 2f);
+            var hi = P(wide, (outer - inner) / 2f, WallThick / 2f);
             Stone(tool, lo.Min(hi), lo.Max(hi), tone);
         }
         return "";
@@ -291,17 +399,28 @@ public sealed partial class CryptDesign
     {
         const float half = Module / 2f;
         var t = DrystoneThick;
+
+        // A solid core, as under the ashlar — but set deeper, because drystone
+        // WANTS its voids: the gaps between slabs are the whole character of a
+        // mortarless wall. The core only stops them seeing clean through to the
+        // dark beyond; a void still falls ~20 to reach it, so it stays a deep
+        // self-shadowing hollow rather than becoming a flat painted seam.
+        Stone(tool, -half, 0, -8f, half, height, 8f, 0.50f);
+
         var courses = Mathf.Max(3, Mathf.RoundToInt(height / 34f));
         var y = 0f;
         for (var c = 0; c < courses && y < height - 6f; c++)
         {
             var courseHeight = Mathf.Min(height - y, 26f + Jitter(c, 0, 41, 7f));
             // Slabs of unequal length, so no two courses break in the same place.
-            var x = -half;
+            // Start a unit IN from the edge so the first slab's end face never
+            // lands on the core's edge and fights it there — the same end-cap
+            // z-fighting the ashlar had, and the core owns the bay edge here too.
+            var x = -half + 1f;
             var s = 0;
             while (x < half - 4f)
             {
-                var run = Mathf.Min(half - x, 22f + Hash(c, s, 43) * 26f);
+                var run = Mathf.Min(half - 1f - x, 22f + Hash(c, s, 43) * 26f);
                 var depth = t / 2f - Hash(c, s, 47) * 5f; // faces sit at slightly different depths
                 Stone(tool, x, y, -depth, x + run - 2.5f, y + courseHeight - 3f, depth,
                       0.72f + Jitter(c, s, 45, 0.13f));
@@ -339,10 +458,14 @@ public sealed partial class CryptDesign
         {
             var a = Mathf.Tau * i / stones;
             var wide = Mathf.Pi * radius / stones * 0.92f;
-            var centre = new Vector3(Mathf.Cos(a) * radius, 0, Mathf.Sin(a) * radius);
-            var basis = new Basis(Vector3.Up, -a);
-            var lo = centre + basis * new Vector3(-wide, 0, -22f);
-            var hi = centre + basis * new Vector3(wide, 20f, 22f);
+            // The stone is the Up-rotation (by -a) of the offset about the ring
+            // point (cos a * radius, 0, sin a * radius), done in deterministic
+            // arithmetic (see Det.CosSin) rather than a libm-backed Basis.
+            var (c, s) = Det.CosSin(a);
+            Vector3 P(double ox, double oy, double oz) =>
+                new((float)(c * (radius + ox) - s * oz), (float)oy, (float)(s * (radius + ox) + c * oz));
+            var lo = P(-wide, 0, -22f);
+            var hi = P(wide, 20f, 22f);
             Stone(tool, lo.Min(hi), lo.Max(hi), 0.74f + Jitter(i, 0, 61, 0.10f));
         }
         return "";
@@ -395,7 +518,11 @@ public sealed partial class CryptDesign
             Mesh = piece,
             MaterialOverride = material,
             Position = at,
-            Rotation = new Vector3(0, yaw, 0),
+            // Deterministic yaw (see Det): a piece placed at an arbitrary angle —
+            // the orthostat ring around the Wheel turns each stone by -a — is
+            // collision, so a libm Euler->Basis here would drift the baked soup
+            // across hosts. Every other yaw is cardinal and unaffected either way.
+            Basis = Det.EulerBasis(0f, yaw, 0f),
         };
         _placements++;
         return floor ? _scene.AddFloor(node) : _scene.AddStructure(node);
@@ -406,8 +533,18 @@ public sealed partial class CryptDesign
     /// around a doorway when one is given. Bays are laid on the module, so a
     /// longer wall is MORE stones rather than the same few stretched.
     /// </summary>
+    /// <param name="doorFloorY">
+    /// The floor height AT THE DOORWAY, when that differs from the wall's own
+    /// base. A descending corridor's walls are built from its LOWEST point so
+    /// they stand level along its length — but its head-height is measured from
+    /// the floor a raider is actually on, and a side door partway up the ramp is
+    /// 80 above that base. Left to the wall's base, the creepway's lintels landed
+    /// at −544 with the gallery floor at −560: a 16-unit gap, and the Cubiculum
+    /// unreachable. The gap in the masonry was correct the whole time; the thing
+    /// bridging it was at knee height.
+    /// </param>
     private void WallRun(Era era, float x0, float z0, float x1, float z1, float floorY, float height,
-                         float? doorAt = null, float doorWidth = 0f)
+                         float? doorAt = null, float doorWidth = 0f, float? doorFloorY = null)
     {
         var alongZ = Mathf.Abs(z1 - z0) > Mathf.Abs(x1 - x0);
         var length = alongZ ? z1 - z0 : x1 - x0;
@@ -433,15 +570,42 @@ public sealed partial class CryptDesign
 
             Place(Bay(era, height), new Vector3(x, floorY, z), yaw, Stone(era));
             solid.Add(along);
+            // Which way this bay's face looks. A wall run is a line, so the
+            // outward normal is whichever axis it does NOT run along; the sign
+            // is resolved later, against the centre of the space it belongs to.
+            _wallBays.Add((new Vector3(x, floorY, z),
+                           alongZ ? Vector3.Right : Vector3.Back, floorY, height, era));
         }
 
         Occlude(era, solid, alongZ, alongZ ? x0 : z0, floorY, height, Mathf.Sign(length));
 
         if (doorAt is not { } opening)
             return;
+
+        // The opening spans the whole gap the skipped bays left, NOT the nominal
+        // door width. A bay is skipped when it so much as TOUCHES the doorway, so
+        // a 120 door punches a 160-240 hole — and filling only 120 of it left
+        // full-height daylight either side of every arch. At the old 240 wall
+        // heights that read as a rough jamb; at 560-820 it reads as an arch
+        // floating in a hole, which is exactly what it was.
+        var span = doorWidth;
+        if (solid.Count > 0)
+        {
+            var before = float.NegativeInfinity;
+            var after = float.PositiveInfinity;
+            foreach (var edge in solid)
+            {
+                if (edge < opening && edge > before) before = edge;
+                if (edge > opening && edge < after) after = edge;
+            }
+            if (!float.IsInfinity(before) && !float.IsInfinity(after))
+                span = after - before - Module;
+        }
+        span = Mathf.Max(doorWidth, span);
+
         var ox = alongZ ? x0 : opening;
         var oz = alongZ ? opening : z0;
-        Opening(era, new Vector3(ox, floorY, oz), yaw, doorWidth, height);
+        Opening(era, new Vector3(ox, doorFloorY ?? floorY, oz), yaw, span, height);
     }
 
     /// <summary>
@@ -504,33 +668,77 @@ public sealed partial class CryptDesign
     /// which age built a wall: a voussoired arch, a drystone head stepping in on
     /// corbels, or a trilithon — two uprights and one lintel.
     /// </summary>
+    /// <summary>
+    /// The head of a doorway — an arch, a corbelled lintel, or a trilithon slab,
+    /// per era — hung HIGH ENOUGH THAT THE CAMERA NEVER DUCKS UNDER IT.
+    ///
+    /// A 4 m door head is right for a person and a third of what the chase rig
+    /// needs: at DoorHeadIII (96) every threshold in the realm crushed the camera
+    /// onto the raider's shoulder for the two strides it took to pass through.
+    /// Ceilings were raised for exactly this reason (PLAY-001) and the doorways
+    /// were left behind, so the realm went from being unreadable in rooms to
+    /// being unreadable in the gaps between them.
+    ///
+    /// The head is therefore lifted to clear <c>CameraFreeAt</c> — and where the
+    /// wall is too low to carry one that high, there is NO head at all. An
+    /// opening open to the wall-head is a perfectly good opening; an arch you
+    /// have to stoop through is not, however correct its voussoirs are.
+    /// </summary>
     private void Opening(Era era, Vector3 at, float yaw, float width, float wallHeight)
     {
         var material = Stone(era);
+        var turn = new Basis(Vector3.Up, yaw);
+
+        // What the head costs above its springing, per era: an arch rises by its
+        // own half-span, a lintel course by its three steps, a trilithon by the
+        // one slab across the top.
+        var crown = era switch
+        {
+            Era.Minster => width / 2f + 26f,
+            Era.Souterrain => 3f * 26f,
+            _ => 30f,
+        };
+
+        // Clear the camera if the wall can carry it. 40 of margin over
+        // CameraFreeAt, because the rig also holds CeilingClearance under
+        // whatever it finds and a threshold is the worst place to be tight.
+        var wanted = CameraFreeAt + 40f;
+        var highest = wallHeight - crown - 20f;
+        if (highest < wanted)
+        {
+            // No head fits above head height. Leave the opening open rather than
+            // hang stone in the one place a player has to walk through.
+            return;
+        }
+        var head = Mathf.Min(wanted, highest);
+
         switch (era)
         {
             case Era.Minster:
-                var head = DoorHeadIII;
                 Place(ArchRing(width, 22f), at + new Vector3(0, head, 0), yaw, material);
-                // The wall above the arch, carried on it.
-                Place(AshlarBay(Mathf.Max(20f, wallHeight - head - width / 2f)),
-                      at + new Vector3(0, head + width / 2f, 0), yaw, material);
+                // The wall above the arch, carried on it — ONE panel the width of
+                // the gap, abutting the wall bays rather than tiling past them.
+                var lift = head + width / 2f;
+                Place(Spandrel(width, Mathf.Max(20f, wallHeight - lift)),
+                      at + new Vector3(0, lift, 0), yaw, material);
                 break;
 
             case Era.Souterrain:
                 // Courses stepping in until the gap is short enough to lintel.
                 for (var c = 0; c < 3; c++)
-                    Place(Lintel(width + 24f - c * 12f), at + new Vector3(0, DoorHeadIII + c * 26f, 0),
+                    Place(Lintel(width + 24f - c * 12f), at + new Vector3(0, head + c * 26f, 0),
                           yaw, material);
                 break;
 
             default:
-                // A trilithon: uprights either side, one great stone across.
+                // A trilithon: uprights either side, one great stone across. The
+                // uprights are as tall as the head they carry, or the lintel
+                // floats above two stumps.
                 foreach (var side in new[] { -1f, 1f })
-                    Place(Orthostat(TrilithonHead, side > 0 ? 1 : 2),
-                          at + new Basis(Vector3.Up, yaw) * new Vector3(side * (width / 2f + Module / 2f), 0, 0),
+                    Place(Orthostat(head, side > 0 ? 1 : 2),
+                          at + turn * new Vector3(side * (width / 2f + Module / 2f), 0f, 0f),
                           yaw, material);
-                Place(Lintel(width + Module), at + new Vector3(0, TrilithonHead, 0), yaw, material);
+                Place(Lintel(width + Module), at + new Vector3(0, head, 0), yaw, material);
                 break;
         }
     }

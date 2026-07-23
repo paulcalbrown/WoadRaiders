@@ -102,7 +102,10 @@ public sealed partial class CryptDesign
     private void Ossuary_Burials()
     {
         var space = Named("B3");
-        var height = CeilPress - 30f;
+        // Banks stop well short of the raised ceiling: a wall of niches four
+        // tiers high is a society, and one stretched to nine metres is a
+        // filing cabinet. The room got taller; the burials did not.
+        var height = 210f;
 
         // The one important grave in a room full of anonymous ones. It stands on
         // the south wall at the room's centre, which is where the eye lands from
@@ -307,11 +310,15 @@ public sealed partial class CryptDesign
                 var inner = half;
                 var outer = half + 22f;
                 var wide = half * (a1 - a0) * 0.54f;
-                var centre = new Vector3(-Mathf.Cos(mid) * (inner + outer) / 2f,
-                                         spring + Mathf.Sin(mid) * (inner + outer) / 2f, 0f);
-                var basis = new Basis(new Vector3(0, 0, 1), mid);
-                var lo = centre + basis * new Vector3(-wide, -(outer - inner) / 2f, -t / 2f);
-                var hi = centre + basis * new Vector3(wide, (outer - inner) / 2f, t / 2f + 10f);
+                // Z-rotation of the wedge box about the arc midpoint, lifted to the
+                // springing — in deterministic arithmetic (see Det.CosSin), not a
+                // libm-backed Basis, so the mesh regenerates the same on any host.
+                var (c, s) = Det.CosSin(mid);
+                var mr = (inner + outer) / 2f;
+                Vector3 P(double x, double y, double z) =>
+                    new((float)(c * (x - mr) - s * y), (float)(spring + s * (mr + x) + c * y), (float)z);
+                var lo = P(-wide, -(outer - inner) / 2f, -t / 2f);
+                var hi = P(wide, (outer - inner) / 2f, t / 2f + 10f);
                 Stone(tool, lo.Min(hi), lo.Max(hi), 0.85f + Jitter(i, 3, 71, 0.08f));
             }
 
