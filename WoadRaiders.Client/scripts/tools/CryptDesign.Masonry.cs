@@ -319,8 +319,8 @@ public sealed partial class CryptDesign
             var tone = 0.84f + Jitter(i, 1, 23, 0.09f);
             // Rotate the wedge into place around Z, keeping it a stone rather than
             // a segment of a smooth tube — the Z-rotation of the box about the arc
-            // midpoint, in deterministic arithmetic (see CosSin) not a libm Basis.
-            var (c, s) = CosSin(mid);
+            // midpoint, in deterministic arithmetic (see Det.CosSin) not a Basis.
+            var (c, s) = Det.CosSin(mid);
             var mr = (inner + outer) / 2f;
             Vector3 P(double x, double y, double z) =>
                 new((float)(c * (x - mr) - s * y), (float)(s * (mr + x) + c * y), (float)z);
@@ -452,35 +452,6 @@ public sealed partial class CryptDesign
     /// <summary>One ring of a corbelled roof: flat stones stepping inward, each
     /// course oversailing the one below. No centring, no keystone — the Atlantic
     /// way of closing a space, and the reason there are no arches down here.</summary>
-    /// <summary>
-    /// Cross-platform-deterministic cosine and sine. Godot's <c>Mathf.Cos/Sin</c>
-    /// and <c>Basis</c> rotations call <c>System.MathF</c>, which delegates to the
-    /// platform libm and differs in the last ULP between Windows and Linux — enough
-    /// to change a generated mesh's bytes and fail the regenerate-and-diff CI. Plain
-    /// IEEE double arithmetic (+,-,*,/) is bit-identical across x64, so a polynomial
-    /// evaluated in double is stable on every machine. Accuracy is ~1e-6 over the
-    /// full circle: far under a millimetre at these radii, and the same everywhere,
-    /// which is the whole point. Used for every trig that reaches a committed vertex
-    /// (the corbel ring, the voussoired arches); placements serialise rounded and
-    /// are unaffected, so they keep Godot's own <c>Basis</c>.
-    /// </summary>
-    private static (double Cos, double Sin) CosSin(double angle)
-    {
-        const double HalfPi = 1.5707963267948966;
-        var q = Math.Round(angle / HalfPi);        // nearest quarter-turn (deterministic)
-        var r = angle - q * HalfPi;                // remainder in [-pi/4, pi/4]
-        var r2 = r * r;
-        var s = r * (1 - r2 * (1.0 / 6 - r2 * (1.0 / 120 - r2 / 5040)));
-        var c = 1 - r2 * (0.5 - r2 * (1.0 / 24 - r2 * (1.0 / 720 - r2 / 40320)));
-        return (((long)q % 4 + 4) % 4) switch
-        {
-            0 => (c, s),
-            1 => (-s, c),
-            2 => (-c, -s),
-            _ => (s, -c),
-        };
-    }
-
     private ArrayMesh CorbelRing(float radius, int stones) => Piece($"corbel_{radius:0}_{stones}", tool =>
     {
         for (var i = 0; i < stones; i++)
@@ -489,8 +460,8 @@ public sealed partial class CryptDesign
             var wide = Mathf.Pi * radius / stones * 0.92f;
             // The stone is the Up-rotation (by -a) of the offset about the ring
             // point (cos a * radius, 0, sin a * radius), done in deterministic
-            // arithmetic (see CosSin) rather than a libm-backed Basis.
-            var (c, s) = CosSin(a);
+            // arithmetic (see Det.CosSin) rather than a libm-backed Basis.
+            var (c, s) = Det.CosSin(a);
             Vector3 P(double ox, double oy, double oz) =>
                 new((float)(c * (radius + ox) - s * oz), (float)oy, (float)(s * (radius + ox) + c * oz));
             var lo = P(-wide, 0, -22f);
@@ -547,7 +518,11 @@ public sealed partial class CryptDesign
             Mesh = piece,
             MaterialOverride = material,
             Position = at,
-            Rotation = new Vector3(0, yaw, 0),
+            // Deterministic yaw (see Det): a piece placed at an arbitrary angle —
+            // the orthostat ring around the Wheel turns each stone by -a — is
+            // collision, so a libm Euler->Basis here would drift the baked soup
+            // across hosts. Every other yaw is cardinal and unaffected either way.
+            Basis = Det.EulerBasis(0f, yaw, 0f),
         };
         _placements++;
         return floor ? _scene.AddFloor(node) : _scene.AddStructure(node);

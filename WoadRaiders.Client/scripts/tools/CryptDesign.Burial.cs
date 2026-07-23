@@ -311,9 +311,9 @@ public sealed partial class CryptDesign
                 var outer = half + 22f;
                 var wide = half * (a1 - a0) * 0.54f;
                 // Z-rotation of the wedge box about the arc midpoint, lifted to the
-                // springing — in deterministic arithmetic (see CosSin), not a
+                // springing — in deterministic arithmetic (see Det.CosSin), not a
                 // libm-backed Basis, so the mesh regenerates the same on any host.
-                var (c, s) = CosSin(mid);
+                var (c, s) = Det.CosSin(mid);
                 var mr = (inner + outer) / 2f;
                 Vector3 P(double x, double y, double z) =>
                     new((float)(c * (x - mr) - s * y), (float)(spring + s * (mr + x) + c * y), (float)z);
