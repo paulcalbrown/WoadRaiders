@@ -310,11 +310,15 @@ public sealed partial class CryptDesign
                 var inner = half;
                 var outer = half + 22f;
                 var wide = half * (a1 - a0) * 0.54f;
-                var centre = new Vector3(-Mathf.Cos(mid) * (inner + outer) / 2f,
-                                         spring + Mathf.Sin(mid) * (inner + outer) / 2f, 0f);
-                var basis = new Basis(new Vector3(0, 0, 1), mid);
-                var lo = centre + basis * new Vector3(-wide, -(outer - inner) / 2f, -t / 2f);
-                var hi = centre + basis * new Vector3(wide, (outer - inner) / 2f, t / 2f + 10f);
+                // Z-rotation of the wedge box about the arc midpoint, lifted to the
+                // springing — in deterministic arithmetic (see CosSin), not a
+                // libm-backed Basis, so the mesh regenerates the same on any host.
+                var (c, s) = CosSin(mid);
+                var mr = (inner + outer) / 2f;
+                Vector3 P(double x, double y, double z) =>
+                    new((float)(c * (x - mr) - s * y), (float)(spring + s * (mr + x) + c * y), (float)z);
+                var lo = P(-wide, -(outer - inner) / 2f, -t / 2f);
+                var hi = P(wide, (outer - inner) / 2f, t / 2f + 10f);
                 Stone(tool, lo.Min(hi), lo.Max(hi), 0.85f + Jitter(i, 3, 71, 0.08f));
             }
 

@@ -317,17 +317,15 @@ public sealed partial class CryptDesign
             // voussoirs — which is what mortar is — and they stop fighting.
             var wide = radius * (a1 - a0) * 0.46f;
             var tone = 0.84f + Jitter(i, 1, 23, 0.09f);
-            var centre = new Vector3(-Mathf.Cos(mid) * (inner + outer) / 2f, Mathf.Sin(mid) * (inner + outer) / 2f, 0);
-            var basis = new Basis(new Vector3(0, 0, 1), mid);
-            var box = new[]
-            {
-                new Vector3(-wide, -(outer - inner) / 2f, -WallThick / 2f),
-                new Vector3(wide, (outer - inner) / 2f, WallThick / 2f),
-            };
-            // Rotate the wedge into place around Z, keeping it a stone rather
-            // than a segment of a smooth tube.
-            var lo = centre + basis * box[0];
-            var hi = centre + basis * box[1];
+            // Rotate the wedge into place around Z, keeping it a stone rather than
+            // a segment of a smooth tube — the Z-rotation of the box about the arc
+            // midpoint, in deterministic arithmetic (see CosSin) not a libm Basis.
+            var (c, s) = CosSin(mid);
+            var mr = (inner + outer) / 2f;
+            Vector3 P(double x, double y, double z) =>
+                new((float)(c * (x - mr) - s * y), (float)(s * (mr + x) + c * y), (float)z);
+            var lo = P(-wide, -(outer - inner) / 2f, -WallThick / 2f);
+            var hi = P(wide, (outer - inner) / 2f, WallThick / 2f);
             Stone(tool, lo.Min(hi), lo.Max(hi), tone);
         }
         return "";
@@ -454,16 +452,49 @@ public sealed partial class CryptDesign
     /// <summary>One ring of a corbelled roof: flat stones stepping inward, each
     /// course oversailing the one below. No centring, no keystone — the Atlantic
     /// way of closing a space, and the reason there are no arches down here.</summary>
+    /// <summary>
+    /// Cross-platform-deterministic cosine and sine. Godot's <c>Mathf.Cos/Sin</c>
+    /// and <c>Basis</c> rotations call <c>System.MathF</c>, which delegates to the
+    /// platform libm and differs in the last ULP between Windows and Linux — enough
+    /// to change a generated mesh's bytes and fail the regenerate-and-diff CI. Plain
+    /// IEEE double arithmetic (+,-,*,/) is bit-identical across x64, so a polynomial
+    /// evaluated in double is stable on every machine. Accuracy is ~1e-6 over the
+    /// full circle: far under a millimetre at these radii, and the same everywhere,
+    /// which is the whole point. Used for every trig that reaches a committed vertex
+    /// (the corbel ring, the voussoired arches); placements serialise rounded and
+    /// are unaffected, so they keep Godot's own <c>Basis</c>.
+    /// </summary>
+    private static (double Cos, double Sin) CosSin(double angle)
+    {
+        const double HalfPi = 1.5707963267948966;
+        var q = Math.Round(angle / HalfPi);        // nearest quarter-turn (deterministic)
+        var r = angle - q * HalfPi;                // remainder in [-pi/4, pi/4]
+        var r2 = r * r;
+        var s = r * (1 - r2 * (1.0 / 6 - r2 * (1.0 / 120 - r2 / 5040)));
+        var c = 1 - r2 * (0.5 - r2 * (1.0 / 24 - r2 * (1.0 / 720 - r2 / 40320)));
+        return (((long)q % 4 + 4) % 4) switch
+        {
+            0 => (c, s),
+            1 => (-s, c),
+            2 => (-c, -s),
+            _ => (s, -c),
+        };
+    }
+
     private ArrayMesh CorbelRing(float radius, int stones) => Piece($"corbel_{radius:0}_{stones}", tool =>
     {
         for (var i = 0; i < stones; i++)
         {
             var a = Mathf.Tau * i / stones;
             var wide = Mathf.Pi * radius / stones * 0.92f;
-            var centre = new Vector3(Mathf.Cos(a) * radius, 0, Mathf.Sin(a) * radius);
-            var basis = new Basis(Vector3.Up, -a);
-            var lo = centre + basis * new Vector3(-wide, 0, -22f);
-            var hi = centre + basis * new Vector3(wide, 20f, 22f);
+            // The stone is the Up-rotation (by -a) of the offset about the ring
+            // point (cos a * radius, 0, sin a * radius), done in deterministic
+            // arithmetic (see CosSin) rather than a libm-backed Basis.
+            var (c, s) = CosSin(a);
+            Vector3 P(double ox, double oy, double oz) =>
+                new((float)(c * (radius + ox) - s * oz), (float)oy, (float)(s * (radius + ox) + c * oz));
+            var lo = P(-wide, 0, -22f);
+            var hi = P(wide, 20f, 22f);
             Stone(tool, lo.Min(hi), lo.Max(hi), 0.74f + Jitter(i, 0, 61, 0.10f));
         }
         return "";
