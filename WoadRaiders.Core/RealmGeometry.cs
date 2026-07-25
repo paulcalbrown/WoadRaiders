@@ -39,7 +39,11 @@ public sealed class RealmGeometry : IRealmGeometry
     private const float CeilingReach = 4000f; // far enough to clear any realm's roof
     private const int MaxPathPolys = 256;
 
-    private readonly record struct AgentClass(float Radius, DtNavMeshQuery Query);
+    private readonly record struct AgentClass(float Radius, DtNavMeshQuery Query, BakedLink[] Links);
+
+    /// <summary>One baked off-mesh connection: A is the lip a scout stepped off,
+    /// B where it landed; two-way links (boardings) cross in either direction.</summary>
+    private readonly record struct BakedLink(Vector3 A, Vector3 B, bool Bidirectional);
 
     private readonly AgentClass[] _classes; // ascending by baked radius
     private readonly IDtQueryFilter _filter = new DtQueryDefaultFilter();
@@ -64,7 +68,7 @@ public sealed class RealmGeometry : IRealmGeometry
             throw new ArgumentException("a navmesh realm needs at least one baked agent class");
         _classes = meshes
             .OrderBy(m => m.radius)
-            .Select(m => new AgentClass(m.radius, new DtNavMeshQuery(m.mesh)))
+            .Select(m => new AgentClass(m.radius, new DtNavMeshQuery(m.mesh), ExtractLinks(m.mesh)))
             .ToArray();
         _soup = soup;
         SpawnPoint = spawnPoint;
@@ -229,6 +233,65 @@ public sealed class RealmGeometry : IRealmGeometry
         return true;
     }
 
+    /// <summary>
+    /// The link a mover pushing over a rim would board: the nearest endpoint
+    /// within LinkBoardRadius at the mover's own floor level whose crossing
+    /// continues the push. One-way links (drops) board only at their lip;
+    /// two-way links (boardings) at either end. The returned code encodes the
+    /// orientation — (index << 1) | reversed — so it alone names the crossing.
+    /// </summary>
+    public int FindLink(Vector3 position, Vector3 desiredDir, float radius = SimConstants.CharacterRadius)
+    {
+        var links = LinksFor(radius);
+        var len = MathF.Sqrt(desiredDir.X * desiredDir.X + desiredDir.Z * desiredDir.Z);
+        if (len < 1e-6f)
+            return -1;
+        var dx = desiredDir.X / len;
+        var dz = desiredDir.Z / len;
+
+        var best = -1;
+        var bestSq = SimConstants.LinkBoardRadius * SimConstants.LinkBoardRadius;
+        for (var i = 0; i < links.Length; i++)
+        {
+            Consider(links[i].A, links[i].B, i << 1);
+            if (links[i].Bidirectional)
+                Consider(links[i].B, links[i].A, (i << 1) | 1);
+        }
+        return best;
+
+        void Consider(Vector3 from, Vector3 to, int code)
+        {
+            if (MathF.Abs(from.Y - position.Y) > SimConstants.LinkBoardHeadroom)
+                return; // some other floor's rim
+            var ex = from.X - position.X;
+            var ez = from.Z - position.Z;
+            var d2 = ex * ex + ez * ez;
+            if (d2 >= bestSq)
+                return;
+            if ((to.X - from.X) * dx + (to.Z - from.Z) * dz <= 0f)
+                return; // the crossing heads back the way the mover came
+            best = code;
+            bestSq = d2;
+        }
+    }
+
+    public bool TryGetLink(int code, out Vector3 from, out Vector3 to, float radius = SimConstants.CharacterRadius)
+    {
+        from = default;
+        to = default;
+        var links = LinksFor(radius);
+        var index = code >> 1;
+        if (code < 0 || index >= links.Length)
+            return false;
+        var link = links[index];
+        var reversed = (code & 1) != 0;
+        if (reversed && !link.Bidirectional)
+            return false;
+        from = reversed ? link.B : link.A;
+        to = reversed ? link.A : link.B;
+        return true;
+    }
+
     public bool HasLineOfSight(Vector3 from, Vector3 to) => !_soup.SegmentHits(from, to);
 
     /// <summary>
@@ -282,6 +345,37 @@ public sealed class RealmGeometry : IRealmGeometry
             if (c.Radius >= radius - 0.01f)
                 return c.Query;
         return _classes[^1].Query;
+    }
+
+    /// <summary>The same class dispatch as <see cref="QueryFor"/>, for the link table.</summary>
+    private BakedLink[] LinksFor(float radius)
+    {
+        foreach (var c in _classes)
+            if (c.Radius >= radius - 0.01f)
+                return c.Links;
+        return _classes[^1].Links;
+    }
+
+    /// <summary>
+    /// The baked off-mesh connections, read out in tile order — identical on
+    /// every peer holding the same bytes, so an index here is a wire-stable
+    /// link identity. pos[0]/pos[1] are the scout's lip and landing from the
+    /// bake (the landing already refined onto exact ground).
+    /// </summary>
+    private static BakedLink[] ExtractLinks(DtNavMesh mesh)
+    {
+        var links = new List<BakedLink>();
+        for (var i = 0; i < mesh.GetMaxTiles(); i++)
+        {
+            if (mesh.GetTile(i)?.data?.offMeshCons is not { } cons)
+                continue;
+            foreach (var con in cons)
+                links.Add(new BakedLink(
+                    new Vector3(con.pos[0].X, con.pos[0].Y, con.pos[0].Z),
+                    new Vector3(con.pos[1].X, con.pos[1].Y, con.pos[1].Z),
+                    (con.flags & 1) != 0)); // bit 0 = DT_OFFMESH_CON_BIDIR
+        }
+        return links.ToArray();
     }
 
     private bool TrySnap(DtNavMeshQuery query, Vector3 position, out long polyRef, out RcVec3f onMesh)

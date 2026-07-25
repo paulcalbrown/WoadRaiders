@@ -261,6 +261,17 @@ public struct PlayerSnapshot : INetSerializable
     public float AttackAnim;
     public float AttackCooldown;
 
+    // The baked-link crossing (falling off a rim / boarding a deck), restored on
+    // reconcile like the timers above — a crossing roots the player, so replaying
+    // inputs without it drifts. Link is the oriented code from
+    // IRealmGeometry.FindLink (NoLink when grounded); both peers re-derive the
+    // endpoints from the same baked bytes, so the pair is the whole state.
+    public ushort TraversalLink;
+    public ushort TraversalTick;
+
+    /// <summary>The <see cref="TraversalLink"/> value meaning "not crossing".</summary>
+    public const ushort NoLink = ushort.MaxValue;
+
     public byte Class; // CharacterClass — picks the model and attack clip
 
     public void Serialize(NetDataWriter w)
@@ -275,6 +286,8 @@ public struct PlayerSnapshot : INetSerializable
         w.Put((byte)(Attacking ? 1 : 0));
         w.Put(AttackAnim);
         w.Put(AttackCooldown);
+        w.Put(TraversalLink);
+        w.Put(TraversalTick);
         w.Put(Class);
     }
 
@@ -290,6 +303,8 @@ public struct PlayerSnapshot : INetSerializable
         Attacking = r.GetByte() != 0;
         AttackAnim = r.GetFloat();
         AttackCooldown = r.GetFloat();
+        TraversalLink = r.GetUShort();
+        TraversalTick = r.GetUShort();
         Class = r.GetByte();
     }
 }

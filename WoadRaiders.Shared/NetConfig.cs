@@ -100,7 +100,11 @@ public static class NetConfig
     ///        and at brotli Optimal rather than SmallestSize. The wire format is
     ///        unchanged and a v21 client would read a v22 payload perfectly —
     ///        the key moves only because a release is a key here.
-    public const string ConnectionKey = "WoadRaiders.v22";
+    /// v23 = PlayerSnapshot baked-link traversal (TraversalLink/TraversalTick):
+    ///        the falling/boarding crossing state, restored on reconcile like
+    ///        the attack timers. Groundwork for navmesh-only movement — links
+    ///        become the one legal way off a walkable surface.
+    public const string ConnectionKey = "WoadRaiders.v23";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";
