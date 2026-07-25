@@ -91,13 +91,50 @@ public class RealmGeometryTests
     }
 
     [Fact]
-    public void A_walker_gets_down_a_face_the_bake_calls_unwalkable()
+    public void A_short_steep_face_descends_by_link()
     {
-        // 75° is far past the navmesh's 67.8° limit, so the mesh ends at the
-        // lip and the sim's own fallbacks have to carry the walker down. This
-        // pins the OUTCOME — a steep face is a way down, not a trap — rather
-        // than which fallback does it; unify the wall threshold with the
-        // bake's slope limit and the walker stalls at the lip forever.
+        // 80° is far past the navmesh's 67.8° limit, so the mesh ends at the
+        // lip — but a face this short is one the sim's physical rules ride
+        // down whole, so the bake's scout finishes the descent and earns a
+        // drop link. Movement is navmesh-only: the walk stalls at the lip and
+        // the stall is a crossing, not a trap. The OUTCOME pinned is the same
+        // as it always was — a steep face is a way down — only the mechanism
+        // moved from Move's hatches to a baked link.
+        var rise = 60f;
+        var run = rise / MathF.Tan(80f * MathF.PI / 180f);
+        var soup = new SoupBuilder()
+            .AddBox(new Aabb(new Vector3(-400, -20, 0), new Vector3(0, 0, 400)))          // floor below
+            .AddQuad(new Vector3(0, 0, 0), new Vector3(run, rise, 0),
+                     new Vector3(run, rise, 400), new Vector3(0, 0, 400))                 // the face
+            .AddBox(new Aabb(new Vector3(run, rise - 20, 0), new Vector3(run + 400, rise, 400))) // plateau above
+            .Build();
+        var geo = new RealmGeometry(NavMeshBuilder.Build(soup), soup, new Vector3(200, rise, 200));
+
+        var pos = new Vector3(200, rise, 200);
+        for (var i = 0; i < 40; i++)
+            pos = geo.Move(pos, new Vector3(-TickStep, 0, 0));
+        Assert.True(pos.Y > rise - 5f,
+            $"the mesh-only walk should stall on the plateau's lip, got ({pos.X:0},{pos.Y:0})");
+
+        // The push that stalled boards a baked link that lands at the foot.
+        var code = geo.FindLink(pos, new Vector3(-1, 0, 0));
+        Assert.True(code >= 0, "no drop link down the face — a descendable grade became a trap");
+        Assert.True(geo.TryGetLink(code, out _, out var to));
+        Assert.True(to.Y < 5f, $"the crossing should land on the floor below, got Y={to.Y:0}");
+        Assert.True(to.X < 0f, $"the landing should sit out on the low floor's mesh, got X={to.X:0}");
+    }
+
+    [Fact]
+    public void A_face_too_tall_to_ride_is_a_clean_wall_not_a_freeze()
+    {
+        // Under the old physics this 1100-unit 75° face was the live
+        // stuck-player bug: floor-riding carried a walker over the lip and
+        // partway down, where the mesh fell out of snap reach and Move
+        // refused every input FOREVER — frozen mid-face. The bake's scout
+        // runs the same physics, cannot finish the ride either, and earns no
+        // link; navmesh-only movement then makes the honest call: the face
+        // is a wall. The walker never leaves the mesh, never half-descends,
+        // and can always walk away.
         var rise = 300f * MathF.Tan(75f * MathF.PI / 180f);
         var soup = new SoupBuilder()
             .AddBox(new Aabb(new Vector3(-400, -20, 0), new Vector3(0, 0, 400)))        // floor below
@@ -108,22 +145,18 @@ public class RealmGeometryTests
         var geo = new RealmGeometry(NavMeshBuilder.Build(soup), soup, new Vector3(500, rise, 200));
 
         var pos = new Vector3(500, rise, 200);
-        for (var i = 0; i < 200; i++)
+        for (var i = 0; i < 60; i++)
             pos = geo.Move(pos, new Vector3(-TickStep, 0, 0));
 
-        Assert.True(pos.X < 300f, $"the walker never left the plateau — the face read as a wall (X={pos.X})");
-        Assert.True(pos.Y < rise - 50f, $"the face should have taken height off the walker, got Y={pos.Y} of {rise:0}");
-
-        // Where it STOPS is a separate limit, and a real one: Move snaps to the
-        // navmesh before doing anything, so a walker who lands beyond the snap
-        // extents of any polygon has no legal move left and stands there. A
-        // face longer than that reach is therefore a one-way shelf, not a
-        // slide to the bottom. Both shipping realms avoid it by construction —
-        // their drops land back on mesh — but a designer tilting a long deck
-        // would meet it, so it is pinned here rather than left as folklore.
-        Assert.True(pos.X > 0f,
-            $"unexpected: the walker rode the whole face to the floor (X={pos.X}). If Move learned to " +
-            "carry a mover across off-mesh ground, this test should become the stronger assertion.");
+        // Stalled ON the plateau, at height — no limbo partway down.
+        Assert.True(pos.X > 300f && pos.Y > rise - 5f,
+            $"the walk must hold the plateau, got ({pos.X:0},{pos.Y:0})");
+        // No link: the scout could not finish this descent, so nobody may start it.
+        Assert.Equal(-1, geo.FindLink(pos, new Vector3(-1, 0, 0)));
+        // And the walker is FREE — walking away works. That freedom is the
+        // whole point of the rework; the old physics froze here.
+        var back = geo.Move(pos, new Vector3(TickStep, 0, 0));
+        Assert.True(back.X > pos.X + TickStep * 0.5f, "the walker must be free to leave the lip");
     }
 
     private static float RampHeight(float x) => x <= 200f ? 0f : (x - 200f) * 0.25f;
@@ -218,23 +251,34 @@ public class RealmGeometryTests
         for (var i = 0; i < 60; i++)
             pos = geo.Move(pos, new Vector3(TickStep, 0, 0));
 
-        // Floor-riding carries feet to the very toe of the face; the 300-unit
-        // rise is a wall. Nobody climbs, nobody teleports past.
+        // The 300-unit rise is a wall: the walk stalls where the floor's mesh
+        // ends (an eroded radius before the toe). Nobody climbs, and there is
+        // no upward link to board — drops never reverse.
         Assert.InRange(pos.X, 150f, 205f);
         Assert.True(pos.Y < 5f, $"nobody walks up a sheer face, got Y={pos.Y}");
+        Assert.Equal(-1, geo.FindLink(pos, new Vector3(1, 0, 0)));
     }
 
     [Fact]
-    public void A_ledge_drop_is_still_allowed()
+    public void A_ledge_drop_crosses_a_baked_link()
     {
         var geo = Geo(Cliff());
 
-        // Leaping off the plateau: the mesh has no edge down the face, but
-        // drops of any size are legal — the transfer lands under the target.
-        var fall = geo.Move(new Vector3(310, 300, 200), new Vector3(-160, 0, 0));
-        Assert.Equal(150f, fall.X, 0);
-        Assert.Equal(200f, fall.Z, 0);
-        Assert.InRange(fall.Y, -1f, 1f);
+        // Leaping off the plateau: movement is navmesh-only, so the push
+        // itself stalls at the rim — Move never leaves the mesh...
+        var stalled = geo.Move(new Vector3(310, 300, 200), new Vector3(-160, 0, 0));
+        Assert.True(stalled.X > 205f, $"the mesh-only move must not leave the plateau, got X={stalled.X:0}");
+        Assert.InRange(stalled.Y, 295f, 305f);
+
+        // ...and boards the drop link the rim scout earned. The landing sits
+        // ON the low floor's mesh, nudged out of the eroded band at the
+        // cliff's base — a landing IN the band would strand a mesh-only
+        // mover the moment it set down.
+        var code = geo.FindLink(stalled, new Vector3(-1, 0, 0));
+        Assert.True(code >= 0, "no drop link off the plateau rim");
+        Assert.True(geo.TryGetLink(code, out _, out var to));
+        Assert.InRange(to.Y, -1f, 1f);
+        Assert.True(to.X <= 185.5f, $"the landing must sit on the floor's mesh, got X={to.X:0}");
     }
 
     [Fact]
@@ -471,7 +515,9 @@ public class RealmGeometryTests
             $"the crypt descends — boss Y={pos.Y} should sit well under the door Y={realm.SpawnPoint.Y}");
     }
 
-    /// <summary>Steer waypoint to waypoint through Move, the way an AI follower would.</summary>
+    /// <summary>Steer waypoint to waypoint through Move, the way a follower
+    /// would: mesh-only steps, and where a step stalls at a rim the route
+    /// planned through, board the baked link and set down at its end.</summary>
     private static Vector3 WalkPath(RealmGeometry geo, Vector3 start,
                                     System.Collections.Generic.IReadOnlyList<Vector3> waypoints,
                                     int maxTicks, float radius = SimConstants.CharacterRadius)
@@ -487,7 +533,18 @@ public class RealmGeometryTests
                 next++;
                 continue;
             }
-            pos = geo.Move(pos, Vector3.Normalize(toWp) * TickStep, radius);
+            var dir = Vector3.Normalize(toWp);
+            var moved = geo.Move(pos, dir * TickStep, radius);
+            if ((moved - pos).LengthSquared() < 0.01f)
+            {
+                var code = geo.FindLink(pos, dir, radius);
+                if (code >= 0 && geo.TryGetLink(code, out _, out var landing, radius))
+                {
+                    pos = landing;
+                    continue;
+                }
+            }
+            pos = moved;
         }
         return pos;
     }
