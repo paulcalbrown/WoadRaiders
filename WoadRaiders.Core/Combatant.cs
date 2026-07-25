@@ -29,6 +29,17 @@ public abstract class Combatant
     /// <summary>True while the attack animation should be playing.</summary>
     public bool IsAttacking => AttackAnimRemaining > 0f;
 
+    /// <summary>
+    /// The baked-link crossing in progress (falling off a rim, boarding a
+    /// deck), or <see cref="LinkTraversal.None"/>. While active the mover is
+    /// rooted: the arc owns the position and attacks cannot fire. Players
+    /// broadcast it as (Code, Tick) so the local client restores it when
+    /// reconciling (see ClientPrediction.Reconcile); enemies cross
+    /// server-side only — their snapshots carry positions, so remotes simply
+    /// watch the arc happen.
+    /// </summary>
+    public LinkTraversal Link = LinkTraversal.None;
+
     /// <summary>True when the attack cooldown has elapsed, so a swing may fire this tick.</summary>
     public bool AttackReady => AttackCooldown <= 0f;
 

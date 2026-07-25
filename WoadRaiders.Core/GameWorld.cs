@@ -285,18 +285,18 @@ public sealed class GameWorld
 
     /// <summary>One tick of a link crossing; the landing tick sets down on the
     /// scout's rest position (already exact ground) and clears the state.</summary>
-    private static void AdvanceLink(PlayerState player)
+    private static void AdvanceLink(Combatant mover)
     {
-        var link = player.Link;
+        var link = mover.Link;
         link.Tick++;
         if (link.Tick >= link.TotalTicks)
         {
-            player.Position = link.To;
-            player.Link = LinkTraversal.None;
+            mover.Position = link.To;
+            mover.Link = LinkTraversal.None;
             return;
         }
-        player.Position = link.PositionAt(link.Tick);
-        player.Link = link;
+        mover.Position = link.PositionAt(link.Tick);
+        mover.Link = link;
     }
 
     private void ResolvePlayerAttacks()
@@ -362,6 +362,16 @@ public sealed class GameWorld
         {
             if (!enemy.IsAlive)
                 continue;
+
+            // Mid-crossing on a baked link: the arc owns the position — no
+            // aggro thinking, no attacks, until it lands. The same root the
+            // players get, for the same reason: there is no footing mid-fall.
+            if (enemy.Link.Active)
+            {
+                enemy.Velocity = Vector3.Zero;
+                AdvanceLink(enemy);
+                continue;
+            }
 
             var arch = EnemyArchetypes.Of(enemy.Type);
             var target = NearestAlivePlayer(enemy.Position);
@@ -488,10 +498,25 @@ public sealed class GameWorld
             enemy.Velocity = Vector3.Zero;
             return;
         }
-        enemy.Velocity = toGoal / distance * arch.MoveSpeed;
+        var direction = toGoal / distance;
+        enemy.Velocity = direction * arch.MoveSpeed;
         var next = ResolveMove(enemy.Position, enemy.Velocity * dt, arch.Radius);
         if (Vector3.DistanceSquared(next, enemy.Position) < 0.01f)
-            enemy.Route.Clear(); // stalled — the route is stale; plan afresh when the cooldown allows
+        {
+            // Stalled at a rim the route planned through? The planner walks
+            // the link graph, so a crossing is usually WHY the waypoint sits
+            // across a disconnect — board the link (this mover's own width's
+            // table) and keep the route for the far side.
+            var code = Geometry?.FindLink(enemy.Position, direction, arch.Radius) ?? -1;
+            if (code >= 0 && Geometry!.TryGetLink(code, out var from, out var to, arch.Radius))
+            {
+                enemy.Link = LinkTraversal.Begin(code, from, to);
+                enemy.Position = from;
+                enemy.Velocity = Vector3.Zero;
+                return;
+            }
+            enemy.Route.Clear(); // stalled at a plain wall — the route is stale; replan when the cooldown allows
+        }
         enemy.Position = next;
     }
 
