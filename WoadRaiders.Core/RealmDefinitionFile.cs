@@ -21,8 +21,12 @@ namespace WoadRaiders.Core;
 ///   "enemySpawnTypes": [ 0, 1, 2, ... ],         (optional — parallel to enemySpawns;
 ///                                                 EnemyType values, missing → all Minion)
 ///   "bossSpawn": [x, y, z],                      (optional — the map's boss)
-///   "portalSpawn": [x, y, z]                     (optional — where the exit portal opens;
+///   "portalSpawn": [x, y, z],                    (optional — where the exit portal opens;
 ///                                                 absent → wherever the boss stood)
+///   "stairs": [ [fx,fy,fz, hx,hy,hz], ... ]      (optional — declared walkable flights,
+///                                                 foot then head; the validator walks each
+///                                                 both ways and fails a flight that stalls
+///                                                 or rides a baked link)
 /// }
 /// </summary>
 public static class RealmDefinitionFile
@@ -65,11 +69,20 @@ public static class RealmDefinitionFile
             spawns.Add(new EnemySpawnPoint(ToVec(positions[i], "enemySpawn"), (EnemyType)raw));
         }
 
+        var stairs = new List<StairRun>();
+        foreach (var run in doc.Stairs ?? Array.Empty<float[]>())
+        {
+            if (run is not { Length: 6 })
+                throw new InvalidDataException("'stairs' entries must be [fx,fy,fz, hx,hy,hz] arrays");
+            stairs.Add(new StairRun(new Vector3(run[0], run[1], run[2]), new Vector3(run[3], run[4], run[5])));
+        }
+
         return new RealmDefinition(ToVec(doc.Spawn, "spawn"), ParseSoup(doc.Soup), spawns)
         {
             ScenePath = string.IsNullOrWhiteSpace(doc.Scene) ? null : doc.Scene,
             BossSpawn = doc.BossSpawn is null ? null : ToVec(doc.BossSpawn, "bossSpawn"),
             PortalSpawn = doc.PortalSpawn is null ? null : ToVec(doc.PortalSpawn, "portalSpawn"),
+            Stairs = stairs,
         };
     }
 
@@ -102,6 +115,9 @@ public static class RealmDefinitionFile
             EnemySpawnTypes = g.EnemySpawns.Select(s => (int)s.Type).ToArray(),
             BossSpawn = g.BossSpawn is { } b ? new[] { b.X, b.Y, b.Z } : null,
             PortalSpawn = g.PortalSpawn is { } p ? new[] { p.X, p.Y, p.Z } : null,
+            Stairs = g.Stairs.Count > 0
+                ? g.Stairs.Select(s => new[] { s.Foot.X, s.Foot.Y, s.Foot.Z, s.Head.X, s.Head.Y, s.Head.Z }).ToArray()
+                : null,
         };
         return JsonSerializer.Serialize(doc, Options);
     }
@@ -120,6 +136,7 @@ public static class RealmDefinitionFile
         public int[]? EnemySpawnTypes { get; set; }
         public float[]? BossSpawn { get; set; }
         public float[]? PortalSpawn { get; set; }
+        public float[][]? Stairs { get; set; }
     }
 
     private sealed class SoupDoc

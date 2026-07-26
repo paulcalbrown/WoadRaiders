@@ -102,6 +102,48 @@ public class RealmValidatorTests
     }
 
     [Fact]
+    public void A_declared_flight_that_walks_passes()
+    {
+        // A gentle ramp joins two floors; the declared flight walks both ways
+        // on plain mesh, so the realm is sound.
+        var soup = new SoupBuilder()
+            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(300, 0, 400)))
+            .AddQuad(new Vector3(300, 0, 0), new Vector3(500, 50, 0),
+                     new Vector3(500, 50, 400), new Vector3(300, 0, 400))
+            .AddBox(new Aabb(new Vector3(500, 30, 0), new Vector3(800, 50, 400)))
+            .Build();
+        var realm = new RealmDefinition(new Vector3(100, 0, 200), soup, Array.Empty<EnemySpawnPoint>())
+        {
+            BossSpawn = new Vector3(700, 50, 200),
+            Stairs = new[] { new StairRun(new Vector3(250, 0, 200), new Vector3(550, 50, 200)) },
+        };
+
+        Assert.Empty(RealmValidator.Validate(realm));
+    }
+
+    [Fact]
+    public void A_flight_that_stalls_or_rides_a_link_fails()
+    {
+        // The Cliff shape: a declared "flight" up a sheer 300 face. Climbing
+        // stalls at the wall; descending boards the rim's baked drop link.
+        // Both are exactly what the walk check exists to catch — no
+        // reachability proof can see either.
+        var soup = new SoupBuilder()
+            .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(200, 0, 400)))
+            .AddBox(new Aabb(new Vector3(200, -20, 0), new Vector3(400, 300, 400)))
+            .Build();
+        var realm = new RealmDefinition(new Vector3(300, 300, 200), soup, Array.Empty<EnemySpawnPoint>())
+        {
+            BossSpawn = new Vector3(350, 300, 200), // beside the spawn: the realm is otherwise sound
+            Stairs = new[] { new StairRun(new Vector3(100, 0, 200), new Vector3(280, 300, 200)) },
+        };
+
+        var issues = RealmValidator.Validate(realm);
+        Assert.Contains(issues, i => i.Contains("flight 0 climbing") && i.Contains("stalls"));
+        Assert.Contains(issues, i => i.Contains("flight 0 descending") && i.Contains("rides a baked link"));
+    }
+
+    [Fact]
     public void A_soupless_or_bossless_map_fails_outright()
     {
         var flat = new SoupBuilder()

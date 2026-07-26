@@ -227,6 +227,25 @@ public sealed class RealmScene
         return Attach(new Marker3D { Position = position }, "PortalSpawn");
     }
 
+    /// <summary>
+    /// Declare a walkable flight between two points — a PROMISE the bake will
+    /// hold the realm to: RealmValidator walks the run both ways through the
+    /// real simulation and fails the build if it stalls or rides a baked link.
+    /// The stair builders call this themselves; declare by hand any climb a
+    /// realm's fiction depends on that no builder produced. (The Fault's east
+    /// flight shipped sealed behind a parapet — reachability proofs cannot see
+    /// a stair that only descends, so every declared one gets a climb test.)
+    /// </summary>
+    public void AddStair(Vector3 oneEnd, Vector3 otherEnd)
+    {
+        var (foot, head) = oneEnd.Y <= otherEnd.Y ? (oneEnd, otherEnd) : (otherEnd, oneEnd);
+        Attach(new Marker3D { Position = foot }, $"Stair{StairCount}_Foot");
+        Attach(new Marker3D { Position = head }, $"Stair{StairCount}_Head");
+        StairCount++;
+    }
+
+    public int StairCount { get; private set; }
+
     // ------------------------------------------------------- the mesh library
 
     /// <summary>Where a realm's sculpted pieces are written, beside its scene.</summary>

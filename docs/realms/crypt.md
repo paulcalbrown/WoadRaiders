@@ -239,7 +239,11 @@ East Landing — so a fall from either end of the Span is a short detour, not a
 trudge. Neither flight may cut diagonally across the pit floor. `REALM-C-014`;
 v1 shipped exactly that defect, and the dead corner it pinned against the stone
 was only found once the kit props made it reachable.
-`[checked: RealmValidator stranding sweep]`
+`[checked: RealmValidator flight walks — every Stair() and descending Corridor()
+declares itself (StairN_Foot/_Head markers → the json's "stairs"), and the
+validator walks each BOTH ways through the real sim: a flight that stalls or
+rides a baked link fails the bake. Added after D7: no reachability proof can
+see a stair that only descends.]`
 
 ### SPACE-008 — the boss is seen before he can be fought
 The Crypt shall give the Forecourt (`B8`) a clear sight line through the

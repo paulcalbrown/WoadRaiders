@@ -87,7 +87,12 @@ The hand-made pipeline (any scene in `WoadRaiders.Client/maps/`):
      it excluded every run. `RealmScene.Passable(node)` is the design-side
      call; the Crypt wraps its whole Relics folder in it.
      Markers: `PlayerSpawn` (required), `EnemySpawnN[_Rogue|_Mage]`,
-     `BossSpawn`. `no_fade` is a render hint for the occlusion fader only.
+     `BossSpawn`, and `StairN_Foot`/`StairN_Head` pairs declaring walkable
+     flights — the validator walks each declared flight BOTH ways through the
+     real sim and fails a stair that stalls or rides a baked link (regular
+     traversal must be mesh-walkable; only a climb test can see a sealed
+     mouth). The design's Stair()/descending-Corridor() builders declare
+     theirs automatically. `no_fade` is a render hint for the occlusion fader only.
   2. Bake to server geometry: `dotnet build WoadRaiders.Client`, then
      `godot-mono --headless --path WoadRaiders.Client -s
      res://tools/bake_realm.gd -- res://maps/MyRealm.tscn

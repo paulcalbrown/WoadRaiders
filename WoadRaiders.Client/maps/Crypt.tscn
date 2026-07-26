@@ -15423,6 +15423,54 @@ occluder = SubResource("BoxOccluder3D_67")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3520, -760, 4000)
 occluder = SubResource("BoxOccluder3D_68")
 
+[node name="Stair0_Foot" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3600, -160, 2200)
+
+[node name="Stair0_Head" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3040, 0, 2200)
+
+[node name="Stair1_Foot" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5600, -400, 1360)
+
+[node name="Stair1_Head" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5600, -160, 1920)
+
+[node name="Stair2_Foot" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5760, -880, 2800)
+
+[node name="Stair2_Head" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5760, -400, 1440)
+
+[node name="Stair3_Foot" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6980, -880, 2600)
+
+[node name="Stair3_Head" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6980, -400, 1300)
+
+[node name="Stair4_Foot" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7120, -560, 2880)
+
+[node name="Stair4_Head" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7120, -400, 2320)
+
+[node name="Stair5_Foot" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4880, -640, 3600)
+
+[node name="Stair5_Head" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5920, -560, 3600)
+
+[node name="Stair6_Foot" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4720, -720, 3200)
+
+[node name="Stair6_Head" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4960, -560, 3200)
+
+[node name="Stair7_Foot" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3520, -880, 3280)
+
+[node name="Stair7_Head" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4160, -720, 3280)
+
 [node name="Monuments" type="Node3D" parent="."]
 
 [node name="Hero0" type="Node3D" parent="Monuments" instance=ExtResource("PackedScene_ext1")]
