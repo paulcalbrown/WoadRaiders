@@ -567,6 +567,32 @@ public class RealmGeometryTests
             Assert.True(peak <= -880f + SimConstants.StepHeight + 1f,
                 $"push ({push.X:0.#},{push.Z:0.#}) from beside the flight hoisted the mover to Y={peak:0}");
         }
+
+        // Descending with slow, camera-drifted input (the third live report:
+        // a careful walk down, 60° off the stair axis) must never board a
+        // plunge — the conviction and commitment gates make grazes slide
+        // along the rim instead of falling through the flight.
+        foreach (var (speed, driftDeg) in new[] { (0.2f, -60f), (1f, -45f) })
+        {
+            var world = new GameWorld { Geometry = nav };
+            var player = world.AddPlayer(1, "descender");
+            // On the flight itself, just below its mouth — starting on the
+            // deck instead sends a drifted push across the open west rim,
+            // which is a genuine walk-off, not a stair descent.
+            var start = new Vector3(6980, 0, 1400);
+            player.Position = start with { Y = nav.GroundHeight(start with { Y = -390f }) };
+            var a = driftDeg * MathF.PI / 180f;
+            var push = new Vector3(MathF.Sin(a), 0, MathF.Cos(a)) * speed;
+            uint seq = 0;
+            for (var t = 0; t < 30 * 30; t++)
+            {
+                var before = player.Position.Y;
+                world.SetInput(1, new PlayerInput { MoveX = push.X, MoveZ = push.Z, Sequence = ++seq });
+                world.Step();
+                Assert.False(player.Link.Active && player.Link.To.Y < before - 40f,
+                    $"speed {speed} drift {driftDeg}: the descent boarded a plunge at Y={before:0}");
+            }
+        }
     }
 
     /// <summary>Steer waypoint to waypoint through Move, the way a follower

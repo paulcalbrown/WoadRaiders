@@ -257,10 +257,11 @@ public sealed class GameWorld
             var next = ResolveMove(player.Position, delta);
 
             // Clamped short of the intent? A baked link may carry this push
-            // over the rim. (Move's own drop handling still runs first, so
-            // links only catch what it refused — the flip to navmesh-only
-            // movement makes them the one way off a surface.)
-            if (Geometry is { } geometry && moveLenSq > 0.0001f)
+            // over the rim — but only a COMMITTED push: a tentative one
+            // (analog edging near a rim) slides along the clamp instead of
+            // boarding a crossing it barely leaned toward.
+            if (Geometry is { } geometry &&
+                moveLenSq >= SimConstants.LinkBoardCommitment * SimConstants.LinkBoardCommitment)
             {
                 var shortX = player.Position.X + delta.X - next.X;
                 var shortZ = player.Position.Z + delta.Z - next.Z;

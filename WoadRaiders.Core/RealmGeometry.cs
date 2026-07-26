@@ -153,11 +153,15 @@ public sealed class RealmGeometry : IRealmGeometry
 
     /// <summary>
     /// How aligned the push must be with a crossing's ground-plane direction
-    /// to board it: cos 45°. A graze — climbing a stair whose open edge is a
-    /// seeded rim, with a little sideways drift — must slide along the rim,
-    /// not be plucked off it; only a push genuinely INTO the crossing boards.
+    /// to board it: cos ~26°. A graze — walking a stair whose open edge is a
+    /// seeded rim, with camera-relative drift — must slide along the rim, not
+    /// be plucked off it; only a push genuinely INTO the crossing boards.
+    /// 45° was not enough: descending the Fault's east flight with the camera
+    /// half-turned pushes 60° off the stair axis, which is cos 0.87 against
+    /// the flank plunges — players "walking down the stairs" fell through
+    /// them. Walking off a rim on purpose is a roughly square push.
     /// </summary>
-    private const float MinBoardAlignment = 0.7f;
+    private const float MinBoardAlignment = 0.9f;
 
     /// <summary>
     /// The link a mover pushing over a rim would board: within LinkBoardRadius

@@ -115,6 +115,15 @@ public static class SimConstants
     /// </summary>
     public const float LinkBoardHeadroom = 24f;
 
+    /// <summary>
+    /// Minimum push magnitude for a player to board a link crossing. A
+    /// half-hearted push (analog input, careful edging) never boards — the
+    /// old physics forgave slow movement near a rim via the eroded band it
+    /// could stand on; committing to a crossing is now what replaces that
+    /// forgiveness. Enemies steer with unit pushes and are unaffected.
+    /// </summary>
+    public const float LinkBoardCommitment = 0.5f;
+
     // --- Enemy aggro behaviour ---
     /// <summary>An aggroed enemy gives up when its target exceeds AggroRange x this (the leash).</summary>
     public const float EnemyLeashFactor = 1.6f;
