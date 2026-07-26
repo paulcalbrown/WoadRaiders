@@ -37,6 +37,11 @@ public sealed class ClientPrediction
     /// <summary>The current predicted position of the local player.</summary>
     public Vector3 Position => _world.Players[_localPlayerId].Position;
 
+    /// <summary>True while the predicted player is mid-crossing on a baked link
+    /// (falling or boarding) — the sim refuses swings for the duration, so the
+    /// client's cosmetic attack prediction should hold too.</summary>
+    public bool TraversingLink => _world.Players[_localPlayerId].Link.Active;
+
     /// <summary>Inputs sent but not yet acknowledged by the server.</summary>
     public int PendingInputCount => _pending.Count;
 
@@ -63,9 +68,11 @@ public sealed class ClientPrediction
     /// position short of the server's — a correction that then eases out as a
     /// visible glide. Restoring the server's authoritative <paramref name="attackAnimRemaining"/>
     /// and <paramref name="attackCooldown"/> makes the replay reproduce the root exactly.
+    /// A baked-link crossing (<paramref name="linkCode"/>/<paramref name="linkTick"/>)
+    /// roots the player the same way and is restored for the same reason.
     /// </summary>
     public Vector3 Reconcile(Vector3 authoritativePosition, float attackAnimRemaining, float attackCooldown,
-                             uint lastProcessedInput)
+                             uint lastProcessedInput, int linkCode = -1, ushort linkTick = 0)
     {
         _pending.RemoveAll(i => i.Sequence <= lastProcessedInput);
 
@@ -74,6 +81,13 @@ public sealed class ClientPrediction
         player.Velocity = Vector3.Zero;
         player.AttackAnimRemaining = attackAnimRemaining;
         player.AttackCooldown = attackCooldown;
+        // The link crossing must be restored with the timers, and for the same
+        // reason: a crossing roots the player, so replaying pending inputs
+        // without it frees ticks the server kept rooted (or the reverse) and
+        // the replayed position lands short of the server's every snapshot.
+        player.Link = linkCode >= 0 && _world.Geometry is { } geometry
+            ? LinkTraversal.Restore(linkCode, linkTick, geometry)
+            : LinkTraversal.None;
 
         foreach (var input in _pending)
         {

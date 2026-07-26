@@ -93,6 +93,27 @@ public static class SimConstants
     /// </summary>
     public const float StepHeight = 18f;
 
+    /// <summary>
+    /// Descent speed across a baked drop link, world units/second (~3x run
+    /// speed). A crossing takes height/LinkFallSpeed — a fall is visible but
+    /// brisk, never the old single-tick teleport.
+    /// </summary>
+    public const float LinkFallSpeed = 660f;
+
+    /// <summary>
+    /// How far (on the ground plane) from a link endpoint a mover can board
+    /// it. Links seed every 50 units along a rim (NavMeshBuilder), so 25
+    /// guarantees any rim point is within reach of one.
+    /// </summary>
+    public const float LinkBoardRadius = 25f;
+
+    /// <summary>
+    /// Max height difference between a mover's feet and a link endpoint to
+    /// board it: a step plus the bake's voxel rounding. Farther apart means
+    /// the endpoint belongs to some other floor's rim.
+    /// </summary>
+    public const float LinkBoardHeadroom = 24f;
+
     // --- Enemy aggro behaviour ---
     /// <summary>An aggroed enemy gives up when its target exceeds AggroRange x this (the leash).</summary>
     public const float EnemyLeashFactor = 1.6f;

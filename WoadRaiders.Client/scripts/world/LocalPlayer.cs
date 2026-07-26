@@ -117,7 +117,9 @@ public sealed class LocalPlayer
             return;
         var before = _prediction.Position;
         _prediction.Reconcile(new SysVec3(snapshot.X, snapshot.Y, snapshot.Z),
-                              snapshot.AttackAnim, snapshot.AttackCooldown, snapshot.LastProcessedInput);
+                              snapshot.AttackAnim, snapshot.AttackCooldown, snapshot.LastProcessedInput,
+                              snapshot.TraversalLink == PlayerSnapshot.NoLink ? -1 : snapshot.TraversalLink,
+                              snapshot.TraversalTick);
         _renderError += before - _prediction.Position;
     }
 
@@ -179,7 +181,8 @@ public sealed class LocalPlayer
         // theirs from the authoritative snapshot flag). Lock the facing at the moment the
         // swing fires: the cursor for a mouse attack, or zero for a Space attack (no
         // visual override → the model keeps facing where it already is).
-        if (_attack.Tick(attack))
+        // Mid-crossing on a link the sim refuses swings — hold the cosmetic one too.
+        if (_attack.Tick(attack && !_prediction!.TraversingLink))
             _attackFacing = attackAim;
 
         _prediction!.Predict(input);

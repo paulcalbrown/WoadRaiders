@@ -211,12 +211,26 @@ public sealed class GameWorld
         }
     }
 
+    /// <summary>Units of unmet movement intent, per tick, before a clamped step
+    /// probes for a baked link over the blocked edge. Wall slides brush this
+    /// constantly; the probe itself is what decides (and usually finds nothing).</summary>
+    private const float LinkProbeShortfall = 1f;
+
     private void MovePlayers(float dt)
     {
         foreach (var player in _players.Values)
         {
             var input = _inputs.TryGetValue(player.Id, out var i) ? i : default;
             player.LastProcessedInput = input.Sequence;
+
+            // Mid-crossing on a baked link: the arc owns the position until it
+            // lands. Inputs still ack (above) so reconciliation keeps draining.
+            if (player.Link.Active)
+            {
+                player.Velocity = Vector3.Zero;
+                AdvanceLink(player);
+                continue;
+            }
 
             // A melee swing roots you: no movement while the swing plays, nor on the
             // tick it fires. Facing still comes from the swing's aim (ResolvePlayerAttacks).
@@ -239,8 +253,50 @@ public sealed class GameWorld
                 player.Facing = Vector3.Normalize(move);
 
             player.Velocity = move * player.Archetype.MoveSpeed;
-            player.Position = ResolveMove(player.Position, player.Velocity * dt);
+            var delta = player.Velocity * dt;
+            var next = ResolveMove(player.Position, delta);
+
+            // Clamped short of the intent? A baked link may carry this push
+            // over the rim. (Move's own drop handling still runs first, so
+            // links only catch what it refused — the flip to navmesh-only
+            // movement makes them the one way off a surface.)
+            if (Geometry is { } geometry && moveLenSq > 0.0001f)
+            {
+                var shortX = player.Position.X + delta.X - next.X;
+                var shortZ = player.Position.Z + delta.Z - next.Z;
+                if (shortX * shortX + shortZ * shortZ > LinkProbeShortfall * LinkProbeShortfall)
+                {
+                    var code = geometry.FindLink(player.Position, move);
+                    if (code >= 0 && geometry.TryGetLink(code, out var from, out var to))
+                    {
+                        // Step to the lip and ride the arc from there; the lip
+                        // is within board radius, so this reads as stepping off.
+                        player.Link = LinkTraversal.Begin(code, from, to);
+                        player.Position = from;
+                        player.Velocity = Vector3.Zero;
+                        continue;
+                    }
+                }
+            }
+
+            player.Position = next;
         }
+    }
+
+    /// <summary>One tick of a link crossing; the landing tick sets down on the
+    /// scout's rest position (already exact ground) and clears the state.</summary>
+    private static void AdvanceLink(PlayerState player)
+    {
+        var link = player.Link;
+        link.Tick++;
+        if (link.Tick >= link.TotalTicks)
+        {
+            player.Position = link.To;
+            player.Link = LinkTraversal.None;
+            return;
+        }
+        player.Position = link.PositionAt(link.Tick);
+        player.Link = link;
     }
 
     private void ResolvePlayerAttacks()
@@ -251,8 +307,8 @@ public sealed class GameWorld
                 continue;
 
             var input = _inputs.TryGetValue(player.Id, out var i) ? i : default;
-            if (!input.Attack || !player.AttackReady)
-                continue;
+            if (!input.Attack || !player.AttackReady || player.Link.Active)
+                continue; // mid-crossing on a link: no footing to swing from
 
             var arch = player.Archetype;
             player.AttackCooldown = arch.AttackCooldown;
@@ -700,6 +756,7 @@ public sealed class GameWorld
             player.Velocity = Vector3.Zero;
             player.Health = player.MaxHealth;
             player.AttackCooldown = 0f;
+            player.Link = LinkTraversal.None; // a death mid-fall does not keep falling
         }
     }
 

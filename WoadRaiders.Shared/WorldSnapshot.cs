@@ -61,6 +61,8 @@ public static class WorldSnapshot
             Attacking = p.IsAttacking,
             AttackAnim = p.AttackAnimRemaining,
             AttackCooldown = p.AttackCooldown,
+            TraversalLink = p.Link.Active ? (ushort)p.Link.Code : PlayerSnapshot.NoLink,
+            TraversalTick = p.Link.Tick,
             Class = (byte)p.Class,
         }).ToArray(),
         Enemies = world.Enemies.Values.Select(e => new EnemySnapshot

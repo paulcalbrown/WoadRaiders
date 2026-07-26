@@ -54,6 +54,8 @@ public class WorldSnapshotTests
         Assert.Equal(player.IsAttacking, ps.Attacking);
         Assert.Equal(player.AttackAnimRemaining, ps.AttackAnim);   // reconcile inputs
         Assert.Equal(player.AttackCooldown, ps.AttackCooldown);
+        Assert.Equal(PlayerSnapshot.NoLink, ps.TraversalLink);     // grounded — not crossing a link
+        Assert.Equal(0, (int)ps.TraversalTick);
 
         // Enemy type is carried as its byte (drives the client model).
         var es = snap.Enemies.Single(e => e.Id == mage.Id);
@@ -105,6 +107,33 @@ public class WorldSnapshotTests
         Assert.Equal(snap.GroundItems.Select(g => g.Type), back.GroundItems.Select(g => g.Type));
         Assert.Equal(snap.Players[0].X, back.Players[0].X);
         Assert.Equal(snap.Projectiles[0].Id, back.Projectiles[0].Id);
+    }
+
+    [Fact]
+    public void A_link_crossing_rides_the_wire_as_its_code_and_tick()
+    {
+        // Mid-fall on a baked link, the whole state is the (code, tick) pair —
+        // both peers re-derive the endpoints from the same baked bytes. The
+        // projection carries it and the wire round-trips it.
+        var world = new GameWorld();
+        var player = world.AddPlayer(1, "faller");
+        player.Link = LinkTraversal.Begin(4, new Vector3(0, 100, 0), Vector3.Zero);
+        player.Link.Tick = 2;
+
+        var snap = WorldSnapshot.From(world);
+        var ps = snap.Players.Single();
+        Assert.Equal(4, (int)ps.TraversalLink);
+        Assert.Equal(2, (int)ps.TraversalTick);
+
+        var writer = new NetDataWriter();
+        snap.Serialize(writer);
+        var reader = new NetDataReader();
+        reader.SetSource(writer);
+        var back = new WorldSnapshotPacket();
+        back.Deserialize(reader);
+
+        Assert.Equal(4, (int)back.Players.Single().TraversalLink);
+        Assert.Equal(2, (int)back.Players.Single().TraversalTick);
     }
 
     [Fact]

@@ -371,6 +371,47 @@ public class RealmGeometryTests
     }
 
     [Fact]
+    public void A_baked_drop_rim_offers_a_link_and_only_downhill()
+    {
+        // The deck's rim scouts fall to the pit floor and land on open mesh,
+        // earning one-way drop links (a sheer cliff's falls land inside the
+        // eroded band at its base, where the scout finds no mesh — so it is
+        // the DECK fixture that bakes links). A mover on the deck pushing
+        // over the rim must find one to board; the same spot pushing inboard
+        // — and the pit floor looking back up — must not. Lips seed every
+        // ~50-60 units along the rim, so scan rather than bet on one seed.
+        var soup = DeckOverPit();
+        var geo = new RealmGeometry(NavMeshBuilder.Build(soup), soup, new Vector3(200, 0, 200));
+
+        var code = -1;
+        var stand = Vector3.Zero;
+        for (var x = 40f; x <= 360f && code < 0; x += 10f)
+        {
+            stand = new Vector3(x, 0f, 233f); // on the deck, at its north rim
+            code = geo.FindLink(stand, new Vector3(0, 0, 1));
+        }
+        Assert.True(code >= 0, "no boardable link anywhere along the deck's drop rim");
+        Assert.True(geo.TryGetLink(code, out var from, out var to));
+        Assert.True(from.Y > -20f, $"the lip should sit at deck level, got Y={from.Y:0}");
+        Assert.True(to.Y < -380f, $"the landing should sit on the pit floor, got Y={to.Y:0}");
+        Assert.True(to.Z > from.Z, "the crossing should carry the push out past the rim");
+
+        // Pushing inboard from the same spot boards nothing (drops never reverse).
+        Assert.Equal(-1, geo.FindLink(stand, new Vector3(0, 0, -1)));
+        // Mid-deck is beyond any lip's board radius.
+        Assert.Equal(-1, geo.FindLink(new Vector3(stand.X, 0, 200f), new Vector3(0, 0, 1)));
+        // From the pit floor, every lip fails the headroom check and a
+        // one-way landing is not a boardable end.
+        Assert.Equal(-1, geo.FindLink(to, new Vector3(0, 0, 1)));
+
+        // Codes are validated, never trusted: the reversed orientation of a
+        // one-way link and out-of-range indices both refuse.
+        Assert.False(geo.TryGetLink(code | 1, out _, out _));
+        Assert.False(geo.TryGetLink(-1, out _, out _));
+        Assert.False(geo.TryGetLink(1 << 20, out _, out _));
+    }
+
+    [Fact]
     public void Bakes_are_deterministic()
     {
         var soup = Ramp();

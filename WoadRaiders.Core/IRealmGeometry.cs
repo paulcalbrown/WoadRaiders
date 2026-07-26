@@ -76,4 +76,27 @@ public interface IRealmGeometry
         waypoints.Add(to);
         return true;
     }
+
+    /// <summary>
+    /// The baked off-mesh link a mover at <paramref name="position"/> pushing
+    /// in <paramref name="desiredDir"/> (ground plane) would board: the
+    /// nearest link endpoint within <see cref="SimConstants.LinkBoardRadius"/>
+    /// at the mover's own floor level whose crossing continues the push.
+    /// Returns an oriented code for <see cref="TryGetLink"/> — stable across
+    /// peers holding the same baked bytes, which is what lets it ride the wire
+    /// in PlayerSnapshot — or -1. Open-arena providers have no links.
+    /// </summary>
+    int FindLink(Vector3 position, Vector3 desiredDir, float radius = SimConstants.CharacterRadius) => -1;
+
+    /// <summary>
+    /// The oriented endpoints of a code from <see cref="FindLink"/>. False when
+    /// the code names no link this provider knows — a reconciling client treats
+    /// that as "not crossing" rather than trusting the wire.
+    /// </summary>
+    bool TryGetLink(int code, out Vector3 from, out Vector3 to, float radius = SimConstants.CharacterRadius)
+    {
+        from = default;
+        to = default;
+        return false;
+    }
 }
