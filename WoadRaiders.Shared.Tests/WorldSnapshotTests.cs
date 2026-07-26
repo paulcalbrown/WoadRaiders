@@ -119,11 +119,13 @@ public class WorldSnapshotTests
         var player = world.AddPlayer(1, "faller");
         player.Link = LinkTraversal.Begin(4, new Vector3(0, 100, 0), Vector3.Zero);
         player.Link.Tick = 2;
+        player.LinkIntent = 3;
 
         var snap = WorldSnapshot.From(world);
         var ps = snap.Players.Single();
         Assert.Equal(4, (int)ps.TraversalLink);
         Assert.Equal(2, (int)ps.TraversalTick);
+        Assert.Equal(3, (int)ps.LinkIntent);
 
         var writer = new NetDataWriter();
         snap.Serialize(writer);
@@ -134,6 +136,7 @@ public class WorldSnapshotTests
 
         Assert.Equal(4, (int)back.Players.Single().TraversalLink);
         Assert.Equal(2, (int)back.Players.Single().TraversalTick);
+        Assert.Equal(3, (int)back.Players.Single().LinkIntent);
     }
 
     [Fact]

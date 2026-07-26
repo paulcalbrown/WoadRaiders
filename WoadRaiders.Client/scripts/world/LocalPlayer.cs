@@ -124,7 +124,7 @@ public sealed class LocalPlayer
         _prediction.Reconcile(new SysVec3(snapshot.X, snapshot.Y, snapshot.Z),
                               snapshot.AttackAnim, snapshot.AttackCooldown, snapshot.LastProcessedInput,
                               snapshot.TraversalLink == PlayerSnapshot.NoLink ? -1 : snapshot.TraversalLink,
-                              snapshot.TraversalTick);
+                              snapshot.TraversalTick, snapshot.LinkIntent);
         _renderError += before - _prediction.Position;
     }
 

@@ -124,6 +124,31 @@ public static class SimConstants
     /// </summary>
     public const float LinkBoardCommitment = 0.5f;
 
+    /// <summary>
+    /// Consecutive qualifying ticks (committed push, clamped at a rim, a
+    /// crossing aligned) before a player boards a stair-scale link. Boarding
+    /// is irreversible, and a single 33 ms tick can qualify by accident — a
+    /// camera turn sweeps the push through every angle, brushing square to
+    /// a crossing while hugging an edge. Four ticks (~133 ms) reads as a
+    /// held decision; a brush never sustains it. Enemies board immediately —
+    /// their pushes are planner-driven, not camera noise.
+    /// </summary>
+    public const int LinkIntentTicks = 4;
+
+    /// <summary>
+    /// The held-tick requirement when the crossing drops more than
+    /// <see cref="LinkPlungeDrop"/>: a chasm takes a third of a second of
+    /// leaning into it. The cost of a wrong boarding scales with the fall,
+    /// so the conviction demanded scales with it too — chained camera-sweep
+    /// spikes reach four ticks in play; they never sustain ten.
+    /// </summary>
+    public const int LinkIntentTicksPlunge = 10;
+
+    /// <summary>A crossing dropping more than this (three steps) is a plunge,
+    /// demanding <see cref="LinkIntentTicksPlunge"/>; anything less is
+    /// stair-scale and boards at <see cref="LinkIntentTicks"/>.</summary>
+    public const float LinkPlungeDrop = 3f * StepHeight;
+
     // --- Enemy aggro behaviour ---
     /// <summary>An aggroed enemy gives up when its target exceeds AggroRange x this (the leash).</summary>
     public const float EnemyLeashFactor = 1.6f;

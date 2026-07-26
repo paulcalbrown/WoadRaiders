@@ -173,27 +173,90 @@ public class LinkTraversalTests
 
         // The client has predicted 25 ticks; the server has processed 16 —
         // mid-crossing (entry lands around tick 14 at this walk speed).
-        for (uint seq = 1; seq <= 25; seq++)
+        for (uint seq = 1; seq <= 28; seq++)
             prediction.Predict(new PlayerInput { MoveX = 1f, Sequence = seq });
-        for (uint seq = 1; seq <= 16; seq++)
+        for (uint seq = 1; seq <= 25; seq++)
         {
             world.SetInput(1, new PlayerInput { MoveX = 1f, Sequence = seq });
             world.Step();
         }
-        Assert.True(serverPlayer.Link.Active, "fixture drift: tick 16 should sit mid-crossing");
+        Assert.True(serverPlayer.Link.Active, "fixture drift: tick 25 should sit mid-crossing");
 
         prediction.Reconcile(serverPlayer.Position, serverPlayer.AttackAnimRemaining,
-                             serverPlayer.AttackCooldown, lastProcessedInput: 16,
-                             serverPlayer.Link.Code, serverPlayer.Link.Tick);
+                             serverPlayer.AttackCooldown, lastProcessedInput: 25,
+                             serverPlayer.Link.Code, serverPlayer.Link.Tick, serverPlayer.LinkIntent);
 
         // The server catches up through the same inputs the client replayed.
-        for (uint seq = 17; seq <= 25; seq++)
+        for (uint seq = 26; seq <= 28; seq++)
         {
             world.SetInput(1, new PlayerInput { MoveX = 1f, Sequence = seq });
             world.Step();
         }
 
         Assert.Equal(serverPlayer.Position, prediction.Position);
+    }
+
+    [Fact]
+    public void Reconcile_mid_intent_counts_the_same_held_ticks()
+    {
+        // The ack lands while the push is HELD at the rim but before it has
+        // been held long enough to board. The replay must resume the count
+        // from the server's number, or the crossing predicts a tick early
+        // (double-counted) or late (reset) and every position after differs.
+        var world = WorldOnCliff(out var serverPlayer);
+        var prediction = new ClientPrediction(1, Spawn, new CliffGeometry());
+
+        for (uint seq = 1; seq <= 25; seq++)
+            prediction.Predict(new PlayerInput { MoveX = 1f, Sequence = seq });
+        for (uint seq = 1; seq <= 15; seq++)
+        {
+            world.SetInput(1, new PlayerInput { MoveX = 1f, Sequence = seq });
+            world.Step();
+        }
+        Assert.True(serverPlayer.LinkIntent > 0 && !serverPlayer.Link.Active,
+            $"fixture drift: tick 15 should sit mid-intent, got intent {serverPlayer.LinkIntent}");
+
+        prediction.Reconcile(serverPlayer.Position, serverPlayer.AttackAnimRemaining,
+                             serverPlayer.AttackCooldown, lastProcessedInput: 15,
+                             -1, 0, serverPlayer.LinkIntent);
+
+        for (uint seq = 16; seq <= 25; seq++)
+        {
+            world.SetInput(1, new PlayerInput { MoveX = 1f, Sequence = seq });
+            world.Step();
+        }
+
+        Assert.Equal(serverPlayer.Position, prediction.Position);
+    }
+
+    [Fact]
+    public void A_brushed_push_never_boards_but_a_held_one_does()
+    {
+        // Boarding is irreversible and a single tick can qualify by accident
+        // (a camera turn sweeps the push square to a crossing). A push that
+        // qualifies for LinkIntentTicks-1 ticks and then wavers must never
+        // board, however often it repeats; the same push held one tick longer
+        // must.
+        var world = WorldOnCliff(out var player);
+        player.Position = new Vector3(CliffGeometry.RimX - 2f, 100f, 100f);
+        uint seq = 0;
+
+        // The cliff's 100-unit drop is PLUNGE-scale, so even a push held one
+        // tick short of the plunge requirement, broken once, must never board.
+        for (var cycle = 0; cycle < 5; cycle++)
+        {
+            player.Position = new Vector3(CliffGeometry.RimX - 2f, 100f, 100f);
+            for (var t = 0; t < SimConstants.LinkIntentTicksPlunge - 1; t++)
+                Push(world, ref seq); // east into the rim: qualifies…
+            world.SetInput(1, new PlayerInput { MoveZ = 1f, Sequence = ++seq });
+            world.Step();             // …then wavers away: the count resets
+            Assert.False(player.Link.Active, $"cycle {cycle}: a brushed push boarded");
+        }
+
+        player.Position = new Vector3(CliffGeometry.RimX - 2f, 100f, 100f);
+        for (var t = 0; t < SimConstants.LinkIntentTicksPlunge && !player.Link.Active; t++)
+            Push(world, ref seq);
+        Assert.True(player.Link.Active, "a held push must board");
     }
 
     [Fact]
@@ -206,19 +269,19 @@ public class LinkTraversalTests
         var world = WorldOnCliff(out var serverPlayer);
         var prediction = new ClientPrediction(1, Spawn, new CliffGeometry());
 
-        for (uint seq = 1; seq <= 25; seq++)
+        for (uint seq = 1; seq <= 28; seq++)
             prediction.Predict(new PlayerInput { MoveX = 1f, Sequence = seq });
-        for (uint seq = 1; seq <= 16; seq++)
+        for (uint seq = 1; seq <= 25; seq++)
         {
             world.SetInput(1, new PlayerInput { MoveX = 1f, Sequence = seq });
             world.Step();
         }
-        Assert.True(serverPlayer.Link.Active, "fixture drift: tick 16 should sit mid-crossing");
+        Assert.True(serverPlayer.Link.Active, "fixture drift: tick 25 should sit mid-crossing");
 
         prediction.Reconcile(serverPlayer.Position, serverPlayer.AttackAnimRemaining,
-                             serverPlayer.AttackCooldown, lastProcessedInput: 16);
+                             serverPlayer.AttackCooldown, lastProcessedInput: 25);
 
-        for (uint seq = 17; seq <= 25; seq++)
+        for (uint seq = 26; seq <= 28; seq++)
         {
             world.SetInput(1, new PlayerInput { MoveX = 1f, Sequence = seq });
             world.Step();
