@@ -243,25 +243,41 @@ public static class NavMeshBuilder
                     var lip = new Vector3(ax + ex * t, ay + ey * t, az + ez * t);
 
                     // Ride the scout over the edge until it rests on mesh
-                    // again — below the lip (a fall) or above it (a boarding).
-                    // A long steep face is ridden tick by tick to its foot: a
-                    // "fell" high on the face keeps riding rather than giving
-                    // up (a sheer wall's plunge arrives here already at the
-                    // bottom). The link's end is the point ON the mesh, not
-                    // the raw rest — a landing inside the eroded band would
-                    // strand a mesh-only mover the moment it set down.
+                    // again. A crossing is an UNBROKEN CHAIN OF HATCH STEPS
+                    // between two mesh rests: a first step that is plain mesh
+                    // walking means this edge connects by walking — no link —
+                    // and a plain step AFTER hatching is the far rest, where
+                    // the crossing ends. Without that discipline a scout that
+                    // hops one tread and then strolls up a staircase records
+                    // the stroll as a 70-unit "boarding", and movers get
+                    // hoisted through the flight from beside it. A long steep
+                    // face is still ridden tick by tick to its foot (every
+                    // tick a floor-ride hatch); the link's end is the point ON
+                    // the mesh, not the raw rest — a landing inside the eroded
+                    // band would strand a mesh-only mover the moment it set
+                    // down.
                     var pos = lip;
                     var step = new Vector3(nx * tickStep, 0, nz * tickStep);
+                    var crossing = false;
                     for (var tick = 0; tick < DropScoutMaxTicks; tick++)
                     {
-                        var next = scout.Move(pos, step);
+                        var next = scout.Move(pos, step, out var hatchedStep);
                         if ((next - pos).LengthSquared() < 0.01f)
                             break; // stuck — a wall or the border seal, not a crossing
-                        pos = next;
+                        if (!hatchedStep && !crossing)
+                            break; // walked, not crossed — the mesh already joins here
+                        var resting = crossing && !hatchedStep; // back to plain walking: land at the PREVIOUS rest
+                        crossing = true;
+                        if (!resting)
+                            pos = next;
                         var fell = pos.Y < lip.Y - SimConstants.StepHeight;
                         var boarded = pos.Y > lip.Y + 9.9f;
                         if (!fell && !boarded)
-                            continue; // still near lip level — plain mesh walking
+                        {
+                            if (resting)
+                                break; // a hatch that went nowhere — band wobble, not a crossing
+                            continue;  // mid-hatch near lip level — keep riding
+                        }
                         var status = query.FindNearestPoly(new RcVec3f(pos.X, pos.Y, pos.Z), landedExtents,
                                                            filter, out var landedRef, out var onMesh, out _);
                         if (status.Succeeded() && landedRef != 0 && NudgeIsClear(soup, pos, onMesh))
@@ -279,8 +295,8 @@ public static class NavMeshBuilder
                                 links.Add((start, end, boarded));
                             break;
                         }
-                        if (boarded)
-                            break; // a boarding lands where it stepped, or nowhere
+                        if (resting || boarded)
+                            break; // a rest or a boarding lands where it stands, or nowhere
                     }
                 }
             }

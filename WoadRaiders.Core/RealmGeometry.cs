@@ -204,6 +204,20 @@ public sealed class RealmGeometry : IRealmGeometry
             var clen = MathF.Sqrt(cx * cx + cz * cz);
             if (clen > 1e-3f && (cx * dx + cz * dz) / clen < MinBoardAlignment)
                 return; // grazing, not crossing — stay on this surface
+            // The mover must be able to REACH the lip — and, for a rise, the
+            // landing — walking at step height from where it actually stands:
+            // the same clearance rail the bake's scout passed at the lip
+            // itself. From LinkBoardRadius away, a lip can sit across a
+            // stair's risers or behind a parapet; boarding through solids is
+            // how "climbing the stairs from underneath" shipped.
+            var railY = position.Y + SimConstants.StepHeight + 0.5f;
+            if (_soup.SegmentHits(new Vector3(position.X, railY, position.Z),
+                                  new Vector3(from.X, railY, from.Z), blockersOnly: true))
+                return;
+            if (to.Y > position.Y + 1f &&
+                _soup.SegmentHits(new Vector3(position.X, railY, position.Z),
+                                  new Vector3(to.X, railY, to.Z), blockersOnly: true))
+                return;
             // Prefer staying at your own level; break ties by nearest lip.
             var rise = MathF.Abs(to.Y - position.Y);
             if (rise > bestRise + 0.5f || (rise > bestRise - 0.5f && d2 >= bestSq))

@@ -546,6 +546,27 @@ public class RealmGeometryTests
                 $"drift {driftX}: the climb should top out on the deck, stalled at " +
                 $"({player.Position.X:0},{player.Position.Y:0},{player.Position.Z:0})");
         }
+
+        // And the flight must not be mountable from BESIDE or UNDER it: a
+        // push into the flank from the pit floor stays on the pit floor —
+        // no link may hoist a mover more than a step, and none may be
+        // boarded through the treads (the second live regression).
+        foreach (var push in new[] { new Vector3(1f, 0, 0), new Vector3(1f, 0, -1f) })
+        {
+            var world = new GameWorld { Geometry = nav };
+            var player = world.AddPlayer(1, "lurker");
+            player.Position = new Vector3(6880, -880, 2430); // beside the flight's foot
+            uint seq = 0;
+            var peak = player.Position.Y;
+            for (var t = 0; t < 30 * 10; t++)
+            {
+                world.SetInput(1, new PlayerInput { MoveX = push.X, MoveZ = push.Z, Sequence = ++seq });
+                world.Step();
+                peak = MathF.Max(peak, player.Position.Y);
+            }
+            Assert.True(peak <= -880f + SimConstants.StepHeight + 1f,
+                $"push ({push.X:0.#},{push.Z:0.#}) from beside the flight hoisted the mover to Y={peak:0}");
+        }
     }
 
     /// <summary>Steer waypoint to waypoint through Move, the way a follower
