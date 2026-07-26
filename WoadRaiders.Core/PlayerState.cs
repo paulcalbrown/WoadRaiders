@@ -28,16 +28,6 @@ public sealed class PlayerState : Combatant
     /// </summary>
     public uint LastProcessedInput;
 
-    /// <summary>
-    /// The baked-link crossing in progress (falling off a rim, boarding a
-    /// deck), or <see cref="LinkTraversal.None"/>. While active the player is
-    /// rooted: the arc owns the position and swings cannot fire. Broadcast as
-    /// (Code, Tick) in snapshots so the local client restores it when
-    /// reconciling — replaying inputs against a lost root drifts, exactly as
-    /// it would against lost attack timers (see ClientPrediction.Reconcile).
-    /// </summary>
-    public LinkTraversal Link = LinkTraversal.None;
-
     /// <summary>Items this player has collected. Authoritative, server-side.</summary>
     public List<Item> Inventory { get; } = new();
 

@@ -76,6 +76,32 @@ public class RealmValidatorTests
     }
 
     [Fact]
+    public void An_oubliette_too_small_for_any_sample_grid_is_still_caught()
+    {
+        // A 140-unit sunken well in an upland plate: one drop link in off its
+        // rim, 100-unit walls, no way out. The old stranding sweep sampled a
+        // 200-unit grid and judged where routed walkers LANDED — a trap this
+        // size could sit between its points. The flood fill proves stranding
+        // over every polygon the spawn can reach, so size cannot hide it.
+        var soup = new SoupBuilder()
+            .AddBox(new Aabb(new Vector3(0, 80, 0), new Vector3(800, 100, 30)))      // upland ring…
+            .AddBox(new Aabb(new Vector3(0, 80, 170), new Vector3(800, 100, 800)))
+            .AddBox(new Aabb(new Vector3(0, 80, 30), new Vector3(30, 100, 170)))
+            .AddBox(new Aabb(new Vector3(170, 80, 30), new Vector3(800, 100, 170)))
+            .AddBox(new Aabb(new Vector3(30, -20, 30), new Vector3(170, 0, 170)))    // …the well floor
+            .Build();
+        var realm = Realm(soup, new Vector3(400, 100, 400), new Vector3(600, 100, 600));
+
+        var issues = RealmValidator.Validate(realm);
+        var stranding = Assert.Single(issues, i => i.Contains("stranded"));
+        // The clump centre names the well, so a designer can walk to the trap.
+        var centre = System.Text.RegularExpressions.Regex.Match(stranding, @"^\((-?\d+),(-?\d+)\)");
+        Assert.True(centre.Success, $"no centre in: {stranding}");
+        Assert.InRange(int.Parse(centre.Groups[1].Value), 80, 120);
+        Assert.InRange(int.Parse(centre.Groups[2].Value), 80, 120);
+    }
+
+    [Fact]
     public void A_soupless_or_bossless_map_fails_outright()
     {
         var flat = new SoupBuilder()

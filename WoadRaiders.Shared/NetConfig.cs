@@ -104,7 +104,14 @@ public static class NetConfig
     ///        the falling/boarding crossing state, restored on reconcile like
     ///        the attack timers. Groundwork for navmesh-only movement — links
     ///        become the one legal way off a walkable surface.
-    public const string ConnectionKey = "WoadRaiders.v23";
+    /// v24 = navmesh-only movement: Move's drop/ride/step-up escape hatches
+    ///        are gone (baked links are the only way off a surface, executed
+    ///        as LinkTraversal arcs) and the shipped .navmesh artifacts are
+    ///        rebaked with the wider drop-scout landing search. The wire
+    ///        FORMAT is unchanged; the key moves because a v23 client's Move
+    ///        predicts different physics against a v24 server and would
+    ///        rubber-band on every slope and rim.
+    public const string ConnectionKey = "WoadRaiders.v24";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";

@@ -1,4 +1,6 @@
 using System.Numerics;
+using DotRecast.Core.Numerics;
+using DotRecast.Detour;
 
 namespace WoadRaiders.Core;
 
@@ -10,8 +12,12 @@ namespace WoadRaiders.Core;
 ///
 ///   - the boss and every enemy camp are reachable from the spawn (a complete
 ///     planned route, drops and boardings included — not a partial best-effort);
-///   - nowhere the spawn can reach is stranded: from every such spot the boss
-///     can still be reached (falls are detours, never graves).
+///   - nowhere the spawn can reach is stranded: from EVERY polygon the spawn
+///     can reach — walks and link crossings alike — the boss can still be
+///     reached (falls are detours, never graves). This is a flood-fill PROOF
+///     over the polygon-and-link graph, not a sampling. Movement is
+///     navmesh-only, so that graph is exactly the set of places a mover can
+///     ever stand, and a trap too small for any sample grid cannot hide in it.
 ///
 /// Sealed borders come free in a built realm: beyond the soup there is no
 /// ground at all, so movement simply refuses the void — there is no infinite
@@ -22,8 +28,8 @@ public static class RealmValidator
     /// <summary>How close (XZ) a route's end must land to its goal to count as arrival.</summary>
     public const float ArrivalTolerance = 40f;
 
-    /// <summary>XZ spacing of the stranding sweep's sample grid.</summary>
-    private const float StrandingSampleSpacing = 200f;
+    /// <summary>FindNearestPoly box anchoring the spawn and boss onto the mesh.</summary>
+    private static readonly RcVec3f AnchorExtents = new(24f, 48f, 24f);
 
     /// <summary>
     /// Validate a realm. Returns problems found (empty = the realm is sound).
@@ -43,7 +49,8 @@ public static class RealmValidator
             return issues;
         }
 
-        var nav = new RealmGeometry(NavMeshBuilder.Build(soup), soup, realm.SpawnPoint);
+        var mesh = NavMeshBuilder.Build(soup);
+        var nav = new RealmGeometry(mesh, soup, realm.SpawnPoint);
 
         if (!Reaches(nav, realm.SpawnPoint, boss))
             issues.Add($"the boss court at ({boss.X:0},{boss.Z:0}) is not reachable from the spawn");
@@ -52,38 +59,26 @@ public static class RealmValidator
                 issues.Add($"the {camp.Type} camp at ({camp.Position.X:0},{camp.Position.Z:0}) " +
                            "is not reachable from the spawn");
 
-        // The stranding sweep: everywhere the spawn can reach — drops included —
-        // must still reach the boss. Spots the spawn CANNOT reach are not the
-        // realm's problem (a roof is scenery, not a trap). Distinct landings
-        // are reported once each, since many samples resolve to the same
-        // ground.
-        var landing = new List<Vector3>();
-        var seen = new HashSet<(int, int)>();
-        for (var x = soup.BoundsMin.X; x <= soup.BoundsMax.X; x += StrandingSampleSpacing)
-            for (var z = soup.BoundsMin.Z; z <= soup.BoundsMax.Z; z += StrandingSampleSpacing)
-            {
-                if (soup.TopSurfaceAt(x, z) is not { } y)
-                    continue;
-
-                // Judge where a raider would ACTUALLY end up walking at this
-                // sample, not the sample itself. A chamber's floor runs on
-                // underneath its own walls and pillars, and Recast rasterizes
-                // solid geometry as a hollow shell — so the floor sealed
-                // inside masonry survives as a walkable ISLAND, cut off from
-                // everything. Asked about such a cell directly, the sweep
-                // reports a dead end that no raider could ever be standing
-                // in. Pathing to it instead leaves the walker on the nearest
-                // ground it can truly reach, and if THAT cannot reach the
-                // boss, the trap is real.
-                landing.Clear();
-                if (!nav.TryFindPath(realm.SpawnPoint, new Vector3(x, y, z), landing) || landing.Count == 0)
-                    continue;
-                var stand = landing[^1];
-                if (!Reaches(nav, stand, boss) &&
-                    seen.Add(((int)(stand.X / StrandingSampleSpacing), (int)(stand.Z / StrandingSampleSpacing))))
-                    issues.Add($"({stand.X:0},{stand.Z:0}) is reachable but stranded — " +
-                               "the boss cannot be reached from it");
-            }
+        // The stranding proof: flood the runtime polygon graph — walkable
+        // adjacency plus the baked links, which carry their one-way-ness —
+        // forward from the spawn, and backward from the boss over the
+        // reversed graph. Every polygon the spawn can reach must sit in both
+        // sets; each connected clump that cannot reach the boss is reported
+        // once, by its centre. Polygons the spawn cannot reach are not the
+        // realm's problem (a roof is scenery, not a trap).
+        var query = new DtNavMeshQuery(mesh);
+        var filter = new DtQueryDefaultFilter();
+        if (TryAnchor(query, filter, realm.SpawnPoint, out var spawnRef) &&
+            TryAnchor(query, filter, boss, out var bossRef))
+        {
+            var (forward, reverse, centres) = BuildLinkGraph(mesh);
+            var stranded = Flood(forward, spawnRef);
+            stranded.ExceptWith(Flood(reverse, bossRef));
+            stranded.RemoveWhere(r => !centres.ContainsKey(r)); // link polys are edges, not places
+            foreach (var (centre, size) in Clumps(stranded, forward, reverse, centres))
+                issues.Add($"({centre.X:0},{centre.Z:0}) is reachable but stranded — " +
+                           $"the boss cannot be reached from it ({size} polygons)");
+        }
 
         return issues;
     }
@@ -98,5 +93,121 @@ public static class RealmValidator
         var dx = end.X - to.X;
         var dz = end.Z - to.Z;
         return dx * dx + dz * dz <= ArrivalTolerance * ArrivalTolerance;
+    }
+
+    private static bool TryAnchor(DtNavMeshQuery query, IDtQueryFilter filter, Vector3 at, out long polyRef)
+    {
+        var status = query.FindNearestPoly(new RcVec3f(at.X, at.Y, at.Z), AnchorExtents, filter,
+                                           out polyRef, out _, out _);
+        return status.Succeeded() && polyRef != 0;
+    }
+
+    /// <summary>
+    /// The runtime polygon graph, read straight off the mesh's link chains so
+    /// it is exactly what MoveAlongSurface and the path planner traverse:
+    /// shared edges both ways, off-mesh links only the way they were baked.
+    /// Ground polys (not the link stubs) also get a centroid, for reporting.
+    /// </summary>
+    private static (Dictionary<long, List<long>> forward, Dictionary<long, List<long>> reverse,
+                    Dictionary<long, Vector3> centres) BuildLinkGraph(DtNavMesh mesh)
+    {
+        var forward = new Dictionary<long, List<long>>();
+        var reverse = new Dictionary<long, List<long>>();
+        var centres = new Dictionary<long, Vector3>();
+        for (var t = 0; t < mesh.GetMaxTiles(); t++)
+        {
+            var tile = mesh.GetTile(t);
+            if (tile?.data?.header is null)
+                continue;
+            // GetTileRef IS the tile's poly-ref base (poly index 0); OR-ing in
+            // the poly index yields the same refs the link chains carry.
+            var baseRef = mesh.GetTileRef(tile);
+            for (var p = 0; p < tile.data.header.polyCount; p++)
+            {
+                var poly = tile.data.polys[p];
+                var from = baseRef | (long)p;
+
+                if (poly.GetPolyType() == 0)
+                {
+                    var centre = Vector3.Zero;
+                    for (var k = 0; k < poly.vertCount; k++)
+                        centre += new Vector3(tile.data.verts[poly.verts[k] * 3],
+                                              tile.data.verts[poly.verts[k] * 3 + 1],
+                                              tile.data.verts[poly.verts[k] * 3 + 2]);
+                    centres[from] = centre / poly.vertCount;
+                }
+
+                for (var i = poly.firstLink; i != DtDetour.DT_NULL_LINK; i = tile.links[i].next)
+                {
+                    var to = tile.links[i].refs;
+                    if (to == 0)
+                        continue;
+                    Add(forward, from, to);
+                    Add(reverse, to, from);
+                }
+            }
+        }
+        return (forward, reverse, centres);
+
+        static void Add(Dictionary<long, List<long>> graph, long from, long to)
+        {
+            if (!graph.TryGetValue(from, out var list))
+                graph[from] = list = new List<long>();
+            list.Add(to);
+        }
+    }
+
+    private static HashSet<long> Flood(Dictionary<long, List<long>> edges, long start)
+    {
+        var seen = new HashSet<long> { start };
+        var frontier = new Stack<long>();
+        frontier.Push(start);
+        while (frontier.Count > 0)
+            if (edges.TryGetValue(frontier.Pop(), out var next))
+                foreach (var r in next)
+                    if (seen.Add(r))
+                        frontier.Push(r);
+        return seen;
+    }
+
+    /// <summary>
+    /// Group stranded polygons into connected clumps (adjacency in either
+    /// direction) so a sunken yard reads as ONE finding with a centre and a
+    /// size, not a report per polygon.
+    /// </summary>
+    private static IEnumerable<(Vector3 centre, int size)> Clumps(
+        HashSet<long> stranded,
+        Dictionary<long, List<long>> forward, Dictionary<long, List<long>> reverse,
+        Dictionary<long, Vector3> centres)
+    {
+        var left = new HashSet<long>(stranded);
+        while (left.Count > 0)
+        {
+            long seed = 0;
+            foreach (var r in left) { seed = r; break; }
+            left.Remove(seed);
+
+            var clump = new List<long>();
+            var frontier = new Stack<long>();
+            frontier.Push(seed);
+            while (frontier.Count > 0)
+            {
+                var at = frontier.Pop();
+                clump.Add(at);
+                if (forward.TryGetValue(at, out var outward))
+                    foreach (var r in outward)
+                        if (left.Remove(r))
+                            frontier.Push(r);
+                if (reverse.TryGetValue(at, out var inward))
+                    foreach (var r in inward)
+                        if (left.Remove(r))
+                            frontier.Push(r);
+            }
+
+            var centre = Vector3.Zero;
+            foreach (var r in clump)
+                centre += centres[r];
+            yield return (centre / clump.Count, clump.Count);
+        }
     }
 }

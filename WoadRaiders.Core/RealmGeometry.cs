@@ -6,13 +6,22 @@ namespace WoadRaiders.Core;
 
 /// <summary>
 /// The shipping <see cref="IRealmGeometry"/>, baked from a
-/// <see cref="RealmDefinition"/>'s soup: movement is
-/// clamped to a baked Detour navmesh (moveAlongSurface — polygon boundaries
-/// act as walls and produce sliding), while sight lines, cursor rays, and the
-/// projectile ground query test the exact <see cref="TriangleSoup"/> the mesh
-/// was baked from. Ledge drops — legal at any height under the sim's rules but
-/// disconnected edges on a navmesh — transfer to the surface directly below
-/// the blocked target when it lies more than StepHeight down.
+/// <see cref="RealmDefinition"/>'s soup: movement is NAVMESH-ONLY —
+/// <see cref="Move"/> walks the baked Detour surface (moveAlongSurface;
+/// polygon boundaries act as walls and produce sliding) and never leaves it.
+/// The only way off a surface is a baked off-mesh link: <see cref="FindLink"/>
+/// names the crossing a blocked push would board and the sim executes it as a
+/// LinkTraversal arc. Every link end is on the mesh by construction (the bake
+/// scout verified it), so "on the mesh" is an invariant no sequence of moves
+/// can break — the stuck-player states the old soup escape hatches could
+/// reach (off-mesh floor rides, island landings) cannot be represented.
+///
+/// The soup keeps its non-movement jobs: sight lines, cursor rays, the
+/// projectile ground query, and refining the mesh's voxel-rough height onto
+/// the exact triangle underfoot (<see cref="SurfaceY"/> — the mesh picks the
+/// layer, the soup gives the true ground). The bake-time physics that used to
+/// live here as escape hatches survives in <see cref="ScoutMover"/>, where
+/// the drop-link scouts still walk it.
 ///
 /// A mover's radius is baked into the mesh, not checked at query time, so wide
 /// movers (the boss, radius 30) get their own baked mesh: each Move picks the
@@ -31,11 +40,6 @@ public sealed class RealmGeometry : IRealmGeometry
     // or two on Y.
     private static readonly RcVec3f SnapExtents = new(24f, 48f, 24f);
 
-    // The drop probe looks for ground far below the blocked target — but only
-    // directly below: a landing off to the side means a wall, not a ledge.
-    private static readonly RcVec3f DropExtents = new(2f, 4096f, 2f);
-    private const float DropSnapTolerance = 2f;
-    private const float ClampEpsilon = 0.05f;
     private const float CeilingReach = 4000f; // far enough to clear any realm's roof
     private const int MaxPathPolys = 256;
 
@@ -78,6 +82,9 @@ public sealed class RealmGeometry : IRealmGeometry
     /// Resolve a move by walking the navmesh surface: the result slides along
     /// polygon boundaries and lands on the true triangle surface — climbs,
     /// stairs, and refusals all come from the bake for this mover's width.
+    /// The mesh is never left: a push the surface refuses is a wall unless a
+    /// baked link (<see cref="FindLink"/>) carries it, and that crossing is
+    /// the sim's to execute, not this method's.
     /// </summary>
     public Vector3 Move(Vector3 position, Vector3 delta, float radius = SimConstants.CharacterRadius)
     {
@@ -85,7 +92,12 @@ public sealed class RealmGeometry : IRealmGeometry
             return position;
         var query = QueryFor(radius);
         if (!TrySnap(query, position, out var startRef, out var start))
-            return position; // off the mesh entirely — nowhere legal to go
+        {
+            // Unreachable when every transition is mesh-walk or link: a mover
+            // with no polygon in snap reach escaped the invariant somewhere.
+            OffMeshRefusals++;
+            return position;
+        }
         var target = new RcVec3f(position.X + delta.X, start.Y, position.Z + delta.Z);
 
         var status = query.MoveAlongSurface(startRef, start, target, _filter,
@@ -93,109 +105,15 @@ public sealed class RealmGeometry : IRealmGeometry
         if (!status.Succeeded())
             return position;
         var endRef = visitedCount > 0 ? _visited[visitedCount - 1] : startRef;
-        var landed = new Vector3(result.X, SurfaceY(result.X, result.Z, HeightOn(query, endRef, result)), result.Z);
-
-        // Clamped short of the target? The mesh only describes what is safe to
-        // WALK — the sim also permits what the bake cannot express: ledge
-        // drops of any size, and riding terrain steeper than the climbable
-        // grade downhill (or inching it up to StepHeight per step).
-        var dx = target.X - landed.X;
-        var dz = target.Z - landed.Z;
-        if (dx * dx + dz * dz > ClampEpsilon * ClampEpsilon)
-        {
-            if (TryStepUp(query, position, target.X, target.Z, radius, out var boarded))
-                return boarded;
-            if (TryLedgeDrop(query, position.Y, target.X, target.Z, out var dropped))
-                return dropped;
-            if (TryFloorRide(position, target.X, target.Z, radius, out var rode))
-                return rode;
-            // Off-mesh (mid-descent), the snap can yank the walker back onto a
-            // rim it already left — never move farther than the tick asked.
-            var jumpX = landed.X - position.X;
-            var jumpZ = landed.Z - position.Z;
-            if (jumpX * jumpX + jumpZ * jumpZ > (delta.X * delta.X + delta.Z * delta.Z) * 4f + 1f)
-                return position;
-        }
-        return landed;
+        return new Vector3(result.X, SurfaceY(result.X, result.Z, HeightOn(query, endRef, result)), result.Z);
     }
 
     /// <summary>
-    /// Boarding by footprint reach: the sim's WalkSurface counts any surface
-    /// within StepHeight above whose edge the body cylinder overlaps — that is
-    /// how a walker steps from a slope onto a bridge deck that starts a
-    /// few units ahead. The mesh's edge additionally sits an eroded radius in
-    /// from the physical edge, so the reach allows for both. Only genuine
-    /// rises board (10..StepHeight — smaller steps are span-connected in the
-    /// bake), only forward of travel, and never through a standing solid.
+    /// How many times <see cref="Move"/> refused because the mover had no
+    /// polygon within snap reach. Under navmesh-only movement this should
+    /// stay 0 forever; a nonzero count is a broken invariant worth logging.
     /// </summary>
-    private bool TryStepUp(DtNavMeshQuery query, Vector3 from, float targetX, float targetZ, float radius, out Vector3 landing)
-    {
-        landing = default;
-        var dx = targetX - from.X;
-        var dz = targetZ - from.Z;
-        var len = MathF.Sqrt(dx * dx + dz * dz);
-        if (len < 1e-6f)
-            return false;
-        // Search centred a body radius past the target so the surface ahead —
-        // not the slope behind — is the nearest candidate.
-        var reach = radius * 2f + 12f;
-        var centre = new RcVec3f(targetX + dx / len * radius, from.Y + SimConstants.StepHeight, targetZ + dz / len * radius);
-        var status = query.FindNearestPoly(centre, new RcVec3f(reach, 8f, reach), _filter,
-                                           out var polyRef, out var pt, out _);
-        if (!status.Succeeded() || polyRef == 0)
-            return false;
-        if (pt.Y > from.Y + SimConstants.StepHeight + 0.01f || pt.Y < from.Y + 10f)
-            return false; // not a legal boarding rise
-        if ((pt.X - from.X) * dx + (pt.Z - from.Z) * dz <= 0f)
-            return false; // behind or beside the walk — not where this step goes
-        var px = pt.X - targetX;
-        var pz = pt.Z - targetZ;
-        if (px * px + pz * pz > reach * reach)
-            return false; // beyond any footprint's touch
-        var clearance = from.Y + SimConstants.StepHeight + 0.5f;
-        if (_soup.SegmentHits(new Vector3(from.X, clearance, from.Z), new Vector3(pt.X, clearance, pt.Z), blockersOnly: true))
-            return false; // a wall stands between — reaching over it is not boarding
-        landing = new Vector3(pt.X, SurfaceY(pt.X, pt.Z, pt.Y), pt.Z);
-        return true;
-    }
-
-    /// <summary>
-    /// The bake's slope cutoff cannot express the sim's asymmetry: a floor of
-    /// any steepness is descendable, and any grade rising no more than
-    /// StepHeight per step is inchable. When the mesh clamps, ride the raw
-    /// floor instead — provided no STRUCTURE stands across the way at step
-    /// height (the ground itself is never a wall; its rise is gated above).
-    /// </summary>
-    private bool TryFloorRide(Vector3 from, float targetX, float targetZ, float radius, out Vector3 landing)
-    {
-        landing = default;
-        if (_soup.GroundBelow(targetX, targetZ, from.Y, SimConstants.StepHeight) is not { } ground ||
-            ground > from.Y + SimConstants.StepHeight)
-            return false;
-        var dx = targetX - from.X;
-        var dz = targetZ - from.Z;
-        var len = MathF.Sqrt(dx * dx + dz * dz);
-        if (len < 1e-6f)
-            return false;
-        // Three clearance rails at step height — down the middle and along
-        // each shoulder — probing a body radius past the target, so the
-        // centre can neither hug a wall nor squeeze a cylinder through a
-        // gap narrower than its body.
-        var clearance = from.Y + SimConstants.StepHeight + 0.5f;
-        var ox = dx / len * radius;
-        var oz = dz / len * radius;
-        for (var rail = -1; rail <= 1; rail++)
-        {
-            var sx = -oz * rail;
-            var sz = ox * rail;
-            if (_soup.SegmentHits(new Vector3(from.X + sx, clearance, from.Z + sz),
-                                  new Vector3(targetX + ox + sx, clearance, targetZ + oz + sz),
-                                  blockersOnly: true))
-                return false;
-        }
-        landing = new Vector3(targetX, ground, targetZ);
-        return true;
-    }
+    public int OffMeshRefusals { get; private set; }
 
     /// <summary>
     /// The walkable route between two points, string-pulled to corner
@@ -388,23 +306,6 @@ public sealed class RealmGeometry : IRealmGeometry
     /// <summary>moveAlongSurface leaves Y unprojected; the poly's detail height is closer.</summary>
     private static float HeightOn(DtNavMeshQuery query, long polyRef, RcVec3f pos) =>
         query.GetPolyHeight(polyRef, pos, out var h).Succeeded() ? h : pos.Y;
-
-    private bool TryLedgeDrop(DtNavMeshQuery query, float fromY, float x, float z, out Vector3 landing)
-    {
-        landing = default;
-        var status = query.FindNearestPoly(new RcVec3f(x, fromY, z), DropExtents, _filter,
-                                           out var polyRef, out var pt, out _);
-        if (!status.Succeeded() || polyRef == 0)
-            return false;
-        var dx = pt.X - x;
-        var dz = pt.Z - z;
-        if (dx * dx + dz * dz > DropSnapTolerance * DropSnapTolerance)
-            return false; // nothing directly below — the clamp was a wall
-        if (pt.Y > fromY - SimConstants.StepHeight)
-            return false; // level or rising ground is never a drop
-        landing = new Vector3(pt.X, SurfaceY(pt.X, pt.Z, HeightOn(query, polyRef, pt)), pt.Z);
-        return true;
-    }
 
     /// <summary>
     /// The navmesh's height is voxel-rough (rasterization rounds surfaces up to

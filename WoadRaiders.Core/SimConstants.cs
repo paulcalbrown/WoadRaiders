@@ -102,10 +102,11 @@ public static class SimConstants
 
     /// <summary>
     /// How far (on the ground plane) from a link endpoint a mover can board
-    /// it. Links seed every 50 units along a rim (NavMeshBuilder), so 25
-    /// guarantees any rim point is within reach of one.
+    /// it. Links seed every 50 units along a rim (NavMeshBuilder), putting
+    /// the midpoint between seeds 25 away — 30 covers it with slack for the
+    /// lip's one-unit inset, so no rim point reads as a phantom wall.
     /// </summary>
-    public const float LinkBoardRadius = 25f;
+    public const float LinkBoardRadius = 30f;
 
     /// <summary>
     /// Max height difference between a mover's feet and a link endpoint to

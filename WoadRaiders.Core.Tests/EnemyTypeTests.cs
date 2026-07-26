@@ -200,6 +200,52 @@ public class EnemyTypeTests
                     $"enemy should have walked back to its post (got {enemy.Position})");
     }
 
+    // A low floor and a plateau meeting at a sheer 300-unit face: the only way
+    // down is the drop link the bake's rim scouts earned. Baked at both agent
+    // widths, like every served realm.
+    private static RealmGeometry CliffRealm() => TestRealms.Geo(new SoupBuilder()
+        .AddBox(new Aabb(new Vector3(0, -20, 0), new Vector3(200, 0, 400)))
+        .AddBox(new Aabb(new Vector3(200, -20, 0), new Vector3(400, 300, 400)))
+        .Build());
+
+    [Theory]
+    [InlineData(EnemyType.Minion)]
+    [InlineData(EnemyType.Boss)]
+    public void The_hunt_crosses_a_drop_link_to_reach_its_prey(EnemyType type)
+    {
+        // The prey stands under the cliff; the hunter starts on the plateau.
+        // Movement is navmesh-only, so the pursuit MUST board the baked drop
+        // link at the rim — under the old rules it teleport-dropped through
+        // Move's hatches; losing the crossing here would leave every enemy
+        // pacing the rim forever. The boss runs the same chase on its own
+        // width's mesh and link table.
+        var world = new GameWorld { Geometry = CliffRealm() };
+        var player = world.AddPlayer(1, "Prey");
+        player.Position = new Vector3(100, 0, 200);
+        var enemy = world.SpawnEnemy(new Vector3(260, 300, 200), type);
+        enemy.Aggroed = true; // the cliff face denies line-of-sight aggro; the hunt itself is under test
+
+        // Success is a landed STRIKE, not proximity: the boss opens fire from
+        // its own attack range and stands there, so a fixed closing distance
+        // would never trip for it (and left running, it beats the prey to
+        // death and chases the respawn — which is how this test first failed).
+        var crossed = false;
+        var attackedMidAir = false;
+        for (var i = 0; i < 30 * SimConstants.TickRate && player.Health >= player.MaxHealth; i++)
+        {
+            world.Step();
+            crossed |= enemy.Link.Active;
+            attackedMidAir |= enemy.Link.Active && enemy.IsAttacking;
+        }
+
+        Assert.True(crossed, "the hunt never boarded the drop link at the rim");
+        Assert.False(attackedMidAir, "no footing mid-fall — a crossing enemy must not strike");
+        Assert.True(player.Health < player.MaxHealth,
+            $"the {type} should have dropped to its prey and struck it, but stands at " +
+            $"({enemy.Position.X:F0},{enemy.Position.Y:F0},{enemy.Position.Z:F0})");
+        Assert.True(enemy.Position.Y < 5f, $"the hunt should end on the low floor, got Y={enemy.Position.Y:F0}");
+    }
+
     [Fact]
     public void Boss_collides_with_its_wider_radius()
     {

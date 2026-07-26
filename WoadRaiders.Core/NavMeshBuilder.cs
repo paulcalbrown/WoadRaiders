@@ -26,12 +26,14 @@ namespace WoadRaiders.Core;
 /// big enough to walk into blocks, because it should.
 ///
 /// Drops are the one sim rule polygons cannot carry: falling off a ledge (or
-/// riding a steep face downhill) is always legal, but on a navmesh those edges
+/// riding a steep face downhill) leaves the mesh, and on a navmesh those edges
 /// simply end. So after the first bake a scout literally walks off every
-/// boundary edge with <see cref="RealmGeometry.Move"/>'s rules; wherever it
-/// lands back on the mesh below, the bake adds a one-way off-mesh drop link
-/// and rebuilds — the path planner can then route through exactly the falls
-/// the mover can perform, and no others.
+/// boundary edge with <see cref="ScoutMover"/>'s rules — the sim's physical
+/// hatches, frozen for the bake; wherever it lands back on the mesh below, the
+/// bake adds a one-way off-mesh drop link and rebuilds. The RUNTIME is
+/// navmesh-only (<see cref="RealmGeometry.Move"/> never leaves the mesh), so
+/// these links are the only crossings a mover ever performs: the planner
+/// routes through them and the sim executes them as LinkTraversal arcs.
 ///
 /// Bake once (tools), serialize, and ship the same bytes to server and client
 /// — never bake independently per peer, so every peer clamps to identical
@@ -172,21 +174,26 @@ public static class NavMeshBuilder
     }
 
     /// <summary>
-    /// Walk a scout off every boundary edge of the bare mesh, using the very
-    /// movement rules the sim will run. A scout that comes to rest back on the
-    /// mesh below its lip earns a one-way drop link; one that boards a surface
-    /// above (a bridge deck its footprint reaches) earns a two-way link — the
-    /// planner may then route through exactly the falls and boardings the
-    /// mover can perform, and no others.
+    /// Walk a scout off every boundary edge of the bare mesh, using the sim's
+    /// PHYSICAL rules (<see cref="ScoutMover"/> — the old escape hatches,
+    /// frozen for the bake). A scout that comes to rest back on the mesh below
+    /// its lip earns a one-way drop link; one that boards a surface above (a
+    /// bridge deck its footprint reaches) earns a two-way link. The runtime is
+    /// navmesh-only, so these links are the ONLY crossings a mover will ever
+    /// perform — a fall the scout cannot finish is a wall, by design.
     /// </summary>
     private static List<(RcVec3f start, RcVec3f end, bool bidir)> FindDropLinks(DtMeshData bare, TriangleSoup soup, float agentRadius)
     {
         var links = new List<(RcVec3f start, RcVec3f end, bool bidir)>();
         var navMesh = ToNavMesh(bare);
-        var scoutGeo = new RealmGeometry(navMesh, soup, Vector3.Zero);
+        var scout = new ScoutMover(navMesh, soup);
         var query = new DtNavMeshQuery(navMesh);
         var filter = new DtQueryDefaultFilter();
-        var landedExtents = new RcVec3f(8f, 12f, 8f);
+        // The landing search must reach across the eroded band at a wall's
+        // base (~agentRadius of meshless floor), or every sheer drop lands
+        // just outside the mesh and earns nothing. Y stays tight: a landing
+        // is only a landing at its own level.
+        var landedExtents = new RcVec3f(agentRadius + 12f, 12f, agentRadius + 12f);
         var tickStep = SimConstants.PlayerMoveSpeed * SimConstants.TickDelta;
 
         for (var pi = 0; pi < bare.header.polyCount; pi++)
@@ -225,7 +232,11 @@ public static class NavMeshBuilder
                     nz = -nz;
                 }
 
-                var scouts = Math.Max(1, (int)(len / DropLinkSpacing));
+                // Ceil, not truncate: seeding must guarantee neighbouring lips
+                // sit within DropLinkSpacing, or the midpoint between them
+                // falls outside LinkBoardRadius and that stretch of rim reads
+                // as a phantom wall to a mesh-only mover.
+                var scouts = Math.Max(1, (int)MathF.Ceiling(len / DropLinkSpacing));
                 for (var s = 0; s < scouts; s++)
                 {
                     var t = (s + 0.5f) / scouts;
@@ -241,11 +252,17 @@ public static class NavMeshBuilder
 
                     // Ride the scout over the edge until it rests on mesh
                     // again — below the lip (a fall) or above it (a boarding).
+                    // A long steep face is ridden tick by tick to its foot: a
+                    // "fell" high on the face keeps riding rather than giving
+                    // up (a sheer wall's plunge arrives here already at the
+                    // bottom). The link's end is the point ON the mesh, not
+                    // the raw rest — a landing inside the eroded band would
+                    // strand a mesh-only mover the moment it set down.
                     var pos = lip;
                     var step = new Vector3(nx * tickStep, 0, nz * tickStep);
                     for (var tick = 0; tick < DropScoutMaxTicks; tick++)
                     {
-                        var next = scoutGeo.Move(pos, step);
+                        var next = scout.Move(pos, step);
                         if ((next - pos).LengthSquared() < 0.01f)
                             break; // stuck — a wall or the border seal, not a crossing
                         pos = next;
@@ -254,16 +271,31 @@ public static class NavMeshBuilder
                         if (!fell && !boarded)
                             continue; // still near lip level — plain mesh walking
                         var status = query.FindNearestPoly(new RcVec3f(pos.X, pos.Y, pos.Z), landedExtents,
-                                                           filter, out var landedRef, out _, out _);
-                        if (status.Succeeded() && landedRef != 0)
+                                                           filter, out var landedRef, out var onMesh, out _);
+                        if (status.Succeeded() && landedRef != 0 && NudgeIsClear(soup, pos, onMesh))
+                        {
+                            var restY = soup.SurfaceNear(onMesh.X, onMesh.Z, onMesh.Y, 2f * CellHeight + 0.5f) ?? onMesh.Y;
                             links.Add((new RcVec3f(lip.X - nx, lip.Y, lip.Z - nz),
-                                       new RcVec3f(pos.X, pos.Y, pos.Z), boarded));
-                        break;
+                                       new RcVec3f(onMesh.X, restY, onMesh.Z), boarded));
+                            break;
+                        }
+                        if (boarded)
+                            break; // a boarding lands where it stepped, or nowhere
                     }
                 }
             }
         }
         return links;
+    }
+
+    /// <summary>The nudge from where the scout rests to the mesh must not pass
+    /// through a standing solid — nearest-poly can otherwise reach across a
+    /// thin wall and land the crossing in a different room.</summary>
+    private static bool NudgeIsClear(TriangleSoup soup, Vector3 rest, RcVec3f onMesh)
+    {
+        var y = MathF.Max(rest.Y, onMesh.Y) + SimConstants.StepHeight + 0.5f;
+        return !soup.SegmentHits(new Vector3(rest.X, y, rest.Z),
+                                 new Vector3(onMesh.X, y, onMesh.Z), blockersOnly: true);
     }
 
     /// <summary>

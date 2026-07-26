@@ -56,6 +56,11 @@ public sealed class LocalPlayer
     /// <summary>Predicted attack-anim window, so the local swing is instant.</summary>
     public bool Swinging => _attack.Swinging;
 
+    /// <summary>Predicted mid-crossing state (falling off a rim, boarding a
+    /// deck) — drives the local character's mid-air pose the instant the
+    /// crossing starts, snapshot latency never in the loop.</summary>
+    public bool Crossing => _prediction?.TraversingLink ?? false;
+
     /// <summary>The smoothed feet position to draw (and follow) this frame.</summary>
     public Vector3 RenderPosition => _renderPos.ToGodot();
 
