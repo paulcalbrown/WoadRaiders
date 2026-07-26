@@ -16,7 +16,15 @@ public partial class CharacterView : Node3D
 
     private const string AnimIdle = "Idle";
     private const string AnimRun = "Running_A";
+    private const string AnimAirborne = "Jump_Idle"; // KayKit's mid-air loop; both packs carry it
     private const float MoveAnimSpeed = 25f;  // units/s at/above which the run clip plays
+
+    // Vertical speed below which a view reads as FALLING (remotes and enemies,
+    // whose crossings arrive only as positions). Sits between the steepest
+    // walkable descent — run speed 220 down the 67.8° bake limit ≈ 540/s —
+    // and the link crossing's fall speed (SimConstants.LinkFallSpeed, 660):
+    // running downhill never reads as a fall, and a real drop always does.
+    private const float FallAnimSpeed = 600f;
     private const float TurnSpeed = 14f;      // facing lerp rate
     private const float VelSmoothRate = 12f;  // facing-velocity smoothing (kills twitch)
     private const float ModelYawOffset = 0f;  // KayKit chars face +Z (glTF convention); flip to Mathf.Pi if they moonwalk
@@ -34,6 +42,15 @@ public partial class CharacterView : Node3D
 
     /// <summary>Play the attack clip this frame? Snapshot flag for remotes, predicted for the local player.</summary>
     public bool Attacking { get; set; }
+
+    /// <summary>
+    /// Mid-crossing on a baked link (falling off a rim, boarding a deck)?
+    /// The local player sets it from prediction, so the mid-air pose starts
+    /// the instant the crossing does. Remotes and enemies never set it —
+    /// their crossings arrive as plain positions, and <see cref="Animate"/>
+    /// infers the fall from vertical speed instead.
+    /// </summary>
+    public bool Airborne { get; set; }
 
     /// <summary>Latest authoritative position; remote views ease toward it every frame.</summary>
     public Vector3 Target { get; set; }
@@ -60,6 +77,7 @@ public partial class CharacterView : Node3D
     private float _barScale = 1f;
     private Vector3 _lastPos;
     private Vector3 _smoothVel;          // low-passed velocity used for facing (kills reconcile twitch)
+    private float _smoothVelY;           // low-passed vertical speed — the fall inference for remotes
     private Vector3? _requestedFacing;   // a direction to face this frame (the cursor while swinging); see FaceToward
     private string _clip = "";
     private float _yaw;                  // the character's current facing angle — always applied to the pivot
@@ -113,6 +131,7 @@ public partial class CharacterView : Node3D
     {
         _lastPos = Position;
         _smoothVel = Vector3.Zero;
+        _smoothVelY = 0f;
     }
 
     /// <summary>
@@ -123,12 +142,15 @@ public partial class CharacterView : Node3D
     {
         var pos = Position;
         var flat = new Vector3(pos.X - _lastPos.X, 0f, pos.Z - _lastPos.Z);
+        var drop = pos.Y - _lastPos.Y;
         _lastPos = pos;
 
         // Low-pass the velocity so per-frame reconciliation micro-corrections don't make the
         // model twitch its facing or flicker between idle/run.
+        var smoothing = Mathf.Clamp((float)delta * VelSmoothRate, 0f, 1f);
         var frameVel = flat / Mathf.Max((float)delta, 0.0001f);
-        _smoothVel = _smoothVel.Lerp(frameVel, Mathf.Clamp((float)delta * VelSmoothRate, 0f, 1f));
+        _smoothVel = _smoothVel.Lerp(frameVel, smoothing);
+        _smoothVelY = Mathf.Lerp(_smoothVelY, drop / Mathf.Max((float)delta, 0.0001f), smoothing);
         var speed = _smoothVel.Length();
 
         // The character is always facing _yaw; each frame it eases _yaw toward the
@@ -150,7 +172,11 @@ public partial class CharacterView : Node3D
         if (_anim is null)
             return;
 
-        var desired = Attacking ? AttackClip : moving ? AnimRun : AnimIdle;
+        // Airborne beats run/idle: mid-crossing there is no ground under the
+        // run cycle. The sim refuses attacks mid-crossing on both peers, so
+        // Attacking and airborne never genuinely compete.
+        var airborne = Airborne || _smoothVelY < -FallAnimSpeed;
+        var desired = Attacking ? AttackClip : airborne ? AnimAirborne : moving ? AnimRun : AnimIdle;
         if (desired != _clip || !_anim.IsPlaying())
         {
             _anim.SpeedScale = desired == AttackClip ? AttackSpeedScale(_anim, AttackClip) : 1f;

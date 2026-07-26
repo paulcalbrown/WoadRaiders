@@ -275,7 +275,8 @@ public sealed class WorldView
     /// Per-frame: ease remote views toward their snapshot targets, drive the local
     /// view from the predicted render position, animate everyone, spin the loot.
     /// </summary>
-    public void Update(double delta, int localPlayerId, Vector3 localRenderPos, bool localSwinging, Vector3 localAttackFacing)
+    public void Update(double delta, int localPlayerId, Vector3 localRenderPos, bool localSwinging,
+                       Vector3 localAttackFacing, bool localCrossing)
     {
         var factor = Mathf.Clamp((float)delta * RemoteSmoothing, 0f, 1f);
 
@@ -293,6 +294,7 @@ public sealed class WorldView
                     view.SnapMotionHistory();
                 }
                 view.Attacking = localSwinging; // predicted (instant), not the snapshot flag
+                view.Airborne = localCrossing;  // predicted too — the mid-air pose starts with the crossing
                 if (localSwinging && localAttackFacing.LengthSquared() > 0.0001f)
                     view.FaceToward(localAttackFacing); // hold the click direction through the swing
             }
