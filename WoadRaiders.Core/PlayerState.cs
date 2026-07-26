@@ -28,6 +28,16 @@ public sealed class PlayerState : Combatant
     /// </summary>
     public uint LastProcessedInput;
 
+    /// <summary>
+    /// Consecutive ticks this player's push has qualified to board a link
+    /// (committed, clamped, aligned — see GameWorld.MovePlayers). Boarding
+    /// fires at <see cref="SimConstants.LinkIntentTicks"/>. Rides the
+    /// snapshot and is restored on reconcile like the attack timers: the
+    /// replay must count the same held ticks the server counted, or a
+    /// crossing predicts a tick early or late and the position drifts.
+    /// </summary>
+    public byte LinkIntent;
+
     /// <summary>Items this player has collected. Authoritative, server-side.</summary>
     public List<Item> Inventory { get; } = new();
 

@@ -300,10 +300,22 @@ public sealed partial class CryptDesign : IRealmDesign
         // The span: the Minster's own masonry, thrown across a hole older than
         // it. The one place Era III appears below its own storey.
         var deck = Ledge("B4c", Era.Minster, 5920, 7040, 1200, 1360, -400);
+        // Kerbstones parapet the span's long edges — but the SOUTH row must
+        // break where the east flight tops out (B4e, x 6920..7040), or the
+        // parapet seals the stair's mouth: the flight climbs 480 into a kerb
+        // wall, the join never meshes, and every climber is handed to the
+        // drop links at the lip instead of the deck — read in play as falling
+        // straight through the stairs. SPACE-007's "tops out ON the deck"
+        // needs an open mouth, not merely overlapped geometry.
+        const float StairMouthX0 = 6920f;
         foreach (var z in new[] { deck.Z0 + 8f, deck.Z1 - 8f })
             for (var x = deck.X0; x < deck.X1; x += Module)
+            {
+                if (z > deck.Z0 + 8f && x + Snap >= StairMouthX0 - Module / 2f)
+                    continue; // the east flight's mouth stays open
                 Place(Kerbstone((int)(x / Module) % 5), new Vector3(x + Snap, -400, z), 0f,
                       Stone(Era.Minster));
+            }
 
         Room("B4d", Era.Souterrain, 7040, 7200, 1120, 1440, -400, CeilMid,
              doorWest: 1280, doorSouth: 7120);
@@ -515,6 +527,10 @@ public sealed partial class CryptDesign : IRealmDesign
             var from = alongZ ? new Vector3(space.MidX, floorAtStart, z0) : new Vector3(x0, floorAtStart, space.MidZ);
             var to = alongZ ? new Vector3(space.MidX, space.EndY, z1) : new Vector3(x1, space.EndY, space.MidZ);
             BoxKit.Stairs(_scene, from, to, alongZ ? x1 - x0 : z1 - z0, Stone(era));
+            // A descending corridor is a flight in all but name — declare it,
+            // so the bake walks it both ways like any stair (a doorway lintel
+            // or a prop can seal its mouth just as the Fault's parapet did).
+            _scene.AddStair(from, to);
         }
         else
         {
@@ -565,7 +581,10 @@ public sealed partial class CryptDesign : IRealmDesign
 
     /// <summary>A flight of treads, each rising less than a step so feet flow up
     /// it. Runs from one point to another — lay it ALONG a wall, never across a
-    /// floor.</summary>
+    /// floor. Every flight declares itself to the bake, which walks it both
+    /// ways and refuses a realm whose stair stalls or rides a link — the only
+    /// check that can see a sealed mouth, since a stair that merely descends
+    /// strands nobody.</summary>
     private Space Stair(string id, Era era, float x0, float x1, float z0, float z1, float fromY, float toY)
     {
         var space = new Space(id, era, Mathf.Min(x0, x1), Mathf.Max(x0, x1),
@@ -573,6 +592,8 @@ public sealed partial class CryptDesign : IRealmDesign
         _spaces.Add(space);
         BoxKit.Stairs(_scene, new Vector3((x0 + x1) / 2f, fromY, z0),
                       new Vector3((x0 + x1) / 2f, toY, z1), Mathf.Abs(x1 - x0), Stone(era));
+        _scene.AddStair(new Vector3((x0 + x1) / 2f, fromY, z0),
+                        new Vector3((x0 + x1) / 2f, toY, z1));
         return space;
     }
 }

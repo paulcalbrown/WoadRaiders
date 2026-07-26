@@ -257,10 +257,14 @@ public sealed class GameWorld
             var next = ResolveMove(player.Position, delta);
 
             // Clamped short of the intent? A baked link may carry this push
-            // over the rim. (Move's own drop handling still runs first, so
-            // links only catch what it refused — the flip to navmesh-only
-            // movement makes them the one way off a surface.)
-            if (Geometry is { } geometry && moveLenSq > 0.0001f)
+            // over the rim — but boarding is irreversible, so it takes a
+            // COMMITTED push (a tentative analog edge-hug slides instead)
+            // HELD for LinkIntentTicks: a single tick can qualify by accident
+            // when a camera turn sweeps the push square to a crossing, and a
+            // 33 ms brush must not become a 400-unit fall.
+            var qualifying = false;
+            if (Geometry is { } geometry &&
+                moveLenSq >= SimConstants.LinkBoardCommitment * SimConstants.LinkBoardCommitment)
             {
                 var shortX = player.Position.X + delta.X - next.X;
                 var shortZ = player.Position.Z + delta.Z - next.Z;
@@ -269,15 +273,27 @@ public sealed class GameWorld
                     var code = geometry.FindLink(player.Position, move);
                     if (code >= 0 && geometry.TryGetLink(code, out var from, out var to))
                     {
-                        // Step to the lip and ride the arc from there; the lip
-                        // is within board radius, so this reads as stepping off.
-                        player.Link = LinkTraversal.Begin(code, from, to);
-                        player.Position = from;
-                        player.Velocity = Vector3.Zero;
-                        continue;
+                        qualifying = true;
+                        // The deeper the fall, the longer the push must be held.
+                        var required = player.Position.Y - to.Y > SimConstants.LinkPlungeDrop
+                            ? SimConstants.LinkIntentTicksPlunge
+                            : SimConstants.LinkIntentTicks;
+                        if (player.LinkIntent + 1 >= required)
+                        {
+                            // Step to the lip and ride the arc from there; the lip
+                            // is within board radius, so this reads as stepping off.
+                            player.Link = LinkTraversal.Begin(code, from, to);
+                            player.Position = from;
+                            player.Velocity = Vector3.Zero;
+                            player.LinkIntent = 0;
+                            continue;
+                        }
+                        player.LinkIntent++;
                     }
                 }
             }
+            if (!qualifying)
+                player.LinkIntent = 0;
 
             player.Position = next;
         }
@@ -782,6 +798,7 @@ public sealed class GameWorld
             player.Health = player.MaxHealth;
             player.AttackCooldown = 0f;
             player.Link = LinkTraversal.None; // a death mid-fall does not keep falling
+            player.LinkIntent = 0;
         }
     }
 

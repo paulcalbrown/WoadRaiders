@@ -17,7 +17,13 @@ namespace WoadRaiders.Core;
 ///     reached (falls are detours, never graves). This is a flood-fill PROOF
 ///     over the polygon-and-link graph, not a sampling. Movement is
 ///     navmesh-only, so that graph is exactly the set of places a mover can
-///     ever stand, and a trap too small for any sample grid cannot hide in it.
+///     ever stand, and a trap too small for any sample grid cannot hide in it;
+///   - every DECLARED flight (<see cref="RealmDefinition.Stairs"/>) walks both
+///     ways on plain mesh: no stall, and no baked-link crossing. Regular
+///     traversal must never ride links, and no reachability proof can see a
+///     stair that only descends — a one-way flight strands nobody, which is
+///     exactly how the Fault's east flight shipped sealed behind a parapet.
+///     Only a climb test catches that, so every stair now carries one.
 ///
 /// Sealed borders come free in a built realm: beyond the soup there is no
 /// ground at all, so movement simply refuses the void — there is no infinite
@@ -80,7 +86,60 @@ public static class RealmValidator
                            $"the boss cannot be reached from it ({size} polygons)");
         }
 
+        for (var i = 0; i < realm.Stairs.Count; i++)
+        {
+            WalkFlight(nav, realm.Stairs[i].Foot, realm.Stairs[i].Head, $"flight {i} climbing", issues);
+            WalkFlight(nav, realm.Stairs[i].Head, realm.Stairs[i].Foot, $"flight {i} descending", issues);
+        }
+
         return issues;
+    }
+
+    /// <summary>
+    /// Walk a declared flight end to end through the REAL simulation — the
+    /// same GameWorld a raider moves in, unit push toward the goal — and
+    /// report a flight that boards a baked link (regular traversal must be
+    /// mesh-walkable; a crossing here means the geometry failed to join and
+    /// the bake healed it with a fall) or stalls short (a sealed mouth).
+    /// </summary>
+    private static void WalkFlight(RealmGeometry nav, Vector3 start, Vector3 goal, string what, List<string> issues)
+    {
+        var world = new GameWorld { Geometry = nav };
+        var walker = world.AddPlayer(1, "flight-walker");
+        walker.Position = start with { Y = nav.GroundHeight(start + new Vector3(0f, 30f, 0f)) };
+
+        var dx = goal.X - start.X;
+        var dz = goal.Z - start.Z;
+        var distance = MathF.Sqrt(dx * dx + dz * dz);
+        var budget = (int)(4f * distance / (SimConstants.PlayerMoveSpeed * SimConstants.TickDelta)) + 90;
+        uint seq = 0;
+        for (var t = 0; t < budget; t++)
+        {
+            var toGoal = new Vector3(goal.X - walker.Position.X, 0f, goal.Z - walker.Position.Z);
+            // Press all the way in before judging: at ArrivalTolerance a
+            // shallow flight is legitimately still a body-height up its
+            // own grade, and stopping there would misread it as a stall.
+            if (toGoal.Length() <= 10f)
+                break;
+            var dir = Vector3.Normalize(toGoal);
+            world.SetInput(1, new PlayerInput { MoveX = dir.X, MoveZ = dir.Z, Sequence = ++seq });
+            world.Step();
+            if (walker.Link.Active)
+            {
+                issues.Add($"the {what} run rides a baked link at " +
+                           $"({walker.Link.From.X:0},{walker.Link.From.Y:0},{walker.Link.From.Z:0}) — " +
+                           "regular traversal must be mesh-walkable; the geometry fails to join there");
+                return;
+            }
+        }
+
+        var endDx = walker.Position.X - goal.X;
+        var endDz = walker.Position.Z - goal.Z;
+        if (endDx * endDx + endDz * endDz > ArrivalTolerance * ArrivalTolerance ||
+            MathF.Abs(walker.Position.Y - goal.Y) > 30f)
+            issues.Add($"the {what} run stalls at " +
+                       $"({walker.Position.X:0},{walker.Position.Y:0},{walker.Position.Z:0}) — " +
+                       $"it never arrives at ({goal.X:0},{goal.Y:0},{goal.Z:0})");
     }
 
     /// <summary>A complete route exists — the planner's last waypoint arrives at the goal.</summary>

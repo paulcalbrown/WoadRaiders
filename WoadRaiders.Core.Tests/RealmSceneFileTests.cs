@@ -64,6 +64,50 @@ public class RealmSceneFileTests
         """;
 
     [Fact]
+    public void Stair_marker_pairs_declare_flights_and_odd_pairs_refuse()
+    {
+        // A declared flight is a validation promise; the parse pairs the
+        // markers (foot then head) and REFUSES an unpaired one — a silently
+        // dropped declaration is a silently unchecked stair.
+        const string floor = """
+            [gd_scene load_steps=2 format=3]
+
+            [sub_resource type="BoxMesh" id="box"]
+            size = Vector3(100, 20, 60)
+
+            [node name="Realm" type="Node3D"]
+
+            [node name="Floor" type="MeshInstance3D" parent="."]
+            mesh = SubResource("box")
+
+            [node name="PlayerSpawn" type="Marker3D" parent="."]
+            """;
+        const string pair = """
+
+            [node name="Stair0_Foot" type="Marker3D" parent="."]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, 20)
+
+            [node name="Stair0_Head" type="Marker3D" parent="."]
+            transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 50, 20)
+            """;
+
+        var realm = RealmSceneFile.Parse(floor + pair);
+        var run = Assert.Single(realm.Stairs);
+        Assert.Equal(new Vector3(10, 0, 20), run.Foot);
+        Assert.Equal(new Vector3(30, 50, 20), run.Head);
+
+        const string widow = """
+
+            [node name="Stair1_Head" type="Marker3D" parent="."]
+            """;
+        Assert.Throws<InvalidDataException>(() => RealmSceneFile.Parse(floor + widow));
+
+        // And the declaration survives the JSON round trip the server reads.
+        var back = RealmDefinitionFile.Parse(RealmDefinitionFile.ToJson(realm));
+        Assert.Equal(realm.Stairs, back.Stairs);
+    }
+
+    [Fact]
     public void A_realm_scene_parses_into_markers_and_a_geometry_soup()
     {
         var geometry = RealmSceneFile.Parse(Realm, "res://maps/Realm.tscn");

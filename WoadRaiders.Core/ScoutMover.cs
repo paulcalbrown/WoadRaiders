@@ -49,8 +49,20 @@ public sealed class ScoutMover
     /// lies below, or ride the raw floor — the transitions the runtime only
     /// permits through the links this mover discovers.
     /// </summary>
-    public Vector3 Move(Vector3 position, Vector3 delta, float radius = SimConstants.CharacterRadius)
+    public Vector3 Move(Vector3 position, Vector3 delta, float radius = SimConstants.CharacterRadius) =>
+        Move(position, delta, out _, radius);
+
+    /// <summary>
+    /// As <see cref="Move(Vector3,Vector3,float)"/>, and reports whether a
+    /// physical HATCH (step-up, ledge drop, floor ride) produced the result
+    /// rather than plain mesh walking — the difference between CROSSING
+    /// something and merely walking somewhere, which is what separates a
+    /// drop-link scout's crossing from its stroll (a scout that walks up a
+    /// staircase has not "boarded" it, however high it ends up).
+    /// </summary>
+    public Vector3 Move(Vector3 position, Vector3 delta, out bool hatched, float radius = SimConstants.CharacterRadius)
     {
+        hatched = false;
         if (delta.X == 0f && delta.Z == 0f)
             return position;
         if (!TrySnap(position, out var startRef, out var start))
@@ -68,12 +80,14 @@ public sealed class ScoutMover
         var dz = target.Z - landed.Z;
         if (dx * dx + dz * dz > ClampEpsilon * ClampEpsilon)
         {
+            hatched = true;
             if (TryStepUp(position, target.X, target.Z, radius, out var boarded))
                 return boarded;
             if (TryLedgeDrop(position.Y, target.X, target.Z, out var dropped))
                 return dropped;
             if (TryFloorRide(position, target.X, target.Z, radius, out var rode))
                 return rode;
+            hatched = false;
             // Off-mesh (mid-descent), the snap can yank the walker back onto a
             // rim it already left — never move farther than the tick asked.
             var jumpX = landed.X - position.X;

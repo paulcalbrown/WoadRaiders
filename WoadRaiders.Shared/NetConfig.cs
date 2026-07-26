@@ -111,7 +111,17 @@ public static class NetConfig
     ///        FORMAT is unchanged; the key moves because a v23 client's Move
     ///        predicts different physics against a v24 server and would
     ///        rubber-band on every slope and rim.
-    public const string ConnectionKey = "WoadRaiders.v24";
+    /// v25 = link boarding takes conviction, commitment, and held intent:
+    ///        FindLink requires a near-square push (cos ~26°), a clear
+    ///        step-height rail to lip and rising landing, and prefers a
+    ///        crossing that keeps the mover's level over a plunge; a player
+    ///        boards only after a committed push (≥0.5) HELD for
+    ///        LinkIntentTicks — the count rides PlayerSnapshot.LinkIntent and
+    ///        restores on reconcile. The drop-scout bakes crossings as
+    ///        hatch-chains between mesh rests and dedups on whole crossings
+    ///        (the Fault's east flight ate climbers under every earlier rule).
+    ///        Artifacts rebaked.
+    public const string ConnectionKey = "WoadRaiders.v25";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";

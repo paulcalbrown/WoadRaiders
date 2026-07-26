@@ -269,6 +269,11 @@ public struct PlayerSnapshot : INetSerializable
     public ushort TraversalLink;
     public ushort TraversalTick;
 
+    // How many consecutive ticks the push has qualified to board a link —
+    // restored on reconcile with the pair above, or the replay boards a tick
+    // early or late against the server's count.
+    public byte LinkIntent;
+
     /// <summary>The <see cref="TraversalLink"/> value meaning "not crossing".</summary>
     public const ushort NoLink = ushort.MaxValue;
 
@@ -288,6 +293,7 @@ public struct PlayerSnapshot : INetSerializable
         w.Put(AttackCooldown);
         w.Put(TraversalLink);
         w.Put(TraversalTick);
+        w.Put(LinkIntent);
         w.Put(Class);
     }
 
@@ -305,6 +311,7 @@ public struct PlayerSnapshot : INetSerializable
         AttackCooldown = r.GetFloat();
         TraversalLink = r.GetUShort();
         TraversalTick = r.GetUShort();
+        LinkIntent = r.GetByte();
         Class = r.GetByte();
     }
 }

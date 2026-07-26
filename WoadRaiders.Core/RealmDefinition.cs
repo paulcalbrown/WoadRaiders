@@ -57,6 +57,17 @@ public sealed class RealmDefinition
     /// </summary>
     public string? ScenePath { get; init; }
 
+    /// <summary>
+    /// The realm's declared walkable flights — each a promise that a mover
+    /// can WALK between the two ends, both ways, on plain mesh. Validation
+    /// walks every one and fails the bake if a flight stalls or rides a
+    /// baked link: regular traversal must never depend on crossings, and no
+    /// reachability proof can see a stair that only descends (a one-way
+    /// flight strands nobody — the Fault's east flight shipped sealed
+    /// exactly that way, and only a climb test caught it).
+    /// </summary>
+    public IReadOnlyList<StairRun> Stairs { get; init; } = Array.Empty<StairRun>();
+
     /// <summary>World extent of the soup (a safety clamp / render hint).</summary>
     public Aabb Bounds { get; }
 
@@ -79,3 +90,6 @@ public sealed class RealmDefinition
 
 /// <summary>An enemy spawn marker: where, and what kind of enemy it produces.</summary>
 public readonly record struct EnemySpawnPoint(Vector3 Position, EnemyType Type);
+
+/// <summary>A declared walkable flight: its lower end and its upper end.</summary>
+public readonly record struct StairRun(Vector3 Foot, Vector3 Head);

@@ -241,51 +241,77 @@ public static class NavMeshBuilder
                 {
                     var t = (s + 0.5f) / scouts;
                     var lip = new Vector3(ax + ex * t, ay + ey * t, az + ez * t);
-                    if (links.Any(l =>
-                    {
-                        var ddx = l.start.X - lip.X;
-                        var ddz = l.start.Z - lip.Z;
-                        return ddx * ddx + ddz * ddz < DropLinkSpacing * DropLinkSpacing * 0.25f &&
-                               MathF.Abs(l.start.Y - lip.Y) < SimConstants.StepHeight;
-                    }))
-                        continue; // a near-identical link already exists
 
                     // Ride the scout over the edge until it rests on mesh
-                    // again — below the lip (a fall) or above it (a boarding).
-                    // A long steep face is ridden tick by tick to its foot: a
-                    // "fell" high on the face keeps riding rather than giving
-                    // up (a sheer wall's plunge arrives here already at the
-                    // bottom). The link's end is the point ON the mesh, not
-                    // the raw rest — a landing inside the eroded band would
-                    // strand a mesh-only mover the moment it set down.
+                    // again. A crossing is an UNBROKEN CHAIN OF HATCH STEPS
+                    // between two mesh rests: a first step that is plain mesh
+                    // walking means this edge connects by walking — no link —
+                    // and a plain step AFTER hatching is the far rest, where
+                    // the crossing ends. Without that discipline a scout that
+                    // hops one tread and then strolls up a staircase records
+                    // the stroll as a 70-unit "boarding", and movers get
+                    // hoisted through the flight from beside it. A long steep
+                    // face is still ridden tick by tick to its foot (every
+                    // tick a floor-ride hatch); the link's end is the point ON
+                    // the mesh, not the raw rest — a landing inside the eroded
+                    // band would strand a mesh-only mover the moment it set
+                    // down.
                     var pos = lip;
                     var step = new Vector3(nx * tickStep, 0, nz * tickStep);
+                    var crossing = false;
                     for (var tick = 0; tick < DropScoutMaxTicks; tick++)
                     {
-                        var next = scout.Move(pos, step);
+                        var next = scout.Move(pos, step, out var hatchedStep);
                         if ((next - pos).LengthSquared() < 0.01f)
                             break; // stuck — a wall or the border seal, not a crossing
-                        pos = next;
+                        if (!hatchedStep && !crossing)
+                            break; // walked, not crossed — the mesh already joins here
+                        var resting = crossing && !hatchedStep; // back to plain walking: land at the PREVIOUS rest
+                        crossing = true;
+                        if (!resting)
+                            pos = next;
                         var fell = pos.Y < lip.Y - SimConstants.StepHeight;
                         var boarded = pos.Y > lip.Y + 9.9f;
                         if (!fell && !boarded)
-                            continue; // still near lip level — plain mesh walking
+                        {
+                            if (resting)
+                                break; // a hatch that went nowhere — band wobble, not a crossing
+                            continue;  // mid-hatch near lip level — keep riding
+                        }
                         var status = query.FindNearestPoly(new RcVec3f(pos.X, pos.Y, pos.Z), landedExtents,
                                                            filter, out var landedRef, out var onMesh, out _);
                         if (status.Succeeded() && landedRef != 0 && NudgeIsClear(soup, pos, onMesh))
                         {
                             var restY = soup.SurfaceNear(onMesh.X, onMesh.Z, onMesh.Y, 2f * CellHeight + 0.5f) ?? onMesh.Y;
-                            links.Add((new RcVec3f(lip.X - nx, lip.Y, lip.Z - nz),
-                                       new RcVec3f(onMesh.X, restY, onMesh.Z), boarded));
+                            var start = new RcVec3f(lip.X - nx, lip.Y, lip.Z - nz);
+                            var end = new RcVec3f(onMesh.X, restY, onMesh.Z);
+                            // Dedup on the WHOLE crossing — lip AND landing. Keyed
+                            // on the lip alone, a plunge to the floor far below
+                            // shadows the boarding hop onto the deck at the same
+                            // rim, and a mover at a broken join is offered only
+                            // the fall (the Fault's east flight shipped exactly
+                            // that: climbers plunged through the stair top).
+                            if (!links.Any(l => NearSame(l.start, start) && NearSame(l.end, end)))
+                                links.Add((start, end, boarded));
                             break;
                         }
-                        if (boarded)
-                            break; // a boarding lands where it stepped, or nowhere
+                        if (resting || boarded)
+                            break; // a rest or a boarding lands where it stands, or nowhere
                     }
                 }
             }
         }
         return links;
+    }
+
+    /// <summary>Two crossing endpoints count as the same when they sit within
+    /// half the seed spacing on the ground plane and a step of each other.</summary>
+    private static bool NearSame(RcVec3f a, RcVec3f b)
+    {
+        var dx = a.X - b.X;
+        var dz = a.Z - b.Z;
+        return dx * dx + dz * dz < DropLinkSpacing * DropLinkSpacing * 0.25f &&
+               MathF.Abs(a.Y - b.Y) < SimConstants.StepHeight;
     }
 
     /// <summary>The nudge from where the scout rests to the mesh must not pass

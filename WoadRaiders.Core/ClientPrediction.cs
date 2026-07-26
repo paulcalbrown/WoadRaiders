@@ -72,7 +72,7 @@ public sealed class ClientPrediction
     /// roots the player the same way and is restored for the same reason.
     /// </summary>
     public Vector3 Reconcile(Vector3 authoritativePosition, float attackAnimRemaining, float attackCooldown,
-                             uint lastProcessedInput, int linkCode = -1, ushort linkTick = 0)
+                             uint lastProcessedInput, int linkCode = -1, ushort linkTick = 0, byte linkIntent = 0)
     {
         _pending.RemoveAll(i => i.Sequence <= lastProcessedInput);
 
@@ -85,9 +85,12 @@ public sealed class ClientPrediction
         // reason: a crossing roots the player, so replaying pending inputs
         // without it frees ticks the server kept rooted (or the reverse) and
         // the replayed position lands short of the server's every snapshot.
+        // The held-intent count rides along too, or a replayed push boards a
+        // crossing one tick earlier or later than the server did.
         player.Link = linkCode >= 0 && _world.Geometry is { } geometry
             ? LinkTraversal.Restore(linkCode, linkTick, geometry)
             : LinkTraversal.None;
+        player.LinkIntent = linkIntent;
 
         foreach (var input in _pending)
         {

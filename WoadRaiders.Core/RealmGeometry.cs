@@ -152,11 +152,27 @@ public sealed class RealmGeometry : IRealmGeometry
     }
 
     /// <summary>
-    /// The link a mover pushing over a rim would board: the nearest endpoint
-    /// within LinkBoardRadius at the mover's own floor level whose crossing
-    /// continues the push. One-way links (drops) board only at their lip;
-    /// two-way links (boardings) at either end. The returned code encodes the
-    /// orientation — (index << 1) | reversed — so it alone names the crossing.
+    /// How aligned the push must be with a crossing's ground-plane direction
+    /// to board it: cos ~26°. A graze — walking a stair whose open edge is a
+    /// seeded rim, with camera-relative drift — must slide along the rim, not
+    /// be plucked off it; only a push genuinely INTO the crossing boards.
+    /// 45° was not enough: descending the Fault's east flight with the camera
+    /// half-turned pushes 60° off the stair axis, which is cos 0.87 against
+    /// the flank plunges — players "walking down the stairs" fell through
+    /// them. Walking off a rim on purpose is a roughly square push.
+    /// </summary>
+    private const float MinBoardAlignment = 0.9f;
+
+    /// <summary>
+    /// The link a mover pushing over a rim would board: within LinkBoardRadius
+    /// at the mover's own floor level, its crossing aligned with the push
+    /// (<see cref="MinBoardAlignment"/>). Among candidates, one that CONTINUES
+    /// at the mover's own level (a boarding hop across a broken join) beats
+    /// one that plunges — a blocked climb must not read as a wish to fall —
+    /// then the nearest lip wins. One-way links (drops) board only at their
+    /// lip; two-way links (boardings) at either end. The returned code encodes
+    /// the orientation — (index << 1) | reversed — so it alone names the
+    /// crossing.
     /// </summary>
     public int FindLink(Vector3 position, Vector3 desiredDir, float radius = SimConstants.CharacterRadius)
     {
@@ -169,6 +185,7 @@ public sealed class RealmGeometry : IRealmGeometry
 
         var best = -1;
         var bestSq = SimConstants.LinkBoardRadius * SimConstants.LinkBoardRadius;
+        var bestRise = float.MaxValue;
         for (var i = 0; i < links.Length; i++)
         {
             Consider(links[i].A, links[i].B, i << 1);
@@ -184,12 +201,34 @@ public sealed class RealmGeometry : IRealmGeometry
             var ex = from.X - position.X;
             var ez = from.Z - position.Z;
             var d2 = ex * ex + ez * ez;
-            if (d2 >= bestSq)
+            if (d2 >= SimConstants.LinkBoardRadius * SimConstants.LinkBoardRadius)
                 return;
-            if ((to.X - from.X) * dx + (to.Z - from.Z) * dz <= 0f)
-                return; // the crossing heads back the way the mover came
+            var cx = to.X - from.X;
+            var cz = to.Z - from.Z;
+            var clen = MathF.Sqrt(cx * cx + cz * cz);
+            if (clen > 1e-3f && (cx * dx + cz * dz) / clen < MinBoardAlignment)
+                return; // grazing, not crossing — stay on this surface
+            // The mover must be able to REACH the lip — and, for a rise, the
+            // landing — walking at step height from where it actually stands:
+            // the same clearance rail the bake's scout passed at the lip
+            // itself. From LinkBoardRadius away, a lip can sit across a
+            // stair's risers or behind a parapet; boarding through solids is
+            // how "climbing the stairs from underneath" shipped.
+            var railY = position.Y + SimConstants.StepHeight + 0.5f;
+            if (_soup.SegmentHits(new Vector3(position.X, railY, position.Z),
+                                  new Vector3(from.X, railY, from.Z), blockersOnly: true))
+                return;
+            if (to.Y > position.Y + 1f &&
+                _soup.SegmentHits(new Vector3(position.X, railY, position.Z),
+                                  new Vector3(to.X, railY, to.Z), blockersOnly: true))
+                return;
+            // Prefer staying at your own level; break ties by nearest lip.
+            var rise = MathF.Abs(to.Y - position.Y);
+            if (rise > bestRise + 0.5f || (rise > bestRise - 0.5f && d2 >= bestSq))
+                return;
             best = code;
             bestSq = d2;
+            bestRise = rise;
         }
     }
 

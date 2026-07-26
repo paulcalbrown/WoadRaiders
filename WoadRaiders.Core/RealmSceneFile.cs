@@ -45,6 +45,14 @@ namespace WoadRaiders.Core;
 ///                   out tears open once the boss falls. Absent, it opens where
 ///                   the boss stood, so a realm owes this only if its ending is
 ///                   somewhere other than its last fight.
+///   - Stairs:       Marker3D pairs "&lt;name&gt;_Foot" / "&lt;name&gt;_Head" starting
+///                   with "Stair" (optional) — each pair declares a walkable
+///                   flight, and the validator walks it BOTH ways on plain
+///                   mesh: a flight that stalls or rides a baked link fails
+///                   the bake. This tags INTENT (this run is a stair, walk
+///                   it), never a fact the geometry could state itself; an
+///                   unpaired marker throws, because a silently dropped
+///                   declaration is a silently unchecked stair.
 ///   - Passable:     the group <see cref="NoCollideGroup"/> on a node excuses
 ///                   it AND everything beneath it from the bake. The one
 ///                   exception to "every mesh is collision", and the only tag
@@ -107,6 +115,8 @@ public static class RealmSceneFile
         Vector3? boss = null;
         Vector3? portal = null;
         var enemySpawns = new List<EnemySpawnPoint>();
+        var stairFeet = new SortedDictionary<string, Vector3>(StringComparer.Ordinal);
+        var stairHeads = new SortedDictionary<string, Vector3>(StringComparer.Ordinal);
         var builder = new SoupBuilder();
         var boxes = 0;
         var unsampledMeshes = 0;
@@ -191,8 +201,28 @@ public static class RealmSceneFile
                     portal = world.Origin;
                 else if (name.StartsWith("EnemySpawn", StringComparison.Ordinal))
                     enemySpawns.Add(new EnemySpawnPoint(world.Origin, TypeFromName(name)));
+                else if (name.StartsWith("Stair", StringComparison.Ordinal))
+                {
+                    if (name.EndsWith("_Foot", StringComparison.Ordinal))
+                        stairFeet[name[..^"_Foot".Length]] = world.Origin;
+                    else if (name.EndsWith("_Head", StringComparison.Ordinal))
+                        stairHeads[name[..^"_Head".Length]] = world.Origin;
+                }
             }
         }
+
+        // Pair the flight markers. Refuse an odd pair rather than skip it: a
+        // silently dropped declaration is a silently unchecked stair.
+        var stairs = new List<StairRun>(stairFeet.Count);
+        foreach (var (key, foot) in stairFeet)
+        {
+            if (!stairHeads.Remove(key, out var head))
+                throw new InvalidDataException($"stair marker '{key}_Foot' has no matching '{key}_Head'");
+            stairs.Add(new StairRun(foot, head));
+        }
+        if (stairHeads.Count > 0)
+            throw new InvalidDataException(
+                $"stair marker '{stairHeads.Keys.First()}_Head' has no matching '{stairHeads.Keys.First()}_Foot'");
 
         if (sampledSoup is null && unsampledMeshes > 0)
             throw new InvalidDataException(
@@ -214,6 +244,7 @@ public static class RealmSceneFile
             ScenePath = scenePath,
             BossSpawn = boss,
             PortalSpawn = portal,
+            Stairs = stairs,
         };
     }
 
