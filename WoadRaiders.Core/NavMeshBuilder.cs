@@ -241,14 +241,6 @@ public static class NavMeshBuilder
                 {
                     var t = (s + 0.5f) / scouts;
                     var lip = new Vector3(ax + ex * t, ay + ey * t, az + ez * t);
-                    if (links.Any(l =>
-                    {
-                        var ddx = l.start.X - lip.X;
-                        var ddz = l.start.Z - lip.Z;
-                        return ddx * ddx + ddz * ddz < DropLinkSpacing * DropLinkSpacing * 0.25f &&
-                               MathF.Abs(l.start.Y - lip.Y) < SimConstants.StepHeight;
-                    }))
-                        continue; // a near-identical link already exists
 
                     // Ride the scout over the edge until it rests on mesh
                     // again — below the lip (a fall) or above it (a boarding).
@@ -275,8 +267,16 @@ public static class NavMeshBuilder
                         if (status.Succeeded() && landedRef != 0 && NudgeIsClear(soup, pos, onMesh))
                         {
                             var restY = soup.SurfaceNear(onMesh.X, onMesh.Z, onMesh.Y, 2f * CellHeight + 0.5f) ?? onMesh.Y;
-                            links.Add((new RcVec3f(lip.X - nx, lip.Y, lip.Z - nz),
-                                       new RcVec3f(onMesh.X, restY, onMesh.Z), boarded));
+                            var start = new RcVec3f(lip.X - nx, lip.Y, lip.Z - nz);
+                            var end = new RcVec3f(onMesh.X, restY, onMesh.Z);
+                            // Dedup on the WHOLE crossing — lip AND landing. Keyed
+                            // on the lip alone, a plunge to the floor far below
+                            // shadows the boarding hop onto the deck at the same
+                            // rim, and a mover at a broken join is offered only
+                            // the fall (the Fault's east flight shipped exactly
+                            // that: climbers plunged through the stair top).
+                            if (!links.Any(l => NearSame(l.start, start) && NearSame(l.end, end)))
+                                links.Add((start, end, boarded));
                             break;
                         }
                         if (boarded)
@@ -286,6 +286,16 @@ public static class NavMeshBuilder
             }
         }
         return links;
+    }
+
+    /// <summary>Two crossing endpoints count as the same when they sit within
+    /// half the seed spacing on the ground plane and a step of each other.</summary>
+    private static bool NearSame(RcVec3f a, RcVec3f b)
+    {
+        var dx = a.X - b.X;
+        var dz = a.Z - b.Z;
+        return dx * dx + dz * dz < DropLinkSpacing * DropLinkSpacing * 0.25f &&
+               MathF.Abs(a.Y - b.Y) < SimConstants.StepHeight;
     }
 
     /// <summary>The nudge from where the scout rests to the mesh must not pass

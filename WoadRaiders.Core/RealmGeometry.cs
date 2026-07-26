@@ -152,11 +152,23 @@ public sealed class RealmGeometry : IRealmGeometry
     }
 
     /// <summary>
-    /// The link a mover pushing over a rim would board: the nearest endpoint
-    /// within LinkBoardRadius at the mover's own floor level whose crossing
-    /// continues the push. One-way links (drops) board only at their lip;
-    /// two-way links (boardings) at either end. The returned code encodes the
-    /// orientation — (index << 1) | reversed — so it alone names the crossing.
+    /// How aligned the push must be with a crossing's ground-plane direction
+    /// to board it: cos 45°. A graze — climbing a stair whose open edge is a
+    /// seeded rim, with a little sideways drift — must slide along the rim,
+    /// not be plucked off it; only a push genuinely INTO the crossing boards.
+    /// </summary>
+    private const float MinBoardAlignment = 0.7f;
+
+    /// <summary>
+    /// The link a mover pushing over a rim would board: within LinkBoardRadius
+    /// at the mover's own floor level, its crossing aligned with the push
+    /// (<see cref="MinBoardAlignment"/>). Among candidates, one that CONTINUES
+    /// at the mover's own level (a boarding hop across a broken join) beats
+    /// one that plunges — a blocked climb must not read as a wish to fall —
+    /// then the nearest lip wins. One-way links (drops) board only at their
+    /// lip; two-way links (boardings) at either end. The returned code encodes
+    /// the orientation — (index << 1) | reversed — so it alone names the
+    /// crossing.
     /// </summary>
     public int FindLink(Vector3 position, Vector3 desiredDir, float radius = SimConstants.CharacterRadius)
     {
@@ -169,6 +181,7 @@ public sealed class RealmGeometry : IRealmGeometry
 
         var best = -1;
         var bestSq = SimConstants.LinkBoardRadius * SimConstants.LinkBoardRadius;
+        var bestRise = float.MaxValue;
         for (var i = 0; i < links.Length; i++)
         {
             Consider(links[i].A, links[i].B, i << 1);
@@ -184,12 +197,20 @@ public sealed class RealmGeometry : IRealmGeometry
             var ex = from.X - position.X;
             var ez = from.Z - position.Z;
             var d2 = ex * ex + ez * ez;
-            if (d2 >= bestSq)
+            if (d2 >= SimConstants.LinkBoardRadius * SimConstants.LinkBoardRadius)
                 return;
-            if ((to.X - from.X) * dx + (to.Z - from.Z) * dz <= 0f)
-                return; // the crossing heads back the way the mover came
+            var cx = to.X - from.X;
+            var cz = to.Z - from.Z;
+            var clen = MathF.Sqrt(cx * cx + cz * cz);
+            if (clen > 1e-3f && (cx * dx + cz * dz) / clen < MinBoardAlignment)
+                return; // grazing, not crossing — stay on this surface
+            // Prefer staying at your own level; break ties by nearest lip.
+            var rise = MathF.Abs(to.Y - position.Y);
+            if (rise > bestRise + 0.5f || (rise > bestRise - 0.5f && d2 >= bestSq))
+                return;
             best = code;
             bestSq = d2;
+            bestRise = rise;
         }
     }
 

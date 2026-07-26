@@ -111,7 +111,13 @@ public static class NetConfig
     ///        FORMAT is unchanged; the key moves because a v23 client's Move
     ///        predicts different physics against a v24 server and would
     ///        rubber-band on every slope and rim.
-    public const string ConnectionKey = "WoadRaiders.v24";
+    /// v25 = link boarding takes conviction: FindLink requires the push to
+    ///        align with the crossing (cos 45°) and prefers a crossing that
+    ///        keeps the mover's level over a plunge; the drop-scout dedup
+    ///        keys on whole crossings so boardings are no longer shadowed by
+    ///        plunges at the same lip (the Fault's east flight ate climbers).
+    ///        Artifacts rebaked; same wire format, different predicted physics.
+    public const string ConnectionKey = "WoadRaiders.v25";
 
     /// <summary>Where a rejected-for-version client is sent for the current build.</summary>
     public const string DownloadUrl = "https://github.com/paulcalbrown/WoadRaiders/releases/latest";

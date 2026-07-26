@@ -515,6 +515,39 @@ public class RealmGeometryTests
             $"the crypt descends — boss Y={pos.Y} should sit well under the door Y={realm.SpawnPoint.Y}");
     }
 
+    [Fact]
+    public void The_east_fault_flight_climbs_out_of_the_pit()
+    {
+        // The regression that shipped as "players fall through the stairs on
+        // the far side of the pit": the span's kerbstone parapet ran across
+        // the east flight's mouth, the join never meshed, and the only baked
+        // crossings at the lip were plunges back to the pit floor — the old
+        // physics fell there too (TryLedgeDrop through the tread gap), the
+        // rework just made it constant. A straight climb must top out on the
+        // deck, and a grazing drift must not be plucked off the rim by the
+        // stair-edge drop links (FindLink's alignment gate).
+        var realm = LoadRealm("Crypt.json");
+        if (realm?.Soup is not { } soup)
+            return; // outside the repo layout, or the realm is not yet regenerated
+        var nav = new RealmGeometry(NavMeshBuilder.Build(soup), soup, realm.SpawnPoint);
+
+        foreach (var driftX in new[] { 0f, -0.2f })
+        {
+            var world = new GameWorld { Geometry = nav };
+            var player = world.AddPlayer(1, "climber");
+            player.Position = new Vector3(6980, -880, 2560); // the flight's foot
+            uint seq = 0;
+            for (var t = 0; t < 30 * SimConstants.TickRate && player.Position.Y < -405f; t++)
+            {
+                world.SetInput(1, new PlayerInput { MoveX = driftX, MoveZ = -1f, Sequence = ++seq });
+                world.Step();
+            }
+            Assert.True(player.Position.Y > -405f,
+                $"drift {driftX}: the climb should top out on the deck, stalled at " +
+                $"({player.Position.X:0},{player.Position.Y:0},{player.Position.Z:0})");
+        }
+    }
+
     /// <summary>Steer waypoint to waypoint through Move, the way a follower
     /// would: mesh-only steps, and where a step stalls at a rim the route
     /// planned through, board the baked link and set down at its end.</summary>

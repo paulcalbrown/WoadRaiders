@@ -300,10 +300,22 @@ public sealed partial class CryptDesign : IRealmDesign
         // The span: the Minster's own masonry, thrown across a hole older than
         // it. The one place Era III appears below its own storey.
         var deck = Ledge("B4c", Era.Minster, 5920, 7040, 1200, 1360, -400);
+        // Kerbstones parapet the span's long edges — but the SOUTH row must
+        // break where the east flight tops out (B4e, x 6920..7040), or the
+        // parapet seals the stair's mouth: the flight climbs 480 into a kerb
+        // wall, the join never meshes, and every climber is handed to the
+        // drop links at the lip instead of the deck — read in play as falling
+        // straight through the stairs. SPACE-007's "tops out ON the deck"
+        // needs an open mouth, not merely overlapped geometry.
+        const float StairMouthX0 = 6920f;
         foreach (var z in new[] { deck.Z0 + 8f, deck.Z1 - 8f })
             for (var x = deck.X0; x < deck.X1; x += Module)
+            {
+                if (z > deck.Z0 + 8f && x + Snap >= StairMouthX0 - Module / 2f)
+                    continue; // the east flight's mouth stays open
                 Place(Kerbstone((int)(x / Module) % 5), new Vector3(x + Snap, -400, z), 0f,
                       Stone(Era.Minster));
+            }
 
         Room("B4d", Era.Souterrain, 7040, 7200, 1120, 1440, -400, CeilMid,
              doorWest: 1280, doorSouth: 7120);
