@@ -63,10 +63,15 @@ public sealed partial class CryptDesign : IRealmDesign
 
     /// <summary>
     /// The clearance above a raider at which the chase camera stops ducking,
-    /// derived from CameraRig rather than chosen: at fit 0 the boom stands
-    /// <c>OpenBoomLength(430) * sin(OpenPitchDegrees(40)) = 276</c> above the aim
-    /// point, and the rig holds <c>CeilingClearance(25)</c> under the roof.
-    /// Below this the camera tightens in toward the raider's shoulder.
+    /// derived from the camera rather than chosen: at fit 0 the boom stands
+    /// <c>OpenBoomLength * sin(OpenPitchDegrees)</c> above the aim point, and
+    /// the rig holds <c>CeilingClearance</c> under the roof. Below this the
+    /// camera tightens in toward the raider's shoulder.
+    ///
+    /// PINNED to the 430-boom era's law (spec §7, crypt.md), which this realm
+    /// was authored and measured against. ChaseCamera's boom has since come in
+    /// to 360 (needing only ~256), so the realm carries slack — do NOT lower
+    /// this to match; it is the spec's number, and geometry derives from it.
     /// </summary>
     private const float CameraFreeAt = 302f;
 
