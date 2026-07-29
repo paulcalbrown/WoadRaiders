@@ -1,12 +1,14 @@
 // Where the chase camera is CONSTRAINED by a ceiling, measured over the realm's
 // own walkable floor rather than assumed from the chamber table.
 //
-// The law comes from CameraRig: at fit 0 (fully open) the boom stands
-// OpenBoomLength(430) * sin(OpenPitchDegrees(40)) = 276 above the raider, the
-// aim point is AimUpBias(30) up, and the rig keeps CeilingClearance(25) under
-// the roof. So a raider needs 276 + 25 = ~302 of clearance before the camera
-// stops ducking. A NOMINAL ceiling is not that number: a groin vault's soffit
-// hangs well below its crown and a corbelled roof steps in from the walls.
+// The law comes from ChaseCamera (read live, not copied): at fit 0 (fully
+// open) the boom stands OpenBoomLength * sin(OpenPitchDegrees) above the
+// raider, the aim point is AimUpBias up, and the rig keeps CeilingClearance
+// under the roof — that sum is the clearance a raider needs before the camera
+// stops ducking (the Crypt was authored against the 430-boom era's 302; the
+// 360 boom asks ~256, so the realm carries slack). A NOMINAL ceiling is not
+// that number: a groin vault's soffit hangs well below its crown and a
+// corbelled roof steps in from the walls.
 //
 //   dotnet run tools/MeasureHeadroom.cs -c Release
 #:project C:/Users/Paul/RiderProjects/WoadRaiders/WoadRaiders.Core/WoadRaiders.Core.csproj
@@ -14,8 +16,9 @@
 using System.Numerics;
 using WoadRaiders.Core;
 
-const float OpenBoom = 430f, OpenPitchDeg = 40f, AimUpBias = 30f, CeilingClearance = 25f;
-var needed = OpenBoom * MathF.Sin(OpenPitchDeg * MathF.PI / 180f) + CeilingClearance;
+const float AimUpBias = ChaseCamera.AimUpBias;
+var needed = ChaseCamera.OpenBoomLength * MathF.Sin(ChaseCamera.OpenPitchDegrees * MathF.PI / 180f)
+             + ChaseCamera.CeilingClearance;
 Console.WriteLine($"camera runs fully open at {needed:0.0} of clearance above the raider\n");
 
 var realm = RealmDefinitionFile.Load("C:/Users/Paul/RiderProjects/WoadRaiders/WoadRaiders.Client/maps/Crypt.json");
