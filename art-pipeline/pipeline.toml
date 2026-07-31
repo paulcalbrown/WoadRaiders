@@ -1,0 +1,8 @@
+# Machine-level pipeline settings (paths/ports, not character data).
+# Character data lives in characters/<name>/spec.toml.
+
+[comfy]
+url = "http://127.0.0.1:8188"
+# Used only as a fallback to locate outputs if the HTTP history API
+# doesn't describe the exported GLB. Forward slashes are fine on Windows.
+root = "C:/AI/ComfyUI_windows_portable"

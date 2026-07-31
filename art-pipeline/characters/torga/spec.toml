@@ -1,0 +1,18 @@
+# Torga — the non-chibi Knight replacement. First character through the pipeline.
+
+[character]
+name = "Torga"
+# CharacterLoadout keeps meshes by prefix; Torga replaces the Knight class,
+# so his meshes carry the Knight prefix (see CharacterView/CharacterLoadout).
+mesh_prefix = "Knight"
+attack_clip = "1H_Melee_Attack_Chop"
+height_m = 1.85
+
+[s2]
+seed = 42
+target_tris = 30000
+mesh_resolution = "512"   # LoadTrellis2Models: "512" | "1024" | "1536"
+texture_size = 2048
+# The approved style anchor (M2 output), relative to this spec's folder.
+# Until it exists, run with an explicit --image override.
+style_anchor = "style_anchor.png"

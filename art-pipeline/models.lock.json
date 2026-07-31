@@ -1,0 +1,27 @@
+{
+  "_comment": "Every AI dependency pinned to an exact revision. bootstrap.py (M4) will consume this; until then it documents the working install of 2026-07-31.",
+  "comfyui": {
+    "distribution": "ComfyUI_windows_portable_nvidia.7z",
+    "release": "v0.29.2",
+    "source": "https://github.com/Comfy-Org/ComfyUI/releases/download/v0.29.2/ComfyUI_windows_portable_nvidia.7z",
+    "install_root": "C:/AI/ComfyUI_windows_portable"
+  },
+  "custom_nodes": {
+    "ComfyUI-TRELLIS2": {
+      "repo": "https://github.com/PozzettiAndrea/ComfyUI-TRELLIS2",
+      "commit": "3e696f2cf174dba141c9efce0205e9a2d87e908a"
+    },
+    "ComfyUI-Manager": {
+      "repo": "https://github.com/Comfy-Org/ComfyUI-Manager",
+      "commit": "2b40deba7d04afeee29ee70c88f6c336e43dc9ca"
+    }
+  },
+  "models": {
+    "trellis2-4b": {
+      "repo": "microsoft/TRELLIS.2-4B",
+      "revision": "af44b45f2e35a493886929c6d786e563ec68364d",
+      "license": "MIT",
+      "dest": "ComfyUI/models/trellis2"
+    }
+  }
+}
