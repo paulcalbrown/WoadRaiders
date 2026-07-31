@@ -18,25 +18,30 @@ SIZE = (768, 1024)  # portrait, matches typical anchor/sketch aspect
 
 # OpenPose BODY-18 keypoints in a strict T-pose, front-facing. The person's
 # right side sits on the image's left (mirror convention of a facing figure).
+#
+# Proportions are anatomical, not decorative: the model draws the figure the
+# skeleton prescribes. Armspan (wrist to wrist, 620) equals figure height
+# (crown ~205 to soles ~825) like a real human — the first template's 0.75
+# armspan/height ratio made every character render vertically stretched.
 KEYPOINTS = {
-    "nose": (384, 170),
-    "neck": (384, 250),
-    "r_shoulder": (322, 250),
-    "r_elbow": (216, 250),
-    "r_wrist": (110, 250),
-    "l_shoulder": (446, 250),
-    "l_elbow": (552, 250),
-    "l_wrist": (658, 250),
-    "r_hip": (346, 470),
-    "r_knee": (346, 650),
-    "r_ankle": (346, 830),
-    "l_hip": (422, 470),
-    "l_knee": (422, 650),
-    "l_ankle": (422, 830),
-    "r_eye": (369, 158),
-    "l_eye": (399, 158),
-    "r_ear": (354, 170),
-    "l_ear": (414, 170),
+    "nose": (384, 258),
+    "neck": (384, 330),
+    "r_shoulder": (322, 330),
+    "r_elbow": (198, 330),
+    "r_wrist": (74, 330),
+    "l_shoulder": (446, 330),
+    "l_elbow": (570, 330),
+    "l_wrist": (694, 330),
+    "r_hip": (344, 505),
+    "r_knee": (344, 650),
+    "r_ankle": (340, 795),
+    "l_hip": (424, 505),
+    "l_knee": (424, 650),
+    "l_ankle": (428, 795),
+    "r_eye": (369, 246),
+    "l_eye": (399, 246),
+    "r_ear": (354, 258),
+    "l_ear": (414, 258),
 }
 
 # (start, end, RGB) — the standard OpenPose limb palette, so any tool (or
