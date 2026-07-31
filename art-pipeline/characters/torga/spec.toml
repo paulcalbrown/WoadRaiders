@@ -10,26 +10,39 @@ height_m = 1.85
 
 [s1]
 sketch = "sketch.jpg"
+# style_ref intentionally unset for the anchor: Qwen treats reference images
+# as CONTENT, so a 3D-render ref drags the medium toward CGI (measured across
+# batches 2-3). Chunky forms come from the prompt. The slot's future is
+# cross-character consistency: once Torga's painted anchor is approved, it
+# becomes the Rogue's style_ref — painted medium referencing painted medium.
 seed = 1000        # candidates use seed, seed+1, ... (--seeds N)
-steps = 8          # Lightning 8-step LoRA
+lightning = true
+steps = 8
 cfg = 1.0
-prompt = """Redraw the warrior from image 1 as a single polished hand-painted \
-game character. Match the body pose exactly to the stick-figure skeleton in \
-image 2: a strict T-pose, both arms straight out horizontally, elbows straight, \
-palms down with fingers slightly spread, legs straight, feet apart with a clear \
-gap between the boots, facing directly forward. Keep his identity from image 1: \
-rounded conical helmet with a riveted brow band, grim scowling face with a heavy \
-jaw and grey mutton-chop sideburns under the helmet, thick studded metal collar, \
-massive pauldrons, breastplate with straps, rivets and a diamond-shaped chest \
-emblem, wide leather belt with a large ornate scrolled buckle, knee-length \
-armored tabard panel hanging between hips and knees without touching either \
-boot, plated leg armor, heavy boots, large armored gauntlets. Empty hands, no \
-weapons, no shield anywhere. Realistic heavyset proportions about 6.5 heads \
-tall, NOT chibi. Painterly hand-painted style with visible brushwork, muted \
-worn steel greys, dark leather browns, off-white tabard cloth with woad-blue \
-trim. Flat even shadowless lighting, no cast shadow on the ground, solid pure \
-white background, full body head to toe, no text, no interface elements — \
-ignore all the small UI boxes, icons and handwritten labels in image 1."""
+negative = ""      # inert at cfg 1; kept for non-lightning experiments
+prompt = """Redraw the warrior from image 1 as a single polished \
+hand-painted game character — a flat 2D painted illustration with visible \
+matte gouache brushwork, soft blended strokes and painted highlights, \
+never a 3D render. Build him from chunky simplified sculptural forms: big \
+readable masses, bold clean silhouette, thick sturdy arms and legs, broad \
+rounded armor plates, simplified planes with no fine surface noise — like \
+a hand-painted RTS unit. Match the body pose exactly to the stick-figure \
+skeleton in image 2: a strict T-pose, both arms straight out horizontally, \
+elbows straight, palms down with fingers slightly spread, legs straight, \
+feet apart with a clear gap between the boots, facing directly forward. \
+Keep his identity from image 1: rounded conical helmet with a riveted brow \
+band, grim scowling face with a heavy jaw and grey mutton-chop sideburns \
+under the helmet, thick studded metal collar, massive pauldrons, \
+breastplate with straps, rivets and a diamond-shaped chest emblem, wide \
+leather belt with a large ornate scrolled buckle, knee-length armored \
+tabard panel hanging between hips and knees without touching either boot, \
+plated leg armor, heavy boots, large armored gauntlets. Empty hands, no \
+weapons, no shield anywhere. Realistic heavyset proportions about 6.5 \
+heads tall, NOT chibi. Muted worn steel greys, dark leather browns, \
+off-white tabard cloth with woad-blue trim. Flat even shadowless lighting, \
+no cast shadow on the ground, solid pure white background, full body head \
+to toe, no text, no interface elements — ignore all the small UI boxes, \
+icons and handwritten labels in image 1."""
 
 [s2]
 seed = 42

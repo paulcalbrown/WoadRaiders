@@ -9,6 +9,11 @@
     "class_type": "LoadImage",
     "_meta": { "title": "Load Pose Template" }
   },
+  "3": {
+    "inputs": { "image": "PLACEHOLDER_STYLE.png" },
+    "class_type": "LoadImage",
+    "_meta": { "title": "Load Style Reference" }
+  },
   "10": {
     "inputs": { "unet_name": "qwen_image_edit_2511_fp8mixed.safetensors", "weight_dtype": "default" },
     "class_type": "UNETLoader",
@@ -59,7 +64,8 @@
       "clip": ["11", 0],
       "vae": ["12", 0],
       "image1": ["20", 0],
-      "image2": ["2", 0]
+      "image2": ["2", 0],
+      "image3": ["3", 0]
     },
     "class_type": "TextEncodeQwenImageEditPlus",
     "_meta": { "title": "Positive" }
@@ -70,7 +76,8 @@
       "clip": ["11", 0],
       "vae": ["12", 0],
       "image1": ["20", 0],
-      "image2": ["2", 0]
+      "image2": ["2", 0],
+      "image3": ["3", 0]
     },
     "class_type": "TextEncodeQwenImageEditPlus",
     "_meta": { "title": "Negative" }

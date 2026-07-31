@@ -38,13 +38,31 @@ def connect(pipeline: dict) -> ComfyClient:
     return comfy
 
 
-def patch_s1(workflow: dict, spec: dict, sketch_name: str, pose_name: str, seed: int) -> dict:
+def patch_s1(
+    workflow: dict,
+    spec: dict,
+    sketch_name: str,
+    pose_name: str,
+    style_name: str | None,
+    seed: int,
+) -> dict:
     """Bind one character's spec to the committed S1 (style anchor) workflow."""
     wf = copy.deepcopy(workflow)
     s1 = spec["s1"]
     wf["1"]["inputs"]["image"] = sketch_name
     wf["2"]["inputs"]["image"] = pose_name
+    if style_name:
+        wf["3"]["inputs"]["image"] = style_name
+    else:
+        # No style reference: drop the loader and its encoder hookups. Qwen
+        # treats reference images as content, so an absent ref beats a wrong one.
+        del wf["3"]
+        for node in ("30", "31"):
+            del wf[node]["inputs"]["image3"]
     wf["30"]["inputs"]["prompt"] = s1["prompt"]
+    wf["31"]["inputs"]["prompt"] = s1.get("negative", "")
+    # Lightning trades text authority for speed; anchors can afford slow.
+    wf["15"]["inputs"]["strength_model"] = 1 if s1.get("lightning", True) else 0
     wf["40"]["inputs"]["seed"] = seed
     wf["40"]["inputs"]["steps"] = s1["steps"]
     wf["40"]["inputs"]["cfg"] = s1["cfg"]
@@ -71,6 +89,9 @@ def run_s1(character: str, seeds: int) -> list[Path]:
     workflow = json.loads((ROOT / "workflows" / "s1_anchor.json").read_text())
     sketch = comfy.upload_image(char_dir / spec["s1"]["sketch"])
     pose = comfy.upload_image(ROOT / "workflows" / "tpose_openpose.png")
+    # Style refs are game-wide (art-pipeline/style/), resolved from the root.
+    style_ref = spec["s1"].get("style_ref")
+    style = comfy.upload_image(ROOT / style_ref) if style_ref else None
 
     out_dir = char_dir / "build" / "anchors"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -78,7 +99,7 @@ def run_s1(character: str, seeds: int) -> list[Path]:
     base_seed = spec["s1"]["seed"]
     for i in range(seeds):
         seed = base_seed + i
-        patched = patch_s1(workflow, spec, sketch, pose, seed)
+        patched = patch_s1(workflow, spec, sketch, pose, style, seed)
         print(f"[S1] {character}: candidate {i + 1}/{seeds} (seed {seed})")
         started = time.monotonic()
         entry = comfy.wait(comfy.queue(patched))
