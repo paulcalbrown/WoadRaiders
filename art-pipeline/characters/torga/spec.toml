@@ -8,6 +8,29 @@ mesh_prefix = "Knight"
 attack_clip = "1H_Melee_Attack_Chop"
 height_m = 1.85
 
+[s1]
+sketch = "sketch.jpg"
+seed = 1000        # candidates use seed, seed+1, ... (--seeds N)
+steps = 8          # Lightning 8-step LoRA
+cfg = 1.0
+prompt = """Redraw the warrior from image 1 as a single polished hand-painted \
+game character. Match the body pose exactly to the stick-figure skeleton in \
+image 2: a strict T-pose, both arms straight out horizontally, elbows straight, \
+palms down with fingers slightly spread, legs straight, feet apart with a clear \
+gap between the boots, facing directly forward. Keep his identity from image 1: \
+rounded conical helmet with a riveted brow band, grim scowling face with a heavy \
+jaw and grey mutton-chop sideburns under the helmet, thick studded metal collar, \
+massive pauldrons, breastplate with straps, rivets and a diamond-shaped chest \
+emblem, wide leather belt with a large ornate scrolled buckle, knee-length \
+armored tabard panel hanging between hips and knees without touching either \
+boot, plated leg armor, heavy boots, large armored gauntlets. Empty hands, no \
+weapons, no shield anywhere. Realistic heavyset proportions about 6.5 heads \
+tall, NOT chibi. Painterly hand-painted style with visible brushwork, muted \
+worn steel greys, dark leather browns, off-white tabard cloth with woad-blue \
+trim. Flat even shadowless lighting, no cast shadow on the ground, solid pure \
+white background, full body head to toe, no text, no interface elements — \
+ignore all the small UI boxes, icons and handwritten labels in image 1."""
+
 [s2]
 seed = 42
 target_tris = 30000

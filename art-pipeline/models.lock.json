@@ -22,6 +22,34 @@
       "revision": "af44b45f2e35a493886929c6d786e563ec68364d",
       "license": "MIT",
       "dest": "ComfyUI/models/trellis2"
+    },
+    "qwen-image-edit-2511": {
+      "repo": "Comfy-Org/Qwen-Image-Edit_ComfyUI",
+      "revision": "e9e85de74a8f48c1e3e2656617626348675a2f21",
+      "file": "split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
+      "license": "Apache-2.0",
+      "dest": "ComfyUI/models/diffusion_models"
+    },
+    "qwen-2.5-vl-7b-te": {
+      "repo": "Comfy-Org/Qwen-Image_ComfyUI",
+      "revision": "46839d338df81ce625d5fae27d7e370314c0fbc9",
+      "file": "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "license": "Apache-2.0",
+      "dest": "ComfyUI/models/text_encoders"
+    },
+    "qwen-image-vae": {
+      "repo": "Comfy-Org/Qwen-Image_ComfyUI",
+      "revision": "46839d338df81ce625d5fae27d7e370314c0fbc9",
+      "file": "split_files/vae/qwen_image_vae.safetensors",
+      "license": "Apache-2.0",
+      "dest": "ComfyUI/models/vae"
+    },
+    "qwen-edit-2511-lightning-8step": {
+      "repo": "lightx2v/Qwen-Image-Edit-2511-Lightning",
+      "revision": "d74eba145674fd7e31b949324e148e21e7118abd",
+      "file": "Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors",
+      "license": "Apache-2.0",
+      "dest": "ComfyUI/models/loras"
     }
   }
 }

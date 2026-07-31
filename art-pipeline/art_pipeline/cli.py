@@ -1,10 +1,11 @@
-"""Pipeline orchestrator. M1 scope: stage S2 only (image -> textured mesh GLB).
+"""Pipeline orchestrator.
 
-    uv run art-pipeline torga --image path/to/anchor.png
+    uv run art-pipeline torga --stage s1              # sketch -> anchor candidates
+    uv run art-pipeline torga --stage s2 --image p.png # image -> textured mesh GLB
 
 Reads characters/<name>/spec.toml, patches the committed API-format workflow
-(seed, face target, texture size, resolution, image), queues it on the local
-ComfyUI server, and lands the GLB in characters/<name>/build/.
+for the stage (seeds, budgets, prompts), queues it on the local ComfyUI
+server, and lands outputs in characters/<name>/build/.
 """
 
 from __future__ import annotations
@@ -25,6 +26,73 @@ ROOT = Path(__file__).resolve().parent.parent  # art-pipeline/
 def load_toml(path: Path) -> dict:
     with path.open("rb") as f:
         return tomllib.load(f)
+
+
+def connect(pipeline: dict) -> ComfyClient:
+    comfy = ComfyClient(pipeline["comfy"]["url"])
+    if not comfy.alive():
+        sys.exit(
+            f"ComfyUI is not responding at {pipeline['comfy']['url']} — "
+            "start it (Desktop shortcut / run_nvidia_gpu.bat) and retry."
+        )
+    return comfy
+
+
+def patch_s1(workflow: dict, spec: dict, sketch_name: str, pose_name: str, seed: int) -> dict:
+    """Bind one character's spec to the committed S1 (style anchor) workflow."""
+    wf = copy.deepcopy(workflow)
+    s1 = spec["s1"]
+    wf["1"]["inputs"]["image"] = sketch_name
+    wf["2"]["inputs"]["image"] = pose_name
+    wf["30"]["inputs"]["prompt"] = s1["prompt"]
+    wf["40"]["inputs"]["seed"] = seed
+    wf["40"]["inputs"]["steps"] = s1["steps"]
+    wf["40"]["inputs"]["cfg"] = s1["cfg"]
+    wf["42"]["inputs"]["filename_prefix"] = f"{spec['character']['name'].lower()}_anchor"
+    return wf
+
+
+def find_image_outputs(history_entry: dict) -> list[tuple[str, str]]:
+    found = []
+    for node_output in history_entry.get("outputs", {}).values():
+        for item in node_output.get("images", []):
+            if item.get("type") == "output":
+                found.append((item["filename"], item.get("subfolder", "")))
+    return found
+
+
+def run_s1(character: str, seeds: int) -> list[Path]:
+    """Generate style-anchor candidates: sketch + fixed T-pose template -> N images."""
+    char_dir = ROOT / "characters" / character
+    spec = load_toml(char_dir / "spec.toml")
+    pipeline = load_toml(ROOT / "pipeline.toml")
+    comfy = connect(pipeline)
+
+    workflow = json.loads((ROOT / "workflows" / "s1_anchor.json").read_text())
+    sketch = comfy.upload_image(char_dir / spec["s1"]["sketch"])
+    pose = comfy.upload_image(ROOT / "workflows" / "tpose_openpose.png")
+
+    out_dir = char_dir / "build" / "anchors"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    results: list[Path] = []
+    base_seed = spec["s1"]["seed"]
+    for i in range(seeds):
+        seed = base_seed + i
+        patched = patch_s1(workflow, spec, sketch, pose, seed)
+        print(f"[S1] {character}: candidate {i + 1}/{seeds} (seed {seed})")
+        started = time.monotonic()
+        entry = comfy.wait(comfy.queue(patched))
+        for filename, subfolder in find_image_outputs(entry):
+            dest = comfy.download_output(
+                filename, subfolder, out_dir / f"anchor_seed{seed}.png"
+            )
+            results.append(dest)
+            print(f"[S1]   {time.monotonic() - started:.0f}s -> {dest}")
+    if not results:
+        raise ComfyError("S1 finished without producing images")
+    print(f"[S1] review the candidates in {out_dir}; commit the winner as "
+          f"characters/{character}/{spec['s2']['style_anchor']}")
+    return results
 
 
 def patch_s2(workflow: dict, spec: dict, image_name: str) -> dict:
@@ -50,15 +118,11 @@ def run_s2(character: str, image_override: Path | None) -> Path:
     if not image.is_file():
         sys.exit(
             f"input image not found: {image}\n"
-            "No approved style anchor yet? Pass one explicitly with --image."
+            "No approved style anchor yet? Run --stage s1, pick a candidate, "
+            "commit it — or pass one explicitly with --image."
         )
 
-    comfy = ComfyClient(pipeline["comfy"]["url"])
-    if not comfy.alive():
-        sys.exit(
-            f"ComfyUI is not responding at {pipeline['comfy']['url']} — "
-            "start it (Desktop shortcut / run_nvidia_gpu.bat) and retry."
-        )
+    comfy = connect(pipeline)
 
     workflow = json.loads((ROOT / "workflows" / "s2_mesh.json").read_text())
     uploaded = comfy.upload_image(image)
@@ -105,14 +169,29 @@ def main() -> None:
     )
     parser.add_argument("character", help="character folder under characters/")
     parser.add_argument(
+        "--stage",
+        choices=["s1", "s2"],
+        default="s2",
+        help="s1: style anchor candidates; s2: image -> mesh (default)",
+    )
+    parser.add_argument(
         "--image",
         type=Path,
-        help="input image override (otherwise the spec's committed style anchor)",
+        help="s2 input override (otherwise the spec's committed style anchor)",
+    )
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        default=4,
+        help="s1: number of anchor candidates to generate (default 4)",
     )
     args = parser.parse_args()
 
     try:
-        run_s2(args.character, args.image)
+        if args.stage == "s1":
+            run_s1(args.character, args.seeds)
+        else:
+            run_s2(args.character, args.image)
     except ComfyError as e:
         sys.exit(f"pipeline failed: {e}")
 
