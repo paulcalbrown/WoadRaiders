@@ -53,8 +53,9 @@ icons and handwritten labels in image 1."""
 [s2]
 seed = 42
 target_tris = 30000
-mesh_resolution = "1024"  # LoadTrellis2Models: "512" | "1024" | "1536"; 512 is smoke-test coarse
-texture_size = 2048
+mesh_resolution = "1536_cascade"  # 512 | 1024 | 1024_cascade | 1536_cascade; cascade = base + refine pass
+texture_size = 4096
+tex_steps = 32            # texture diffusion steps; node default 12 is the fast preset
 # The approved style anchor (M2 output), relative to this spec's folder.
 # Until it exists, run with an explicit --image override.
 style_anchor = "style_anchor.png"
