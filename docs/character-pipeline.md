@@ -82,11 +82,34 @@ tool authors it, this stage IS the style enforcement point. Current
 direction: cel-shaded, bold outlines, flat color (supersedes the earlier
 soft-gouache school notes).
 
-### S2 — mesh (TRELLIS.2, already installed and smoke-tested)
+### S2 — mesh (provider-pluggable; Meshy primary as of 2026-08-01)
 
-The `geometry_texture` workflow exported in API format, with the decimation
-target set for game budget (~30k faces) so no separate retopo stage is needed.
-MIT license, weights pinned in `models.lock.json`.
+**The 2026-08-01 verdict**: eight measured iterations of local TRELLIS.2
+(multi-view conditioning, projection baking, head kitbashing, LOD baking)
+produced geometry that was fine and textures that never crossed the bar —
+photographic-organic mush vs the game's clean stylized color. Commercial
+stacks (integrated gen → quad retopo → texture tuning) are years ahead for
+finished characters: Meshy-6 won 63.8% of 1,331 senior-artist blind votes
+vs Tripo 3.1, has A/T-pose control, quad topology, multi-image (front+back)
+input, a 600+ clip animation library with FREE rig/animate, full-GLB
+multi-clip export, and a REST API (+MCP server). Pro $20/mo ≈ 33 full
+characters. Tripo's API (~$0.20-0.25/asset) stays the creature option
+(quadruped/serpentine/avian skeletons).
+
+So S2 becomes a **provider abstraction** (`provider = "meshy" | "trellis2"`
+in the spec): Meshy for hero/roster finals via its Multi-Image API — fed by
+OUR committed anchors and back views, which remain the style-consistency
+mechanism no cloud tool provides. TRELLIS.2 stays installed as the
+zero-cost draft/prop path. Committed outputs (reproducibility rule 5)
+matter MORE with metered generation.
+
+**Where the local pipeline earns its keep** (the honest division):
+2D authoring & roster consistency (anchors, pose contract, back views —
+now Meshy inputs); API orchestration + character-as-code; the game
+contract layer (clip renames to `Idle`/`Running_A`/…, `Knight_*` mesh
+naming, scale/facing, validate.py — no vendor will ever do this);
+assembly (weapons, LODs, Godot import); free local drafting; and
+provider portability as models improve.
 
 ### S2 adoption notes (from RunComfy's advanced TRELLIS.2 workflow, researched 2026-07-31)
 
