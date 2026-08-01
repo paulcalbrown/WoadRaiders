@@ -30,6 +30,7 @@ from .cli import ROOT, load_toml
 FADE_LO = 0.15
 FADE_HI = 0.55
 DEPTH_TOL = 0.015  # of figure depth: how far behind the z-buffer still counts as visible
+FEATHER = 0.03  # height-fraction feather at exclusion band edges
 
 
 def _raster_barycentric(tri2d: np.ndarray, values: np.ndarray, size: int, channels: int):
@@ -127,6 +128,17 @@ def reproject(character: str) -> Path:
     facing = nz / n_len
     w = np.clip((facing - FADE_LO) / (FADE_HI - FADE_LO), 0.0, 1.0)
     w = np.where(front_surface & covered, w, 0.0)
+
+    # Exclusion bands (fractions of figure height, feathered): regions where
+    # the mesh geometry deviates too much from the flat drawing for projection
+    # to line up — faces, mostly. The generated texture keeps those.
+    yfrac = (ty - my0) / (my1 - my0 + 1e-9)
+    for lo, hi in spec.get("reproject", {}).get("exclude_y", []):
+        keep = np.clip(
+            np.minimum(np.abs(yfrac - lo), np.abs(yfrac - hi)) / FEATHER, 0.0, 1.0
+        )
+        keep = np.where((yfrac > lo) & (yfrac < hi), 0.0, keep)
+        w *= keep
 
     # 4) Sample the anchor: front-plane xy -> figure-bbox pixel.
     px = ax0 + (tx - mx0) / (mx1 - mx0 + 1e-9) * (ax1 - ax0)

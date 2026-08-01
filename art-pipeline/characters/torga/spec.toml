@@ -50,6 +50,12 @@ no cast shadow on the ground, solid pure white background, full body head \
 to toe, no text, no interface elements — ignore all the small UI boxes, \
 icons and handwritten labels in image 1."""
 
+[reproject]
+# Face band: mesh geometry (nose, snarl, brow) deviates from the flat drawing
+# there, so projection smears — the generated texture keeps the face. Values
+# are fractions of figure height (0 = soles, 1 = crown), feathered edges.
+exclude_y = [[0.80, 0.94]]
+
 [s2]
 seed = 42
 target_tris = 30000
