@@ -50,6 +50,23 @@ no cast shadow on the ground, solid pure white background, full body head \
 to toe, no text, no interface elements — ignore all the small UI boxes, \
 icons and handwritten labels in image 1."""
 
+[head]
+# Kitbash stage: the head generated alone at full latent resolution, merged
+# at the collar. Crop is (left, top, right, bottom) fractions of the anchor.
+crop = [0.30, 0.04, 0.70, 0.40]
+seed = 42
+target_tris = 60000
+body_cut = 0.82   # body keeps faces below this height fraction (collar top)
+head_cut = 0.40   # head keeps faces above this fraction of its own height
+shade_prompt = """Repaint this head as a softly shaded three-dimensional \
+sculpture render. Keep every feature, proportion and color exactly the same: \
+the riveted conical helmet with nasal bar, the angry eyes, the thick brown \
+mustache, the bared gritted teeth, the studded metal collar and chainmail. \
+Remove all black outlines and replace flat cel shading with smooth soft \
+volumetric shading under gentle even studio light, like a painted 3D model \
+render, so every surface reads as rounded three-dimensional form. Solid pure \
+white background, no text."""
+
 [reproject]
 # Face band: mesh geometry (nose, snarl, brow) deviates from the flat drawing
 # there, so projection smears — the generated texture keeps the face. Values
