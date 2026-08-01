@@ -98,12 +98,16 @@ multi-clip export, and a REST API (+MCP server). Pro $20/mo ≈ 33 full
 characters. Tripo's API (~$0.20-0.25/asset) stays the creature option
 (quadruped/serpentine/avian skeletons).
 
-So S2 becomes a **provider abstraction** (`provider = "meshy" | "trellis2"`
-in the spec): Meshy for hero/roster finals via its Multi-Image API — fed by
-OUR committed anchors and back views, which remain the style-consistency
-mechanism no cloud tool provides. TRELLIS.2 stays installed as the
-zero-cost draft/prop path. Committed outputs (reproducibility rule 5)
-matter MORE with metered generation.
+So S2 becomes a **provider abstraction** with a hard rule: **the pipeline
+never spends credits**. Generation, rigging and animation happen manually
+in the Meshy web UI — a human presses every button that costs money. The
+pipeline's Meshy interaction is read-only: Paul downloads the multi-clip
+GLB he likes into `characters/<name>/meshy/`, and the ingest stage takes
+it from there (contract renames, validation, assembly). If an API key is
+ever configured, automation may use GET endpoints only (status,
+downloads) — never POST. TRELLIS.2 stays installed as the zero-cost
+draft/prop path. Committed outputs (rule 5) matter MORE with metered
+generation.
 
 **Where the local pipeline earns its keep** (the honest division):
 2D authoring & roster consistency (anchors, pose contract, back views —
