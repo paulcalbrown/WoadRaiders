@@ -61,12 +61,14 @@ candidate ─→ [S5 validate.py gate] ─→ assets/characters/<Name>.glb
 
 ### S1 — style anchor (nano banana, full stop — revised 2026-08-01)
 
-**All 2D character authoring happens in nano banana**: the anchor from the
-friend's sketch, the back view for multi-image generation, and roster
-consistency (its character-consistency across edits beat local Qwen in
-every session comparison). The picked renders are committed
-(`style_anchor.png`, `back_view.png`) — approved intermediates are
-committed (rule 5), so downstream stages never depend on the external tool.
+**All 2D character authoring happens in nano banana**, and step one is
+deliberately minimal: **one committed `style_anchor.png` per character**
+(Meshy generates well from a single image — Paul, 2026-08-01). Roster
+consistency comes from nano banana's character-consistency across edits
+(it beat local Qwen in every session comparison). Approved renders are
+committed (rule 5), so downstream stages never depend on the external
+tool. A back view stays an optional later refinement via Meshy's
+multi-image endpoint, not a requirement.
 
 Qwen exits the character pipeline entirely. Its old jobs are obsolete:
 pose surgery (Meshy enforces A/T-pose at generation), de-cel shading (a
@@ -80,7 +82,7 @@ The anchor image is what the mesh provider propagates into textures, so
 this stage IS the style enforcement point. Current direction: cel-shaded,
 bold outlines, flat color (supersedes the earlier soft-gouache notes).
 Anchor requirements for Meshy input: full body, A- or T-pose, empty
-hands, white background, front + back pair with matching pose and style.
+hands, white background, single front view.
 
 ### S2 — mesh (provider-pluggable; Meshy primary as of 2026-08-01)
 
