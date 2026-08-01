@@ -88,7 +88,23 @@ The `geometry_texture` workflow exported in API format, with the decimation
 target set for game budget (~30k faces) so no separate retopo stage is needed.
 MIT license, weights pinned in `models.lock.json`.
 
-### S3 — rig (the Mixamo replacement, part 1)
+### S2 adoption notes (from RunComfy's advanced TRELLIS.2 workflow, researched 2026-07-31)
+
+Their workflow runs a different wrapper, but three techniques transfer to ours:
+
+1. **Multi-view generation** — front + back conditioning via our pack's native
+   `Trellis2MultiViewImageToShape` (per-view image+mask, `blend_temperature`).
+   The back view comes from Qwen's pose-preserving edit of the anchor. Kills
+   the hallucinated back side of single-image generation.
+2. **LOD baking from voxel data** — their batch-simplify pattern: from one
+   generation's voxelgrid, bake each LOD (hero-res, game-res) via
+   simplify → UV unwrap → RasterizePBR, instead of decimating a baked mesh
+   in Blender (which shreds UVs). Changes the M3 plan: Blender normalizes
+   and assembles, but LOD textures bake in-graph.
+3. **Mesh hygiene before rigging** — fill holes + fix normals (GeomPack has
+   the nodes) ahead of auto-rigging; optional quad remesh for deformation.
+
+Their Qwen-generated normal-map guide images are noted but not adopted.
 
 **ComfyUI-UniRig** (same author + comfy-env pattern as our TRELLIS2 node,
 bundles Blender internally) running **Make-It-Animatable** for humanoids — both
