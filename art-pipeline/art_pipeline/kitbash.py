@@ -66,6 +66,12 @@ def generate_head(spec: dict, char_dir: Path, comfy, pipeline: dict) -> Path:
     img = comfy.upload_image(char_dir / "build" / "head_shaded.png")
     wf = json.loads((ROOT / "workflows" / "s2_mesh.json").read_text())
     wf["1"]["inputs"]["image"] = img
+    # Head generation is single-view; drop the back-view path and the game
+    # LOD branch (the game head comes from the assembled asset in M3).
+    for node in ("2", "6", "100", "101", "102", "103"):
+        wf.pop(node, None)
+    for key in ("back_image", "back_mask"):
+        wf["82"]["inputs"].pop(key, None)
     wf["68"]["inputs"]["resolution"] = str(spec["s2"]["mesh_resolution"])
     wf["82"]["inputs"]["seed"] = h["seed"]
     wf["83"]["inputs"]["seed"] = h["seed"]
@@ -124,6 +130,12 @@ def merge(spec: dict, char_dir: Path) -> Path:
     keep_faces = (head.vertices[head.faces][:, :, 1] > head_cut).any(axis=1)
     head.update_faces(keep_faces)
     head.remove_unreferenced_vertices()
+
+    # Pre-rig hygiene (RunComfy adoption #3): auto-riggers misbehave on open
+    # rims and flipped winding. Cap the cut boundaries, fix normals.
+    for part in (body, head):
+        trimesh.repair.fill_holes(part)
+        trimesh.repair.fix_normals(part)
 
     scene = trimesh.Scene()
     scene.add_geometry(body, node_name="Body")

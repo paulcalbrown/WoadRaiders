@@ -92,12 +92,6 @@ def reproject(character: str) -> Path:
 
     anchor = Image.open(anchor_path).convert("RGB")
     a = np.asarray(anchor, dtype=np.float64) / 255.0
-    ah, aw = a.shape[:2]
-
-    # Figure bbox in the anchor (white background): where any channel departs white.
-    fg = (a < 0.94).any(axis=2)
-    ys, xs = np.where(fg)
-    ax0, ax1, ay0, ay1 = xs.min(), xs.max(), ys.min(), ys.max()
 
     # Mesh bbox in the front plane (x right, y up, +z toward viewer).
     mx0, my0 = v[:, 0].min(), v[:, 1].min()
@@ -112,45 +106,66 @@ def reproject(character: str) -> Path:
     nx, ny, nz = texel[..., 2], texel[..., 3], texel[..., 4]
     tz = texel[..., 5]
 
-    # 2) Front-view z-buffer at atlas resolution (screen xy -> nearest z).
     span = max(mx1 - mx0, my1 - my0)
-    sxy = np.stack([(v[:, 0] - mx0) / span, (v[:, 1] - my0) / span], axis=1)
-    tri_screen = sxy[f]
-    _, scover, zbuf = _raster_barycentric(tri_screen, v[f][..., [0, 1, 2]], atlas, 3)
-
-    # 3) For every covered texel: is it the front surface, and does it face us?
-    su = np.clip(((tx - mx0) / span) * (atlas - 1), 0, atlas - 1).astype(int)
-    sv = np.clip(((ty - my0) / span) * (atlas - 1), 0, atlas - 1).astype(int)
-    depth_at = zbuf[sv, su]
     zspan = v[:, 2].max() - v[:, 2].min()
-    front_surface = tz >= depth_at - DEPTH_TOL * max(zspan, 1e-6)
     n_len = np.sqrt(nx**2 + ny**2 + nz**2) + 1e-9
-    facing = nz / n_len
-    w = np.clip((facing - FADE_LO) / (FADE_HI - FADE_LO), 0.0, 1.0)
-    w = np.where(front_surface & covered, w, 0.0)
 
-    # Exclusion bands (fractions of figure height, feathered): regions where
-    # the mesh geometry deviates too much from the flat drawing for projection
-    # to line up — faces, mostly. The generated texture keeps those.
-    yfrac = (ty - my0) / (my1 - my0 + 1e-9)
-    for lo, hi in spec.get("reproject", {}).get("exclude_y", []):
-        keep = np.clip(
-            np.minimum(np.abs(yfrac - lo), np.abs(yfrac - hi)) / FEATHER, 0.0, 1.0
-        )
-        keep = np.where((yfrac > lo) & (yfrac < hi), 0.0, keep)
-        w *= keep
+    def directional_pass(image: np.ndarray, sign: float, bands) -> tuple:
+        """Project one view (sign=+1 front, -1 back) -> (weights, samples)."""
+        ih, iw = image.shape[:2]
+        fg = (image < 0.94).any(axis=2)
+        ys, xs = np.where(fg)
+        ix0, ix1, iy0, iy1 = xs.min(), xs.max(), ys.min(), ys.max()
 
-    # 4) Sample the anchor: front-plane xy -> figure-bbox pixel.
-    px = ax0 + (tx - mx0) / (mx1 - mx0 + 1e-9) * (ax1 - ax0)
-    py = ay0 + (1.0 - (ty - my0) / (my1 - my0 + 1e-9)) * (ay1 - ay0)
-    px = np.clip(px, 0, aw - 1).astype(int)
-    py = np.clip(py, 0, ah - 1).astype(int)
-    sampled = a[py, px]
+        # View z-buffer at atlas resolution keyed on signed depth.
+        sxy = np.stack([(v[:, 0] - mx0) / span, (v[:, 1] - my0) / span], axis=1)
+        depth_vals = np.concatenate([v[f], v[f][..., 2:3] * sign], axis=2)[..., [0, 1, 3]]
+        _, _, zbuf = _raster_barycentric(sxy[f], depth_vals, atlas, 3)
+
+        su = np.clip(((tx - mx0) / span) * (atlas - 1), 0, atlas - 1).astype(int)
+        sv = np.clip(((ty - my0) / span) * (atlas - 1), 0, atlas - 1).astype(int)
+        visible = tz * sign >= zbuf[sv, su] - DEPTH_TOL * max(zspan, 1e-6)
+        facing = (nz * sign) / n_len
+        w = np.clip((facing - FADE_LO) / (FADE_HI - FADE_LO), 0.0, 1.0)
+        w = np.where(visible & covered, w, 0.0)
+
+        # Exclusion bands (fractions of figure height, feathered): regions
+        # where the mesh deviates too much from the flat drawing — faces.
+        yfrac = (ty - my0) / (my1 - my0 + 1e-9)
+        for lo, hi in bands:
+            keep = np.clip(
+                np.minimum(np.abs(yfrac - lo), np.abs(yfrac - hi)) / FEATHER, 0.0, 1.0
+            )
+            keep = np.where((yfrac > lo) & (yfrac < hi), 0.0, keep)
+            w *= keep
+
+        # World x maps to image x mirrored for the back view.
+        u = (tx - mx0) / (mx1 - mx0 + 1e-9)
+        u = u if sign > 0 else 1.0 - u
+        px = np.clip(ix0 + u * (ix1 - ix0), 0, iw - 1).astype(int)
+        py = np.clip(
+            iy0 + (1.0 - (ty - my0) / (my1 - my0 + 1e-9)) * (iy1 - iy0), 0, ih - 1
+        ).astype(int)
+        return w, image[py, px]
+
+    rp = spec.get("reproject", {})
+    w_front, s_front = directional_pass(a, +1.0, rp.get("exclude_y", []))
+    passes = [(w_front, s_front)]
+
+    back_rel = spec["s2"].get("back_view")
+    back_path = char_dir / back_rel if back_rel else None
+    if back_path and back_path.is_file():
+        b = np.asarray(Image.open(back_path).convert("RGB"), dtype=np.float64) / 255.0
+        # Face bands are a front-view concern; the back projects unbanded.
+        w_back, s_back = directional_pass(b, -1.0, [])
+        passes.append((w_back, s_back))
 
     # glTF UV origin is top-left; our rasterizer indexed row 0 at v=0 (bottom).
-    tex_flipped = tex[::-1]
-    blended = tex_flipped * (1 - w[..., None]) + sampled * w[..., None]
+    blended = tex[::-1]
+    for w, sampled in passes:
+        blended = blended * (1 - w[..., None]) + sampled * w[..., None]
     blended = blended[::-1]
+    w = np.maximum.reduce([p[0] for p in passes])
 
     material.baseColorTexture = Image.fromarray(
         (np.clip(blended, 0, 1) * 255).astype(np.uint8)

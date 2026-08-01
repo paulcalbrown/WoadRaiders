@@ -87,3 +87,7 @@ tex_guidance_rescale = 0.0
 # The approved style anchor (M2 output), relative to this spec's folder.
 # Until it exists, run with an explicit --image override.
 style_anchor = "style_anchor.png"
+# Qwen-generated rear view (pose-preserving edit of the anchor): conditions
+# the multi-view shape stage AND back-projects in the reproject stage.
+back_view = "back_view.png"
+game_tris = 30000   # in-graph game LOD, baked from voxel data with its own UVs

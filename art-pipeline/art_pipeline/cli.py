@@ -116,11 +116,18 @@ def run_s1(character: str, seeds: int) -> list[Path]:
     return results
 
 
-def patch_s2(workflow: dict, spec: dict, image_name: str) -> dict:
+def patch_s2(workflow: dict, spec: dict, image_name: str, back_name: str | None) -> dict:
     """Bind one character's spec to the committed S2 workflow."""
     wf = copy.deepcopy(workflow)
     s2 = spec["s2"]
+    name = spec["character"]["name"].lower()
     wf["1"]["inputs"]["image"] = image_name
+    if back_name:
+        wf["2"]["inputs"]["image"] = back_name
+    else:
+        # Multi-view node treats every non-front view as optional.
+        del wf["2"], wf["6"]
+        del wf["82"]["inputs"]["back_image"], wf["82"]["inputs"]["back_mask"]
     wf["68"]["inputs"]["resolution"] = str(s2["mesh_resolution"])
     wf["82"]["inputs"]["seed"] = s2["seed"]
     wf["83"]["inputs"]["seed"] = s2["seed"]
@@ -129,7 +136,9 @@ def patch_s2(workflow: dict, spec: dict, image_name: str) -> dict:
     wf["83"]["inputs"]["tex_guidance_rescale"] = s2.get("tex_guidance_rescale", 0.2)
     wf["97"]["inputs"]["target_face_count"] = s2["target_tris"]
     wf["98"]["inputs"]["texture_size"] = s2["texture_size"]
-    wf["86"]["inputs"]["filename_prefix"] = spec["character"]["name"].lower()
+    wf["100"]["inputs"]["target_face_count"] = s2.get("game_tris", 30000)
+    wf["86"]["inputs"]["filename_prefix"] = name
+    wf["103"]["inputs"]["filename_prefix"] = f"{name}_game"
     return wf
 
 
@@ -150,40 +159,45 @@ def run_s2(character: str, image_override: Path | None) -> Path:
 
     workflow = json.loads((ROOT / "workflows" / "s2_mesh.json").read_text())
     uploaded = comfy.upload_image(image)
-    patched = patch_s2(workflow, spec, uploaded)
+    back_path = char_dir / spec["s2"]["back_view"] if spec["s2"].get("back_view") else None
+    back = comfy.upload_image(back_path) if back_path and back_path.is_file() else None
+    patched = patch_s2(workflow, spec, uploaded, back)
 
-    print(f"[S2] {character}: image={image.name} seed={spec['s2']['seed']} "
-          f"faces<={spec['s2']['target_tris']} res={spec['s2']['mesh_resolution']}")
+    print(f"[S2] {character}: image={image.name} back={'yes' if back else 'no'} "
+          f"seed={spec['s2']['seed']} faces<={spec['s2']['target_tris']} "
+          f"game<={spec['s2'].get('game_tris', 30000)} res={spec['s2']['mesh_resolution']}")
     started = time.monotonic()
+    wall_started = time.time()
     prompt_id = comfy.queue(patched)
     print(f"[S2] queued {prompt_id}")
-    entry = comfy.wait(prompt_id)
+    comfy.wait(prompt_id)
     elapsed = time.monotonic() - started
 
+    # The export nodes don't reliably report through history; take each
+    # prefix's newest file from ComfyUI's output directory on disk.
     build = char_dir / "build"
-    glbs = find_glb_outputs(entry)
-    if glbs:
-        filename, subfolder = glbs[-1]
-        dest = comfy.download_output(filename, subfolder, build / f"{character}_mesh.glb")
-    else:
-        # The export node may not report through history; fall back to the
-        # newest matching file in ComfyUI's output directory on disk.
-        out_dir = Path(pipeline["comfy"]["root"]) / "ComfyUI" / "output"
-        prefix = character.lower()
+    build.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(pipeline["comfy"]["root"]) / "ComfyUI" / "output"
+    name = character.lower()
+    results = []
+    for prefix, out_name in [
+        (f"{name}_game", f"{character}_game.glb"),
+        (name, f"{character}_mesh.glb"),
+    ]:
         candidates = sorted(
-            out_dir.glob(f"{prefix}*.glb"), key=lambda p: p.stat().st_mtime
+            (p for p in out_dir.glob(f"{prefix}*.glb")
+             if p.stat().st_mtime >= wall_started - 60
+             and (prefix.endswith("_game") or "_game" not in p.name)),
+            key=lambda p: p.stat().st_mtime,
         )
         if not candidates:
-            raise ComfyError(
-                f"prompt finished but no GLB found via history or {out_dir}"
-            )
-        build.mkdir(parents=True, exist_ok=True)
-        dest = build / f"{character}_mesh.glb"
+            raise ComfyError(f"no {prefix}*.glb produced in {out_dir}")
+        dest = build / out_name
         dest.write_bytes(candidates[-1].read_bytes())
-
-    size_mb = dest.stat().st_size / 1e6
-    print(f"[S2] done in {elapsed:.0f}s -> {dest} ({size_mb:.1f} MB)")
-    return dest
+        results.append(dest)
+        print(f"[S2] {out_name}: {dest.stat().st_size / 1e6:.1f} MB")
+    print(f"[S2] done in {elapsed:.0f}s")
+    return results[-1]
 
 
 def main() -> None:

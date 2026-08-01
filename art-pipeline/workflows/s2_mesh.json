@@ -4,10 +4,20 @@
     "class_type": "LoadImage",
     "_meta": { "title": "Load Image" }
   },
+  "2": {
+    "inputs": { "image": "PLACEHOLDER_BACK.png" },
+    "class_type": "LoadImage",
+    "_meta": { "title": "Load Back View (optional)" }
+  },
   "5": {
     "inputs": { "image": ["1", 0] },
     "class_type": "Trellis2RemoveBackground",
-    "_meta": { "title": "Remove Background (BiRefNet)" }
+    "_meta": { "title": "Remove Background (front)" }
+  },
+  "6": {
+    "inputs": { "image": ["2", 0] },
+    "class_type": "Trellis2RemoveBackground",
+    "_meta": { "title": "Remove Background (back)" }
   },
   "68": {
     "inputs": { "resolution": "512", "precision": "auto", "attn_backend": "auto" },
@@ -35,10 +45,13 @@
       "shape_sampling_steps": 12,
       "max_tokens": 262144,
       "model_config": ["68", 0],
-      "conditioning": ["69", 0]
+      "front_image": ["5", 0],
+      "front_mask": ["5", 1],
+      "back_image": ["6", 0],
+      "back_mask": ["6", 1]
     },
-    "class_type": "Trellis2ImageToShape",
-    "_meta": { "title": "TRELLIS.2 Image to Shape" }
+    "class_type": "Trellis2MultiViewImageToShape",
+    "_meta": { "title": "TRELLIS.2 Multi-View Image to Shape" }
   },
   "83": {
     "inputs": {
@@ -89,6 +102,39 @@
       "trimesh": ["98", 0]
     },
     "class_type": "Trellis2ExportTrimesh",
-    "_meta": { "title": "TRELLIS.2 Export Trimesh" }
+    "_meta": { "title": "TRELLIS.2 Export Trimesh (hero)" }
+  },
+  "100": {
+    "inputs": {
+      "trimesh": ["82", 0],
+      "target_face_count": 30000,
+      "fill_holes": true
+    },
+    "class_type": "Trellis2Simplify",
+    "_meta": { "title": "Simplify to game budget" }
+  },
+  "101": {
+    "inputs": { "trimesh": ["100", 0] },
+    "class_type": "Trellis2UVUnwrap",
+    "_meta": { "title": "UV Unwrap (game LOD)" }
+  },
+  "102": {
+    "inputs": {
+      "texture_size": 2048,
+      "trimesh": ["101", 0],
+      "voxelgrid": ["83", 0],
+      "original_mesh": ["82", 0]
+    },
+    "class_type": "Trellis2RasterizePBR",
+    "_meta": { "title": "Bake PBR (game LOD)" }
+  },
+  "103": {
+    "inputs": {
+      "filename_prefix": "trellis2_game",
+      "file_format": "glb",
+      "trimesh": ["102", 0]
+    },
+    "class_type": "Trellis2ExportTrimesh",
+    "_meta": { "title": "TRELLIS.2 Export Trimesh (game)" }
   }
 }
