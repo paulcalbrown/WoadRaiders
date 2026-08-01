@@ -1,0 +1,33 @@
+# The Warrior (working name Torga) — first non-chibi character.
+# Recipe as of 2026-08-01: nano banana authors the anchor; Meshy (web UI,
+# human-operated, the pipeline never spends credits) generates mesh + rig +
+# animations; the ingest stage enforces the game contract. Earlier local
+# TRELLIS.2/Qwen stages are retired — see git history and the design doc.
+
+[character]
+name = "Warrior"
+mesh_prefix = "Warrior"   # every mesh node gets this prefix at ingest
+height_m = 1.85           # full human scale — the new world standard;
+                          # other characters and realms adjust to fit over time
+
+[s1]
+# Authored in nano banana from the friend's sketch (sketch.jpg). Committed
+# inputs: style_anchor.png (the single Meshy input), nano_banana_ref*.png
+# (provenance), back_view.png (optional multi-image refinement, unused).
+
+[ingest]
+# The pipeline-side stage. Reads the newest GLB from source_dir, renames
+# clips and meshes to the contract, normalizes scale/origin/facing,
+# validates, and promotes to WoadRaiders.Client/assets/characters/.
+source_dir = "meshy"      # drop Download > Animation > All Added > Single File GLBs here
+max_tris = 60000
+max_texture = 2048
+
+[ingest.clips]
+# Meshy library clip name (right) -> standard contract name (left). Fill
+# the right-hand values with the exact names shown in Meshy's Animate
+# panel; ingest errors (listing what it found) on any mismatch.
+Idle = ""                 # e.g. "Standing Idle"
+Run = ""                  # pick an IN-PLACE run (preview for root motion)
+Fall = ""                 # e.g. "Falling Idle" — the mid-air loop
+Attack = ""               # e.g. a one-handed sword chop

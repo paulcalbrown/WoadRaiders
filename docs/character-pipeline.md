@@ -167,6 +167,45 @@ the scripts are ordinary committed Python. Blender is pinned by version in
   character's rig, renames clips to the game contract, exports final GLB with
   one glTF animation per clip.
 
+### The ingest stage (2026-08-01 — supersedes S3/S4/S5 for the Meshy path)
+
+`uv run art-pipeline warrior --stage ingest`. Reads the newest GLB from
+`characters/<name>/meshy/` (human-downloaded from Meshy), then:
+
+1. **Inventory & report** — clips, meshes, skeleton, tri count, texture
+   sizes, bounds. Everything visible before anything changes.
+2. **Clip renames** — `[ingest.clips]` in the spec maps Meshy's library
+   names to the game's **standard clip names** (see below). Explicit data,
+   no guessing; a missing mapping fails with the list of what the file
+   actually contains. Renames are lossless glTF JSON edits.
+3. **Mesh naming** — nodes prefixed `Warrior_*` (the CharacterLoadout
+   visibility contract; also keys future weapon attachment).
+4. **Normalization** — uniform scale to `height_m` (1.85 m: full human
+   scale is the world standard now; other characters and realms adjust to
+   fit as we go), feet to y=0, facing +Z, root at origin.
+5. **Checks that fail loudly** — `Run` root drift ≈ 0 (root motion is a
+   contract violation; re-pick an in-place clip in Meshy), all four
+   contract clips present, single skeleton, tri/texture budgets from spec.
+6. **Promotion** — on pass, copy to
+   `WoadRaiders.Client/assets/characters/<Name>.glb` plus a provenance
+   sidecar (source file hash, date, Meshy task id when known). Committed.
+
+**Standard animation names** (industry-convention verbs, PascalCase; the
+KayKit names retire from the contract):
+
+| Contract | Was (KayKit) | Notes |
+|---|---|---|
+| `Idle` | `Idle` | unchanged |
+| `Run` | `Running_A` | in-place required |
+| `Fall` | `Jump_Idle` | the mid-air loop |
+| `Attack` | `1H_Melee_Attack_Chop` | per-class variants later: `Attack_02`… |
+
+Reserved for later: `Walk`, `Jump`, `Hit`, `Death`. Game-side, the rename
+ships with a **fallback lookup**: `CharacterView` tries the standard name
+first and falls back to the legacy KayKit name, so KayKit enemies and
+un-migrated classes keep animating during the transition. The class enum
+renames `Knight` → `Warrior` in the same change.
+
 ### S5 — validation gate (the game contract, executable)
 
 `validate.py` (pygltflib or Blender-python) fails the build unless:
