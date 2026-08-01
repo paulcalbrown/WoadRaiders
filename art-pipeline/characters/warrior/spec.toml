@@ -23,6 +23,14 @@ source_dir = "meshy"      # drop Download > Animation > All Added > Single File 
 max_tris = 60000
 max_texture = 2048
 
+[ingest.props]
+# Separate Meshy-generated props, rigid-attached to hand bones at ingest and
+# merged into the shipped GLB (the KayKit pattern: armory attached,
+# CharacterLoadout toggles visibility). offset/rotation are grip-fit tuning,
+# adjusted once by eye against the Attack clip.
+# weapon = { file = "weapon.glb", bone = "RightHand", name = "Warrior_Weapon", offset = [0,0,0], rotation_deg = [0,0,0] }
+# shield = { file = "shield.glb", bone = "LeftForeArm", name = "Warrior_Shield", offset = [0,0,0], rotation_deg = [0,0,0] }
+
 [ingest.clips]
 # Meshy library clip name (right) -> standard contract name (left). Fill
 # the right-hand values with the exact names shown in Meshy's Animate
