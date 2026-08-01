@@ -208,10 +208,12 @@ def main() -> None:
     parser.add_argument("character", help="character folder under characters/")
     parser.add_argument(
         "--stage",
-        choices=["s1", "s2"],
+        choices=["s1", "s2", "ingest"],
         default="s2",
-        help="s1: style anchor candidates; s2: image -> mesh (default)",
+        help="s1: anchor candidates; s2: image -> mesh (default); "
+        "ingest: Meshy GLB -> contract-passing game asset",
     )
+    parser.add_argument("--dry-run", action="store_true", help="ingest: inventory only")
     parser.add_argument(
         "--image",
         type=Path,
@@ -228,6 +230,10 @@ def main() -> None:
     try:
         if args.stage == "s1":
             run_s1(args.character, args.seeds)
+        elif args.stage == "ingest":
+            from .ingest import run_ingest
+
+            run_ingest(args.character, args.dry_run)
         else:
             run_s2(args.character, args.image)
     except ComfyError as e:
