@@ -20,23 +20,31 @@ SIZE = (768, 1024)  # portrait, matches typical anchor/sketch aspect
 # right side sits on the image's left (mirror convention of a facing figure).
 #
 # Proportions are anatomical, not decorative: the model draws the figure the
-# skeleton prescribes. Armspan (wrist to wrist, 620) equals figure height
-# (crown ~205 to soles ~825) like a real human — the first template's 0.75
-# armspan/height ratio made every character render vertically stretched.
+# skeleton prescribes. Every landmark derives from average-human segment
+# fractions (Drillis & Contini) for a figure of height H = 612 px standing
+# on ground y = 819 (crown ~207, so the figure fills the canvas with margin):
+#   eye level 0.936H -> y 246      shoulder height 0.818H -> y 318
+#   hip height 0.530H -> y 495     knee 0.285H -> y 645    ankle 0.039H -> y 795
+#   biacromial width 0.23H -> +/-70
+#   FINGERTIP span = H (the "armspan equals height" rule) minus one hand
+#   (0.108H) per side puts OpenPose wrists at +/-240; elbows split the arm
+#   0.186:0.146 (upper:forearm) -> +/-165.
+# v1 had wrist span 0.75H (rendered stretched); v2 overcorrected to wrist
+# span = H, forgetting hands are not wrists (rendered long-armed).
 KEYPOINTS = {
     "nose": (384, 258),
-    "neck": (384, 330),
-    "r_shoulder": (322, 330),
-    "r_elbow": (198, 330),
-    "r_wrist": (74, 330),
-    "l_shoulder": (446, 330),
-    "l_elbow": (570, 330),
-    "l_wrist": (694, 330),
-    "r_hip": (344, 505),
-    "r_knee": (344, 650),
+    "neck": (384, 318),
+    "r_shoulder": (314, 318),
+    "r_elbow": (219, 318),
+    "r_wrist": (144, 318),
+    "l_shoulder": (454, 318),
+    "l_elbow": (549, 318),
+    "l_wrist": (624, 318),
+    "r_hip": (344, 495),
+    "r_knee": (344, 645),
     "r_ankle": (340, 795),
-    "l_hip": (424, 505),
-    "l_knee": (424, 650),
+    "l_hip": (424, 495),
+    "l_knee": (424, 645),
     "l_ankle": (428, 795),
     "r_eye": (369, 246),
     "l_eye": (399, 246),
