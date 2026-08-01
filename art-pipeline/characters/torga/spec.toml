@@ -58,10 +58,15 @@ exclude_y = [[0.80, 0.94]]
 
 [s2]
 seed = 42
-target_tris = 30000
+# Source-mesh budget, NOT the in-game budget. The 1536 latent carries fine
+# geometry (mail bumps, folds, facial features) that low decimation discards;
+# the game-ready decimation happens in the Blender stage (M3).
+target_tris = 150000
 mesh_resolution = "1536_cascade"  # 512 | 1024 | 1024_cascade | 1536_cascade; cascade = base + refine pass
 texture_size = 4096
 tex_steps = 32            # texture diffusion steps; node default 12 is the fast preset
+tex_guidance = 1.0        # official pipeline value; the template's 3.0 over-drives the 1024-capped tex model
+tex_guidance_rescale = 0.0
 # The approved style anchor (M2 output), relative to this spec's folder.
 # Until it exists, run with an explicit --image override.
 style_anchor = "style_anchor.png"

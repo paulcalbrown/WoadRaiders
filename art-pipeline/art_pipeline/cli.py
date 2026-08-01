@@ -125,6 +125,8 @@ def patch_s2(workflow: dict, spec: dict, image_name: str) -> dict:
     wf["82"]["inputs"]["seed"] = s2["seed"]
     wf["83"]["inputs"]["seed"] = s2["seed"]
     wf["83"]["inputs"]["tex_sampling_steps"] = s2.get("tex_steps", 12)
+    wf["83"]["inputs"]["tex_guidance_strength"] = s2.get("tex_guidance", 3.0)
+    wf["83"]["inputs"]["tex_guidance_rescale"] = s2.get("tex_guidance_rescale", 0.2)
     wf["97"]["inputs"]["target_face_count"] = s2["target_tris"]
     wf["98"]["inputs"]["texture_size"] = s2["texture_size"]
     wf["86"]["inputs"]["filename_prefix"] = spec["character"]["name"].lower()
