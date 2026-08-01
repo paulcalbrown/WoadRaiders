@@ -59,28 +59,28 @@ rigged GLB ─→ [S4 Blender headless: normalize + assemble] ─→ candidate G
 candidate ─→ [S5 validate.py gate] ─→ assets/characters/<Name>.glb
 ```
 
-### S1 — style anchor (authored by taste, normalized by machine)
+### S1 — style anchor (nano banana, full stop — revised 2026-08-01)
 
-Division of labor, settled 2026-07-31 after measuring both tools on Torga:
+**All 2D character authoring happens in nano banana**: the anchor from the
+friend's sketch, the back view for multi-image generation, and roster
+consistency (its character-consistency across edits beat local Qwen in
+every session comparison). The picked renders are committed
+(`style_anchor.png`, `back_view.png`) — approved intermediates are
+committed (rule 5), so downstream stages never depend on the external tool.
 
-- **Authoring: nano banana** (external). Best-in-class aesthetics and
-  conversational iteration from the friend's sketches. The picked render is
-  committed as `style_anchor.png` — approved intermediates are committed
-  (reproducibility rule 5), so downstream stages never depend on the
-  external tool again. An A-pose anchor is fine: MIA rigs arbitrary poses
-  and AccuRIG prefers A-pose; only silhouette-crossing props are forbidden.
-- **Normalization + variants: local Qwen-Image-Edit-2511** (Apache 2.0,
-  pinned, seeded). Pose surgery against the committed anthropometric
-  OpenPose template, proportion enforcement, colorways/damage-state/roster
-  variants, and style-consistency generation for future characters (an
-  approved painted anchor as image3 reference — measured to carry the
-  medium faithfully; a 3D-render reference does NOT, it drags output to
-  CGI). Also general 2D asset generation beyond characters.
+Qwen exits the character pipeline entirely. Its old jobs are obsolete:
+pose surgery (Meshy enforces A/T-pose at generation), de-cel shading (a
+TRELLIS.2-era workaround), style-ref consistency (nano banana's is
+better). The local Qwen/ComfyUI stack remains installed for NON-character
+work — realm dressing, prop texturing, 2D game assets — per the realm AI
+notes. The S1 Qwen workflows and the OpenPose template stay in the repo
+as archived tooling, out of the character path.
 
-The anchor image is what TRELLIS.2 propagates into textures, so whichever
-tool authors it, this stage IS the style enforcement point. Current
-direction: cel-shaded, bold outlines, flat color (supersedes the earlier
-soft-gouache school notes).
+The anchor image is what the mesh provider propagates into textures, so
+this stage IS the style enforcement point. Current direction: cel-shaded,
+bold outlines, flat color (supersedes the earlier soft-gouache notes).
+Anchor requirements for Meshy input: full body, A- or T-pose, empty
+hands, white background, front + back pair with matching pose and style.
 
 ### S2 — mesh (provider-pluggable; Meshy primary as of 2026-08-01)
 
