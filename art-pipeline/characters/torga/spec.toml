@@ -53,7 +53,7 @@ icons and handwritten labels in image 1."""
 [s2]
 seed = 42
 target_tris = 30000
-mesh_resolution = "512"   # LoadTrellis2Models: "512" | "1024" | "1536"
+mesh_resolution = "1024"  # LoadTrellis2Models: "512" | "1024" | "1536"; 512 is smoke-test coarse
 texture_size = 2048
 # The approved style anchor (M2 output), relative to this spec's folder.
 # Until it exists, run with an explicit --image override.

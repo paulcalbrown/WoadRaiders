@@ -4,10 +4,10 @@
     "class_type": "LoadImage",
     "_meta": { "title": "Load Image" }
   },
-  "11": {
-    "inputs": { "mask": ["1", 1] },
-    "class_type": "InvertMask",
-    "_meta": { "title": "Invert Mask" }
+  "5": {
+    "inputs": { "image": ["1", 0] },
+    "class_type": "Trellis2RemoveBackground",
+    "_meta": { "title": "Remove Background (BiRefNet)" }
   },
   "68": {
     "inputs": { "resolution": "512", "precision": "auto", "attn_backend": "auto" },
@@ -18,8 +18,8 @@
     "inputs": {
       "background_color": "black",
       "model_config": ["68", 0],
-      "image": ["1", 0],
-      "mask": ["11", 0]
+      "image": ["5", 0],
+      "mask": ["5", 1]
     },
     "class_type": "Trellis2GetConditioning",
     "_meta": { "title": "TRELLIS.2 Get Conditioning" }
