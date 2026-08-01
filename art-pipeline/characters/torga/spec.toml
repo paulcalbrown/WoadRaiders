@@ -9,6 +9,12 @@ attack_clip = "1H_Melee_Attack_Chop"
 height_m = 1.85
 
 [s1]
+# PROVENANCE: the committed style_anchor.png was authored externally in nano
+# banana (Gemini image) from the sketch — Paul's pick, 2026-07-31; the source
+# render is nano_banana_ref_cel.png. His A-pose is rigger-friendly (MIA is
+# pose-robust, AccuRIG prefers A-pose), so no T-pose normalization was needed.
+# The recipe below is the LOCAL toolkit (Qwen) for variants and normalization
+# — pose surgery, colorways, roster consistency — not the anchor's source.
 sketch = "sketch.jpg"
 # style_ref intentionally unset for the anchor: Qwen treats reference images
 # as CONTENT, so a 3D-render ref drags the medium toward CGI (measured across
@@ -31,12 +37,12 @@ skeleton in image 2: a strict T-pose, both arms straight out horizontally, \
 elbows straight, palms down with fingers slightly spread, legs straight, \
 feet apart with a clear gap between the boots, facing directly forward. \
 Keep his identity from image 1: rounded conical helmet with a riveted brow \
-band, grim scowling face with a heavy jaw and grey mutton-chop sideburns \
-under the helmet, thick studded metal collar, massive pauldrons, \
-breastplate with straps, rivets and a diamond-shaped chest emblem, wide \
-leather belt with a large ornate scrolled buckle, knee-length armored \
-tabard panel hanging between hips and knees without touching either boot, \
-plated leg armor, heavy boots, large armored gauntlets. Empty hands, no \
+band, angry face with bared gritted teeth, a heavy jaw and a thick brown \
+mustache, riveted chainmail hauberk with chainmail sleeves and chainmail \
+leggings, studded metal collar, crossed leather straps with a diamond \
+emblem at the chest, wide leather belt with a large ornate scrolled \
+buckle, red knee-length tabard and red under-skirt, heavy leather \
+gauntlets and heavy brown boots. Empty hands, no \
 weapons, no shield anywhere. Realistic heavyset proportions about 6.5 \
 heads tall, NOT chibi. Muted worn steel greys, dark leather browns, \
 off-white tabard cloth with woad-blue trim. Flat even shadowless lighting, \
