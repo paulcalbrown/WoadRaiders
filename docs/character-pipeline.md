@@ -180,9 +180,23 @@ the scripts are ordinary committed Python. Blender is pinned by version in
    actually contains. Renames are lossless glTF JSON edits.
 3. **Mesh naming** — nodes prefixed `Warrior_*` (the CharacterLoadout
    visibility contract; also keys future weapon attachment).
-4. **Normalization** — uniform scale to `height_m` (1.85 m: full human
-   scale is the world standard now; other characters and realms adjust to
-   fit as we go), feet to y=0, facing +Z, root at origin.
+4. **Normalization** — uniform scale to the character's own `height_m`,
+   feet to y=0, facing +Z, root at origin. **Heights are per-model by
+   design**: every spec declares its own, so size is authored data, not a
+   spawn-time hack. The size language (2026-08-01):
+
+   | Band | height_m | Who |
+   |---|---|---|
+   | Human standard | 1.75–1.95 | player classes, human NPCs |
+   | Elite | 2.2–2.6 | veteran enemies, minibosses |
+   | Brute | 3.0–3.5 | heavy enemies |
+   | Boss | 4.0+ | realm bosses |
+
+   The asset carries its true metric height; the game applies ONE world
+   meters→units constant at spawn. As models migrate, the per-type scale
+   numbers in `WorldView` (20 here, 44 there) retire, and derived visuals
+   (bar height, nameplate, spotlight mount) key off declared height
+   instead of hand-tuned constants.
 5. **Checks that fail loudly** — `Run` root drift ≈ 0 (root motion is a
    contract violation; re-pick an in-place clip in Meshy), all four
    contract clips present, single skeleton, tri/texture budgets from spec.
