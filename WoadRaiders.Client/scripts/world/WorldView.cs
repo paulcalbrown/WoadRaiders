@@ -38,10 +38,12 @@ public sealed class WorldView
     // Migrated characters (art-pipeline ingest) are authored in metres and use
     // the standard clip names at MetersToUnits scale; KayKit holdovers keep
     // their legacy scale and clip names until each is replaced.
-    // 27 calibrates a 1.85 m human to the screen presence the chibi knight had
-    // (2.47 raw units x 20 = ~49.4): slender silhouettes need the extra height
-    // to hold the same visual weight the stocky chibis got for free.
-    private const float MetersToUnits = 27f;
+    // 32 puts a 1.85 m human at ~59 world units — a full head-and-shoulders
+    // over the ~49-unit chibi holdovers, so the Warrior reads as a grown man
+    // among mascots rather than another mascot. (27 matched the old knight
+    // exactly and read as "no change"; the world re-calibrates around human
+    // scale as characters and realms migrate.)
+    private const float MetersToUnits = 32f;
 
     private readonly record struct ClassVisual(string ScenePath, string AttackClip, float Scale);
 

@@ -32,9 +32,9 @@ public partial class ClassCard : Button
     private static readonly Dictionary<CharacterClass, (string ScenePath, string Role, float ModelHeight)> Flavor = new()
     {
         [CharacterClass.Warrior] = ("res://assets/characters/Warrior.glb", "Shield-sworn line-holder", 1.85f),
-        [CharacterClass.Rogue] = (KayKit + "/Rogue.glb", "Knife-quick shadow", 1.4f),
-        [CharacterClass.Mage] = (KayKit + "/Mage.glb", "Wielder of the sickly fire", 1.4f),
-        [CharacterClass.Ranger] = (KayKit + "/Rogue_Hooded.glb", "Cold eye, colder bolt", 1.4f),
+        [CharacterClass.Rogue] = (KayKit + "/Rogue.glb", "Knife-quick shadow", 2.5f),
+        [CharacterClass.Mage] = (KayKit + "/Mage.glb", "Wielder of the sickly fire", 2.5f),
+        [CharacterClass.Ranger] = (KayKit + "/Rogue_Hooded.glb", "Cold eye, colder bolt", 2.5f),
     };
 
     private float _highlight;
