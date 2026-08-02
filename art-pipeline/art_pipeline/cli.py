@@ -208,9 +208,10 @@ def main() -> None:
     parser.add_argument("character", help="character folder under characters/")
     parser.add_argument(
         "--stage",
-        choices=["s1", "s2", "ingest"],
+        choices=["s1", "s2", "rig", "ingest"],
         default="s2",
         help="s1: anchor candidates; s2: image -> mesh (default); "
+        "rig: MIA auto-rig the newest inbox GLB; "
         "ingest: Meshy GLB -> contract-passing game asset",
     )
     parser.add_argument("--dry-run", action="store_true", help="ingest: inventory only")
@@ -230,6 +231,10 @@ def main() -> None:
     try:
         if args.stage == "s1":
             run_s1(args.character, args.seeds)
+        elif args.stage == "rig":
+            from .rig import run_rig
+
+            run_rig(args.character)
         elif args.stage == "ingest":
             from .ingest import run_ingest
 
