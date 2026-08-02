@@ -9,8 +9,11 @@ our proportions).
 which ride along under their own names. `Run.fbx` must be an in-place clip
 (tick "In Place" in Mixamo); ingest rejects root motion.
 
-Because every character rigs to the same mixamorig skeleton, this library
-is roster-wide: one set of clips animates everyone.
+Because every character rigs to the same mixamorig skeleton, any clip can
+animate anyone. In practice, though, keep only GENUINELY UNIVERSAL motion
+here (Fall, and likely Death/Hit): armed stances make most player-class
+locomotion character-specific — a sword-and-shield idle is not a staff
+idle — so Idle/Run/Attack usually live in each character's own folder.
 
 `uv run art-pipeline <character> --stage animate` applies everything here
 to the character's rigged FBX and produces `build/<character>_animated.glb`
