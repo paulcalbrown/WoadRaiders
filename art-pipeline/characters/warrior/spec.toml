@@ -15,6 +15,13 @@ height_m = 1.85           # full human scale — the new world standard;
 # inputs: style_anchor.png (the single Meshy input), nano_banana_ref*.png
 # (provenance), back_view.png (optional multi-image refinement, unused).
 
+[rig.rest_pose]
+# Degrees of upward pitch baked into the rest pose after auto-rigging —
+# the Meshy mesh carries a slightly dropped chin, and every retargeted
+# clip inherits the rest posture. Tune by eye in Mixamo, rerun --stage rig.
+"mixamorig:Neck" = 3
+"mixamorig:Head" = 5
+
 [ingest]
 # The pipeline-side stage. Reads the newest GLB from source_dir, renames
 # clips and meshes to the contract, normalizes scale/origin/facing,

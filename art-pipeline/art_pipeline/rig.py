@@ -90,7 +90,42 @@ def run_rig(character: str) -> None:
             print(f"[rig] -> {dest} ({dest.stat().st_size/1e6:.1f} MB)")
     if not found:
         raise SystemExit(f"[rig] job succeeded but no {name}_rig* outputs in {out_dir}")
+
+    fix_rest_pose(spec, pipeline, build / f"{character}_rigged.fbx")
     print("[rig] done — next: animations (UniRigApplyAnimation or Mesh2Motion), then ingest")
+
+
+def fix_rest_pose(spec: dict, pipeline: dict, fbx: Path) -> None:
+    """Bake spec-declared rest-pose corrections (e.g. lift a dropped chin).
+
+    Auto-rig rest poses inherit the source mesh's posture, and retargeters
+    (Mixamo included) reproduce that posture in every clip. [rig.rest_pose]
+    maps bone name -> degrees of upward pitch, baked into mesh + rest so
+    downstream tools see a corrected character.
+    """
+    tweaks = spec.get("rig", {}).get("rest_pose", {})
+    if not tweaks or not fbx.exists():
+        return
+    rig_cfg = pipeline.get("rig", {})
+    pixi = rig_cfg.get("pixi")
+    manifest = rig_cfg.get("unirig_manifest")
+    if not (pixi and manifest):
+        print("[rig] rest_pose declared but pipeline.toml [rig] pixi/unirig_manifest "
+              "not set — skipping correction")
+        return
+    import subprocess
+
+    script = Path(__file__).parent / "bpy_scripts" / "fix_rest_pose.py"
+    out_base = str(fbx.with_suffix(""))
+    args = [pixi, "run", "--manifest-path", manifest, "python", str(script),
+            str(fbx), out_base] + [f"{b}:{d}" for b, d in tweaks.items()]
+    print(f"[rig] baking rest-pose correction: {dict(tweaks)}")
+    r = subprocess.run(args, capture_output=True, text=True, timeout=600)
+    tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
+    for line in tail:
+        print(f"[rig]   {line}")
+    if r.returncode != 0:
+        raise SystemExit(f"[rig] rest-pose correction failed (exit {r.returncode})")
 
 
 if __name__ == "__main__":
