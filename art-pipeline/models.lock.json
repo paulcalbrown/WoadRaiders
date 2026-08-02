@@ -14,6 +14,10 @@
     "ComfyUI-Manager": {
       "repo": "https://github.com/Comfy-Org/ComfyUI-Manager",
       "commit": "2b40deba7d04afeee29ee70c88f6c336e43dc9ca"
+    },
+    "ComfyUI-UniRig": {
+      "repo": "https://github.com/PozzettiAndrea/ComfyUI-UniRig",
+      "note": "local auto-rigger (Make-It-Animatable for humanoids, MIT) + mixamo-format animation applier. CRITICAL: its comfy-env pixi manifest must pin bpy = '4.2.*' (pozzettiandrea channel) — the unpinned 5.1.1 build access-violates on teardown and the node metadata scan registers zero nodes. Clip library: ComfyUI/input/animation_templates/mixamo/."
     }
   },
   "models": {
