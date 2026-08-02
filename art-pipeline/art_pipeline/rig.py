@@ -103,8 +103,10 @@ def fix_rest_pose(spec: dict, pipeline: dict, fbx: Path) -> None:
     maps bone name -> degrees of upward pitch, baked into mesh + rest so
     downstream tools see a corrected character.
     """
+    # Runs even with no tweaks: the pass also grounds the character
+    # (feet to y=0, centered), which every character needs.
     tweaks = spec.get("rig", {}).get("rest_pose", {})
-    if not tweaks or not fbx.exists():
+    if not fbx.exists():
         return
     rig_cfg = pipeline.get("rig", {})
     pixi = rig_cfg.get("pixi")

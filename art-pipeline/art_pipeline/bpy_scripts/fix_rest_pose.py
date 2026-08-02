@@ -62,6 +62,30 @@ bpy.ops.object.mode_set(mode="POSE")
 bpy.ops.pose.armature_apply(selected=False)
 bpy.ops.object.mode_set(mode="OBJECT")
 
+# 3) Ground and center: feet to y=0, bbox centered on x/z. A mesh centered
+#    on its own middle bakes a vertical offset into every retargeted clip's
+#    root track; grounding here makes all downstream tools agree on the floor.
+deps = bpy.context.evaluated_depsgraph_get()
+lo = [float("inf")] * 3
+hi = [float("-inf")] * 3
+for mesh in meshes:
+    ev = mesh.evaluated_get(deps)
+    for v in ev.data.vertices:
+        w = mesh.matrix_world @ v.co
+        for i in range(3):
+            lo[i] = min(lo[i], w[i])
+            hi[i] = max(hi[i], w[i])
+offset = (-(lo[0] + hi[0]) / 2.0, -(lo[1] + hi[1]) / 2.0, -lo[2])
+# Blender is z-up here; ground = min z, center = x/y midpoints.
+for obj in [arm] + meshes:
+    if obj.parent is None:
+        obj.location.x += offset[0]
+        obj.location.y += offset[1]
+        obj.location.z += offset[2]
+bpy.ops.object.select_all(action="SELECT")
+bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
+print(f"[fix_rest_pose] grounded: moved by {tuple(round(o, 4) for o in offset)}")
+
 bpy.ops.export_scene.fbx(filepath=out_base + ".fbx", add_leaf_bones=False,
                          path_mode="COPY", embed_textures=True)
 bpy.ops.export_scene.gltf(filepath=out_base + ".glb", export_format="GLB")
