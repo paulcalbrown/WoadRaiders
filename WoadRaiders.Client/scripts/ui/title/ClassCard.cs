@@ -150,11 +150,13 @@ public partial class ClassCard : Button
         model.FindDescendant<AnimationPlayer>()?.Play("Idle");
 
         // Frame by declared model height so a full-size human and a chibi both
-        // fill the card the same way.
+        // fill the card the same way. With the default 75° vertical FOV the
+        // visible height at distance d is ~1.53*d; aim for the figure filling
+        // ~75% of the frame: d ≈ h / (1.53 * 0.75).
         var h = Flavor[Class].ModelHeight;
-        var camera = new Camera3D { Position = new Vector3(0f, 0.68f * h, 1.95f * h) };
+        var camera = new Camera3D { Position = new Vector3(0f, 0.58f * h, 0.92f * h) };
         viewport.AddChild(camera);
-        camera.LookAt(new Vector3(0f, 0.55f * h, 0f));
+        camera.LookAt(new Vector3(0f, 0.5f * h, 0f));
 
         // A warm key light plus a cold woad fill — the game's torch-against-night palette.
         var key = new DirectionalLight3D { LightColor = new Color(1f, 0.85f, 0.65f), LightEnergy = 1.6f };

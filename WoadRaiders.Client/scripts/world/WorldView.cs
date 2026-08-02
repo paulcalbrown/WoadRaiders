@@ -38,7 +38,10 @@ public sealed class WorldView
     // Migrated characters (art-pipeline ingest) are authored in metres and use
     // the standard clip names at MetersToUnits scale; KayKit holdovers keep
     // their legacy scale and clip names until each is replaced.
-    private const float MetersToUnits = 24f;
+    // 27 calibrates a 1.85 m human to the screen presence the chibi knight had
+    // (2.47 raw units x 20 = ~49.4): slender silhouettes need the extra height
+    // to hold the same visual weight the stocky chibis got for free.
+    private const float MetersToUnits = 27f;
 
     private readonly record struct ClassVisual(string ScenePath, string AttackClip, float Scale);
 
