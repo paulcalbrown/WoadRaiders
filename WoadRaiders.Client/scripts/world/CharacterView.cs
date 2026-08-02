@@ -14,9 +14,13 @@ public partial class CharacterView : Node3D
 {
     public const string DefaultAttackClip = "1H_Melee_Attack_Chop";
 
+    // Standard contract names (art-pipeline characters) with KayKit fallbacks;
+    // Spawn resolves per model, so both generations of asset animate.
     private const string AnimIdle = "Idle";
-    private const string AnimRun = "Running_A";
-    private const string AnimAirborne = "Jump_Idle"; // KayKit's mid-air loop; both packs carry it
+    private const string AnimRun = "Run";
+    private const string AnimRunLegacy = "Running_A";
+    private const string AnimAirborne = "Fall";
+    private const string AnimAirborneLegacy = "Jump_Idle"; // KayKit's mid-air loop
     private const float MoveAnimSpeed = 25f;  // units/s at/above which the run clip plays
 
     // Vertical speed below which a view reads as FALLING (remotes and enemies,
@@ -80,6 +84,8 @@ public partial class CharacterView : Node3D
     private float _smoothVelY;           // low-passed vertical speed — the fall inference for remotes
     private Vector3? _requestedFacing;   // a direction to face this frame (the cursor while swinging); see FaceToward
     private string _clip = "";
+    private string _runClip = AnimRunLegacy;       // resolved per model at spawn
+    private string _airborneClip = AnimAirborneLegacy;
     private float _yaw;                  // the character's current facing angle — always applied to the pivot
 
     /// <summary>Instantiate the model, snap to its real spot (no lerp-in from the origin), and enter the tree.
@@ -115,6 +121,8 @@ public partial class CharacterView : Node3D
         view._anim = model.FindDescendant<AnimationPlayer>();
         if (view._anim is not null)
         {
+            view._runClip = view._anim.HasAnimation(AnimRun) ? AnimRun : AnimRunLegacy;
+            view._airborneClip = view._anim.HasAnimation(AnimAirborne) ? AnimAirborne : AnimAirborneLegacy;
             view._anim.Play(AnimIdle);
             view._clip = AnimIdle;
         }
@@ -176,7 +184,7 @@ public partial class CharacterView : Node3D
         // run cycle. The sim refuses attacks mid-crossing on both peers, so
         // Attacking and airborne never genuinely compete.
         var airborne = Airborne || _smoothVelY < -FallAnimSpeed;
-        var desired = Attacking ? AttackClip : airborne ? AnimAirborne : moving ? AnimRun : AnimIdle;
+        var desired = Attacking ? AttackClip : airborne ? _airborneClip : moving ? _runClip : AnimIdle;
         if (desired != _clip || !_anim.IsPlaying())
         {
             _anim.SpeedScale = desired == AttackClip ? AttackSpeedScale(_anim, AttackClip) : 1f;

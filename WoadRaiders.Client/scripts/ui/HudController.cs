@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using WoadRaiders.Core;
 
 namespace WoadRaiders.Client;
@@ -25,7 +25,7 @@ public partial class HudController : CanvasLayer
     private ColorRect _healthFillRect = null!;
     private Label _healthLabel = null!;
     private DamageChip _chip = DamageChip.Full;
-    private CharacterClass _class = CharacterClass.Knight;
+    private CharacterClass _class = CharacterClass.Warrior;
     private float _maxHealth = SimConstants.PlayerMaxHealth;
 
     public bool InventoryOpen { get; private set; }

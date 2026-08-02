@@ -1,4 +1,4 @@
-using WoadRaiders.Core;
+﻿using WoadRaiders.Core;
 using WoadRaiders.Shared;
 
 namespace WoadRaiders.Server;
@@ -74,7 +74,7 @@ internal sealed class GameSession
     /// JoinRequest mid-match renames at most — never a fresh body, so it can't be
     /// abused as a free heal or teleport to spawn.
     /// </summary>
-    public void AddPlayer(int id, string name, CharacterClass cls = CharacterClass.Knight)
+    public void AddPlayer(int id, string name, CharacterClass cls = CharacterClass.Warrior)
     {
         if (_world.Players.TryGetValue(id, out var existing))
         {

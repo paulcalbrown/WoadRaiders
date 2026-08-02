@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using WoadRaiders.Core;
 using WoadRaiders.Shared;
 
@@ -38,7 +38,7 @@ public static class ClientConfig
     public static string PlayerName { get; set; } = "Woad Raider";
 
     /// <summary>The class to raid as; the character-select screen sets it.</summary>
-    public static CharacterClass PlayerClass { get; set; } = CharacterClass.Knight;
+    public static CharacterClass PlayerClass { get; set; } = CharacterClass.Warrior;
 
     /// <summary>The realm to raid; the realm-select screen sets it.</summary>
     public static DungeonId Dungeon { get; set; } = DungeonId.Crag;
@@ -115,9 +115,9 @@ public static class ClientConfig
     /// <summary>Set the endpoint from user text ("host[:port]"); malformed input falls back to defaults.</summary>
     public static void SetServer(string text) => (Host, Port) = NetConfig.ParseEndpoint(text, DefaultServerHost);
 
-    /// <summary>Parse a class name, case-insensitive; anything unrecognized is a Knight.</summary>
+    /// <summary>Parse a class name, case-insensitive; anything unrecognized is a Warrior.</summary>
     private static CharacterClass ParseClass(string text) =>
-        Enum.TryParse<CharacterClass>(text, ignoreCase: true, out var cls) ? cls : CharacterClass.Knight;
+        Enum.TryParse<CharacterClass>(text, ignoreCase: true, out var cls) ? cls : CharacterClass.Warrior;
 
     /// <summary>Parse a realm name, case-insensitive; anything unrecognized is the Crag.</summary>
     private static DungeonId ParseDungeon(string text) =>

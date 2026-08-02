@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace WoadRaiders.Core;
 
@@ -50,7 +50,7 @@ public sealed class PlayerState : Combatant
     /// <summary>Currently equipped item per slot.</summary>
     public Dictionary<EquipSlot, Item> Equipped { get; } = new();
 
-    public PlayerState(int id, string name, CharacterClass cls = CharacterClass.Knight)
+    public PlayerState(int id, string name, CharacterClass cls = CharacterClass.Warrior)
         : base(id, ClassArchetypes.Of(cls).MaxHealth)
     {
         Name = name;

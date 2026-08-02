@@ -32,7 +32,7 @@ public class PortalRunTests
     {
         var session = new GameSession(BossArena(), new Random(1));
         session.SpawnInitial();
-        session.AddPlayer(1, "Bran", CharacterClass.Knight);
+        session.AddPlayer(1, "Bran", CharacterClass.Warrior);
 
         // Drive the knight one tick at a time from the authoritative snapshot:
         // close on the boss, then hold the blade to its ribs until it falls.
@@ -104,7 +104,7 @@ public class PortalRunTests
         var hall = new Vector3(-600, 0, 250);
         var session = new GameSession(BossArena(portal: hall), new Random(1));
         session.SpawnInitial();
-        session.AddPlayer(1, "Bran", CharacterClass.Knight);
+        session.AddPlayer(1, "Bran", CharacterClass.Warrior);
 
         var snap = SlayTheBoss(session);
 

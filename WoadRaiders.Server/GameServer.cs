@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -311,7 +311,7 @@ public sealed class GameServer
         // default rather than faulting. A repeated join must not move a live
         // player between instances (that would be a free escape) — the first
         // binding sticks and a re-join renames at most.
-        var cls = join.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)join.Class : CharacterClass.Knight;
+        var cls = join.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)join.Class : CharacterClass.Warrior;
         var name = SanitizeName(join.Name, peer.Id);
         var instance = connection.Instance is { } bound
             ? _instances[bound]

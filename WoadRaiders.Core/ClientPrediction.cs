@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace WoadRaiders.Core;
 
@@ -24,7 +24,7 @@ public sealed class ClientPrediction
     private readonly int _localPlayerId;
 
     public ClientPrediction(int localPlayerId, Vector3 startPosition, IRealmGeometry? geometry = null,
-                            CharacterClass cls = CharacterClass.Knight)
+                            CharacterClass cls = CharacterClass.Warrior)
     {
         _world.Geometry = geometry; // predict against the same geometry the server uses
         _localPlayerId = localPlayerId;

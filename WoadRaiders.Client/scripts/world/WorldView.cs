@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using WoadRaiders.Core;
 using WoadRaiders.Shared;
 
@@ -20,6 +20,7 @@ public sealed class WorldView
 
     // Characters (KayKit models are ~2.47 units tall → ~20x to reach ~49 world units).
     private const float CharScale = 20f;
+    private const string AdvDir = "res://addons/kaykit_character_pack_adventures/Characters/gltf";
 
     /// <summary>How each enemy type looks: model, size, swing, and health-bar placement.</summary>
     private readonly record struct EnemyVisual(string SceneFile, float Scale, string AttackClip, float BarHeight, float BarScale);
@@ -34,12 +35,19 @@ public sealed class WorldView
 
     /// <summary>How each player class looks: the KayKit adventurer model and its strike clip.
     /// The Ranger borrows the hooded rogue body — the pack ships no dedicated ranger.</summary>
-    private static readonly Dictionary<CharacterClass, (string SceneFile, string AttackClip)> ClassVisuals = new()
+    // Migrated characters (art-pipeline ingest) are authored in metres and use
+    // the standard clip names at MetersToUnits scale; KayKit holdovers keep
+    // their legacy scale and clip names until each is replaced.
+    private const float MetersToUnits = 24f;
+
+    private readonly record struct ClassVisual(string ScenePath, string AttackClip, float Scale);
+
+    private static readonly Dictionary<CharacterClass, ClassVisual> ClassVisuals = new()
     {
-        [CharacterClass.Knight] = ("Knight.glb", "1H_Melee_Attack_Chop"),
-        [CharacterClass.Rogue] = ("Rogue.glb", "1H_Melee_Attack_Stab"),
-        [CharacterClass.Mage] = ("Mage.glb", "Spellcast_Shoot"),
-        [CharacterClass.Ranger] = ("Rogue_Hooded.glb", "2H_Ranged_Shoot"),
+        [CharacterClass.Warrior] = new("res://assets/characters/Warrior.glb", "Attack", MetersToUnits),
+        [CharacterClass.Rogue] = new($"{AdvDir}/Rogue.glb", "1H_Melee_Attack_Stab", CharScale),
+        [CharacterClass.Mage] = new($"{AdvDir}/Mage.glb", "Spellcast_Shoot", CharScale),
+        [CharacterClass.Ranger] = new($"{AdvDir}/Rogue_Hooded.glb", "2H_Ranged_Shoot", CharScale),
     };
 
     // Every character carries a light. Players glow warm (torch-lit raiders);
@@ -144,12 +152,11 @@ public sealed class WorldView
     {
         _parent = parent;
 
-        const string adv = "res://addons/kaykit_character_pack_adventures/Characters/gltf";
         const string weapons = "res://addons/kaykit_character_pack_adventures/Assets/gltf";
         const string skel = "res://addons/kaykit_character_pack_skeletons/Characters/gltf";
         const string dungeon = "res://addons/kaykit_dungeon_remastered/Assets/gltf";
         foreach (var (cls, visual) in ClassVisuals)
-            _classScenes[cls] = GD.Load<PackedScene>($"{adv}/{visual.SceneFile}");
+            _classScenes[cls] = GD.Load<PackedScene>(visual.ScenePath);
         _arrowScene = GD.Load<PackedScene>($"{weapons}/arrow.gltf");
         _goldScene = GD.Load<PackedScene>($"{dungeon}/coin_stack_large.gltf.glb");
         _potionScene = GD.Load<PackedScene>($"{dungeon}/bottle_A_green.gltf.glb");
@@ -166,8 +173,8 @@ public sealed class WorldView
         {
             var feet = new Vector3(p.X, p.Y, p.Z);
             // Tolerate an unknown Class byte the same way as enemy types: fall back
-            // to Knight — never crash the receive path over cosmetics.
-            var cls = p.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)p.Class : CharacterClass.Knight;
+            // to Warrior — never crash the receive path over cosmetics.
+            var cls = p.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)p.Class : CharacterClass.Warrior;
             var isRemote = p.Id != localPlayerId;
 
             // A player's class can change on the same id (the server honors the join
@@ -178,7 +185,7 @@ public sealed class WorldView
 
             if (!_players.Touch(p.Id, out var view))
             {
-                view = CharacterView.Spawn(_parent, _classScenes[cls], feet, CharScale, PlayerLight, cls);
+                view = CharacterView.Spawn(_parent, _classScenes[cls], feet, ClassVisuals[cls].Scale, PlayerLight, cls);
                 view.AttackClip = ClassVisuals[cls].AttackClip;
                 if (isRemote)
                 {

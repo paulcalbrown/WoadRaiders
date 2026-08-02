@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using WoadRaiders.Core;
 
 namespace WoadRaiders.Client;
@@ -73,7 +73,7 @@ public partial class CharacterSelectScreen : Control
         column.AddChild(row);
 
         foreach (var cls in new[]
-                 { CharacterClass.Knight, CharacterClass.Rogue, CharacterClass.Mage, CharacterClass.Ranger })
+                 { CharacterClass.Warrior, CharacterClass.Rogue, CharacterClass.Mage, CharacterClass.Ranger })
         {
             var card = new ClassCard { Class = cls };
             card.Pressed += () => Choose(cls);
