@@ -317,8 +317,8 @@ def merge_prop(gltf: GLTF2, prop_path: Path, cfg: dict) -> None:
     print(f"[ingest] prop '{cfg['name']}' from {prop_path.name} attached to {bone}")
 
 
-def normalize(gltf: GLTF2, height_m: float, yaw_deg: float = 0.0) -> float:
-    """Wrap the scene so the RENDERED character stands height_m with feet at 0.
+def normalize(gltf: GLTF2, target_units: float, yaw_deg: float = 0.0) -> float:
+    """Wrap the scene so the RENDERED character stands target_units with feet at 0.
 
     Measures the true skinned rest pose (not bind-space accessor bounds,
     which ignore node-hierarchy scale). Returns the world-units-per-local
@@ -329,7 +329,7 @@ def normalize(gltf: GLTF2, height_m: float, yaw_deg: float = 0.0) -> float:
     lo, hi = sk if sk is not None else (blo, bhi)
     height = float(hi[1] - lo[1])
     bind_height = float(bhi[1] - blo[1])
-    s = height_m / height
+    s = target_units / height
     wrapper = Node(
         name="IngestRoot",
         children=list(gltf.scenes[gltf.scene or 0].nodes),
@@ -342,7 +342,8 @@ def normalize(gltf: GLTF2, height_m: float, yaw_deg: float = 0.0) -> float:
     gltf.scenes[gltf.scene or 0].nodes = [len(gltf.nodes) - 1]
     hierarchy_scale = height / bind_height if bind_height > 1e-9 else 1.0
     print(f"[ingest] normalized: rendered {height:.4f} units (bind {bind_height:.3f}, "
-          f"hierarchy x{hierarchy_scale:.4f}) -> {height_m} m (wrapper {s:.4f}), feet at y=0")
+          f"hierarchy x{hierarchy_scale:.4f}) -> {target_units:.1f} WORLD units "
+          f"(wrapper {s:.4f}), feet at y=0")
     # Joint-local translations reach world through hierarchy scale x wrapper.
     return s * hierarchy_scale
 
@@ -394,6 +395,7 @@ def validate(gltf: GLTF2, spec: dict) -> None:
 def run_ingest(character: str, dry_run: bool = False, out: Path | None = None) -> Path | None:
     char_dir = ROOT / "characters" / character
     spec = load_toml(char_dir / "spec.toml")
+    pipeline = load_toml(ROOT / "pipeline.toml")
     ing = spec["ingest"]
     # The local rig+animate path pre-names clips; it takes precedence over
     # a raw inbox GLB (the Meshy-animated path) when both exist.
@@ -421,11 +423,15 @@ def run_ingest(character: str, dry_run: bool = False, out: Path | None = None) -
         rename_clips(gltf, mapping)
     else:
         print("[ingest] no clip mapping in spec — expecting pre-named contract clips")
+
+    m2u = float(pipeline.get("world", {}).get("meters_to_units", 1.0))
+    target_units = spec["character"]["height_m"] * m2u
     prefix_mesh_nodes(gltf, spec["character"]["mesh_prefix"])
     for key, cfg in ing.get("props", {}).items():
         merge_prop(gltf, src_dir / cfg["file"], cfg)
-    scale = normalize(gltf, spec["character"]["height_m"])
-    check_run_drift(gltf, spec["character"]["height_m"], scale)
+    scale = normalize(gltf, target_units)
+    # Drift limit stays in metres; convert the world-unit factor back down.
+    check_run_drift(gltf, spec["character"]["height_m"], scale / m2u)
     validate(gltf, spec)
 
     name = spec["character"]["name"]

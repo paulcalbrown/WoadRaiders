@@ -38,18 +38,17 @@ public sealed class WorldView
     // Migrated characters (art-pipeline ingest) are authored in metres and use
     // the standard clip names at MetersToUnits scale; KayKit holdovers keep
     // their legacy scale and clip names until each is replaced.
-    // 32 puts a 1.85 m human at ~59 world units — a full head-and-shoulders
-    // over the ~49-unit chibi holdovers, so the Warrior reads as a grown man
-    // among mascots rather than another mascot. (27 matched the old knight
-    // exactly and read as "no change"; the world re-calibrates around human
-    // scale as characters and realms migrate.)
-    private const float MetersToUnits = 32f;
+    // Pipeline-ingested assets are baked to WORLD units in the GLB itself
+    // (spec height_m x the pipeline's meters_to_units; the Warrior ships at
+    // ~59 raw units — head-and-shoulders over the ~49-unit chibi holdovers).
+    // They spawn at scale 1: what the glTF viewer shows is what the game gets.
+    private const float WorldScaleAsset = 1f;
 
     private readonly record struct ClassVisual(string ScenePath, string AttackClip, float Scale);
 
     private static readonly Dictionary<CharacterClass, ClassVisual> ClassVisuals = new()
     {
-        [CharacterClass.Warrior] = new("res://assets/characters/Warrior.glb", "Attack", MetersToUnits),
+        [CharacterClass.Warrior] = new("res://assets/characters/Warrior.glb", "Attack", WorldScaleAsset),
         [CharacterClass.Rogue] = new($"{AdvDir}/Rogue.glb", "1H_Melee_Attack_Stab", CharScale),
         [CharacterClass.Mage] = new($"{AdvDir}/Mage.glb", "Spellcast_Shoot", CharScale),
         [CharacterClass.Ranger] = new($"{AdvDir}/Rogue_Hooded.glb", "2H_Ranged_Shoot", CharScale),

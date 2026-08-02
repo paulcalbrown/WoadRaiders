@@ -1,6 +1,12 @@
 # Machine-level pipeline settings (paths/ports, not character data).
 # Character data lives in characters/<name>/spec.toml.
 
+[world]
+# The game's meters-to-world-units constant. Ingest bakes final WORLD height
+# into the GLB's raw units (spec height_m x this), so shipped assets need no
+# game-side scaling — what a glTF viewer shows is what the game renders.
+meters_to_units = 32
+
 [comfy]
 url = "http://127.0.0.1:8188"
 # Used only as a fallback to locate outputs if the HTTP history API
