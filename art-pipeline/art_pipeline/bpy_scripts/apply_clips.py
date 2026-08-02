@@ -63,6 +63,31 @@ for clip in clips:
         bpy.data.objects.remove(o, do_unlink=True)
     applied.append(clip.stem)
 
+# Flatten to a boring skeleton: FBX round trips leave the armature at scale
+# 0.01 with centimetre bones — spec-legal, but importers (Godot included)
+# reconstruct it badly. Apply object transforms so bones are metre-space
+# under an identity armature, then rescale every action's location curves
+# by the old armature scale (pose translations are in bone-local units and
+# do NOT follow transform_apply — the classic 100x hip-bob trap).
+old_scale = float(main_arm.scale.x)
+meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+bpy.ops.object.select_all(action="DESELECT")
+main_arm.select_set(True)
+for m in meshes:
+    m.select_set(True)
+bpy.context.view_layer.objects.active = main_arm
+bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+if abs(old_scale - 1.0) > 1e-6:
+    for action in bpy.data.actions:
+        for fc in action.fcurves:
+            if fc.data_path.endswith(".location"):
+                for kp in fc.keyframe_points:
+                    kp.co.y *= old_scale
+                    kp.handle_left.y *= old_scale
+                    kp.handle_right.y *= old_scale
+    print(f"[apply_clips] flattened armature (was scale {old_scale}); "
+          f"location curves rescaled")
+
 bpy.ops.export_scene.gltf(
     filepath=out,
     export_format="GLB",

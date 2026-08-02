@@ -61,6 +61,75 @@ def read_accessor(gltf: GLTF2, idx: int) -> np.ndarray:
     return out
 
 
+def _trs_matrix(node) -> np.ndarray:
+    if node.matrix:
+        return np.array(node.matrix, dtype=np.float64).reshape(4, 4).T
+    m = np.eye(4)
+    if node.scale:
+        m[:3, :3] = np.diag(node.scale)
+    if node.rotation:
+        x, y, z, w = node.rotation
+        from scipy.spatial.transform import Rotation
+
+        m[:3, :3] = Rotation.from_quat([x, y, z, w]).as_matrix() @ m[:3, :3]
+    if node.translation:
+        m[:3, 3] = node.translation
+    return m
+
+
+def _world_matrices(gltf: GLTF2) -> list[np.ndarray]:
+    world = [None] * len(gltf.nodes)
+
+    def walk(idx: int, parent: np.ndarray) -> None:
+        world[idx] = parent @ _trs_matrix(gltf.nodes[idx])
+        for c in gltf.nodes[idx].children or []:
+            walk(c, world[idx])
+
+    for root in gltf.scenes[gltf.scene or 0].nodes:
+        walk(root, np.eye(4))
+    for i, w in enumerate(world):
+        if w is None:
+            world[i] = np.eye(4)
+    return world
+
+
+def skinned_bounds(gltf: GLTF2) -> tuple[np.ndarray, np.ndarray] | None:
+    """True rendered rest-pose bounds: joints x inverse-bind x weighted verts.
+
+    glTF renders skinned meshes through joint world transforms (the mesh
+    node's own transform is ignored), so bind-space accessor bounds lie
+    whenever the node hierarchy carries scale — e.g. the FBX 0.01 that
+    Blender round trips leave on armatures. Returns None for unskinned.
+    """
+    if not gltf.skins:
+        return None
+    world = _world_matrices(gltf)
+    skin = gltf.skins[0]
+    ibm = read_accessor(gltf, skin.inverseBindMatrices).reshape(-1, 4, 4)
+    joint_mats = np.array(
+        [world[j] @ ibm[k].T for k, j in enumerate(skin.joints)]
+    )  # glTF matrices are column-major; .T converts
+    lo = np.full(3, np.inf)
+    hi = np.full(3, -np.inf)
+    for node_idx, node in enumerate(gltf.nodes):
+        if node.mesh is None or node.skin is None:
+            continue
+        for prim in gltf.meshes[node.mesh].primitives:
+            if prim.attributes.JOINTS_0 is None:
+                continue
+            pos = read_accessor(gltf, prim.attributes.POSITION, )
+            ji = read_accessor(gltf, prim.attributes.JOINTS_0).astype(int)
+            w = read_accessor(gltf, prim.attributes.WEIGHTS_0)
+            hom = np.concatenate([pos, np.ones((len(pos), 1))], axis=1)
+            out = np.zeros((len(pos), 3))
+            for k in range(4):
+                mats = joint_mats[ji[:, k]]  # (N,4,4)
+                out += w[:, k:k + 1] * np.einsum("nij,nj->ni", mats, hom)[:, :3]
+            lo = np.minimum(lo, out.min(axis=0))
+            hi = np.maximum(hi, out.max(axis=0))
+    return lo, hi
+
+
 def bounds(gltf: GLTF2) -> tuple[np.ndarray, np.ndarray]:
     lo = np.full(3, np.inf)
     hi = np.full(3, -np.inf)
@@ -249,8 +318,17 @@ def merge_prop(gltf: GLTF2, prop_path: Path, cfg: dict) -> None:
 
 
 def normalize(gltf: GLTF2, height_m: float, yaw_deg: float = 0.0) -> float:
-    lo, hi = bounds(gltf)
+    """Wrap the scene so the RENDERED character stands height_m with feet at 0.
+
+    Measures the true skinned rest pose (not bind-space accessor bounds,
+    which ignore node-hierarchy scale). Returns the world-units-per-local
+    factor used for translation-track checks.
+    """
+    sk = skinned_bounds(gltf)
+    blo, bhi = bounds(gltf)
+    lo, hi = sk if sk is not None else (blo, bhi)
     height = float(hi[1] - lo[1])
+    bind_height = float(bhi[1] - blo[1])
     s = height_m / height
     wrapper = Node(
         name="IngestRoot",
@@ -262,9 +340,11 @@ def normalize(gltf: GLTF2, height_m: float, yaw_deg: float = 0.0) -> float:
         wrapper.rotation = _euler_quat([0, yaw_deg, 0])
     gltf.nodes.append(wrapper)
     gltf.scenes[gltf.scene or 0].nodes = [len(gltf.nodes) - 1]
-    print(f"[ingest] normalized: {height:.3f} units -> {height_m} m "
-          f"(scale {s:.4f}), feet at y=0")
-    return s
+    hierarchy_scale = height / bind_height if bind_height > 1e-9 else 1.0
+    print(f"[ingest] normalized: rendered {height:.4f} units (bind {bind_height:.3f}, "
+          f"hierarchy x{hierarchy_scale:.4f}) -> {height_m} m (wrapper {s:.4f}), feet at y=0")
+    # Joint-local translations reach world through hierarchy scale x wrapper.
+    return s * hierarchy_scale
 
 
 def check_run_drift(gltf: GLTF2, height_m: float, scale: float) -> None:
