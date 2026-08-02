@@ -17,10 +17,10 @@ height_m = 1.85           # full human scale — the new world standard;
 
 [rig.rest_pose]
 # Degrees of upward pitch baked into the rest pose after auto-rigging —
-# the Meshy mesh carries a slightly dropped chin, and every retargeted
-# clip inherits the rest posture. Tune by eye in Mixamo, rerun --stage rig.
-"mixamorig:Neck" = 3
-"mixamorig:Head" = 5
+# the Meshy mesh carries a dropped chin, and every retargeted clip
+# inherits the rest posture. Tune by eye in Mixamo, rerun --stage rig.
+"mixamorig:Neck" = 6
+"mixamorig:Head" = 12
 
 [ingest]
 # The pipeline-side stage. Reads the newest GLB from source_dir, renames
