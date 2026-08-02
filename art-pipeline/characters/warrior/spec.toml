@@ -27,9 +27,9 @@ height_m = 1.85           # full human scale — the new world standard;
 # clips and meshes to the contract, normalizes scale/origin/facing,
 # validates, and promotes to WoadRaiders.Client/assets/characters/.
 source_dir = "meshy"      # drop Download > Animation > All Added > Single File GLBs here
-# PROVISIONAL budgets accepting the current Meshy mesh as-is (98k tris, one
-# 4096 atlas). The intended diet: run Meshy's quad Remesh (~40-60k) and
-# re-rig, or add a decimate+downscale pass, then tighten these back down.
+# Budgets are in TRIANGLES as measured in the GLB. The source is a ~49k-QUAD
+# Meshy remesh, which triangulates to ~98k — so 100k tris IS the intended
+# hero budget (quads x2), not a temporary allowance. 4096 is the hero atlas.
 max_tris = 100000
 max_texture = 4096
 
