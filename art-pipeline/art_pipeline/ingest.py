@@ -315,14 +315,20 @@ def run_ingest(character: str, dry_run: bool = False, out: Path | None = None) -
     char_dir = ROOT / "characters" / character
     spec = load_toml(char_dir / "spec.toml")
     ing = spec["ingest"]
-    src_dir = char_dir / ing["source_dir"]
-    prop_files = {p["file"] for p in ing.get("props", {}).values()}
-    candidates = [
-        p for p in src_dir.glob("*.glb") if p.name not in prop_files
-    ]
-    if not candidates:
-        raise SystemExit(f"[ingest] no character GLB in {src_dir}")
-    src = max(candidates, key=lambda p: p.stat().st_mtime)
+    # The local rig+animate path pre-names clips; it takes precedence over
+    # a raw inbox GLB (the Meshy-animated path) when both exist.
+    animated = char_dir / "build" / f"{character}_animated.glb"
+    if animated.exists():
+        src = animated
+    else:
+        src_dir = char_dir / ing["source_dir"]
+        prop_files = {p["file"] for p in ing.get("props", {}).values()}
+        candidates = [
+            p for p in src_dir.glob("*.glb") if p.name not in prop_files
+        ]
+        if not candidates:
+            raise SystemExit(f"[ingest] no character GLB in {src_dir}")
+        src = max(candidates, key=lambda p: p.stat().st_mtime)
     print(f"[ingest] source: {src.name} ({src.stat().st_size/1e6:.1f} MB)")
 
     gltf = GLTF2().load(str(src))
@@ -330,7 +336,11 @@ def run_ingest(character: str, dry_run: bool = False, out: Path | None = None) -
     if dry_run:
         return None
 
-    rename_clips(gltf, dict(ing["clips"]))
+    mapping = {k: v for k, v in dict(ing["clips"]).items() if v}
+    if mapping:
+        rename_clips(gltf, mapping)
+    else:
+        print("[ingest] no clip mapping in spec — expecting pre-named contract clips")
     prefix_mesh_nodes(gltf, spec["character"]["mesh_prefix"])
     for key, cfg in ing.get("props", {}).items():
         merge_prop(gltf, src_dir / cfg["file"], cfg)

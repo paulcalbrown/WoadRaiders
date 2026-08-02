@@ -208,11 +208,12 @@ def main() -> None:
     parser.add_argument("character", help="character folder under characters/")
     parser.add_argument(
         "--stage",
-        choices=["s1", "s2", "rig", "ingest"],
+        choices=["s1", "s2", "rig", "animate", "ingest"],
         default="s2",
         help="s1: anchor candidates; s2: image -> mesh (default); "
         "rig: MIA auto-rig the newest inbox GLB; "
-        "ingest: Meshy GLB -> contract-passing game asset",
+        "animate: apply the repo clip library to the rigged character; "
+        "ingest: animated GLB -> contract-passing game asset",
     )
     parser.add_argument("--dry-run", action="store_true", help="ingest: inventory only")
     parser.add_argument(
@@ -235,6 +236,10 @@ def main() -> None:
             from .rig import run_rig
 
             run_rig(args.character)
+        elif args.stage == "animate":
+            from .animate import run_animate
+
+            run_animate(args.character)
         elif args.stage == "ingest":
             from .ingest import run_ingest
 
