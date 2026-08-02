@@ -15,3 +15,11 @@ is roster-wide: one set of clips animates everyone.
 `uv run art-pipeline <character> --stage animate` applies everything here
 to the character's rigged FBX and produces `build/<character>_animated.glb`
 for ingest.
+
+## Per-character clips
+
+A character may have its own `characters/<name>/clips/` folder: same
+filename-is-contract-name rule, and a file there OVERRIDES the shared one
+with the same stem (the Warrior's axe Attack vs the Mage's spellcast
+Attack). Extras on either side ride along. A character can opt out of a
+shared clip with `[animate] exclude = ["Name"]` in its spec.

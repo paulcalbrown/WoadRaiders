@@ -1,12 +1,13 @@
 """Apply the repo clip library to a rigged character; run in the UniRig env.
 
-    python apply_clips.py <rigged.fbx> <clips_dir> <out.glb>
+    python apply_clips.py <rigged.fbx> <out.glb> <clip1.fbx> [<clip2.fbx>...]
 
-Every .fbx in clips_dir is a mixamo-format motion file (no skin) whose
-bone names match the character's mixamorig skeleton, so each imported
-action drives the main armature directly. Each clip becomes one NLA track
-named after its file stem — and the glTF exporter turns each track into
-one named animation. The filename IS the contract clip name.
+Each clip is a mixamo-format motion file (no skin) whose bone names match
+the character's mixamorig skeleton, so each imported action drives the
+main armature directly. Each clip becomes one NLA track named after its
+file stem — and the glTF exporter turns each track into one named
+animation. The filename IS the contract clip name; the caller resolves
+the shared-vs-character layering and passes the final file list.
 """
 
 import sys
@@ -14,7 +15,8 @@ from pathlib import Path
 
 import bpy
 
-rigged, clips_dir, out = sys.argv[1], Path(sys.argv[2]), sys.argv[3]
+rigged, out = sys.argv[1], sys.argv[2]
+clip_paths = [Path(p) for p in sys.argv[3:]]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.context.scene.render.fps = 30
@@ -22,9 +24,9 @@ bpy.ops.import_scene.fbx(filepath=rigged)
 main_arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
 main_bones = {b.name for b in main_arm.data.bones}
 
-clips = sorted(clips_dir.glob("*.fbx"))
+clips = clip_paths
 if not clips:
-    raise SystemExit(f"[apply_clips] no .fbx clips in {clips_dir}")
+    raise SystemExit("[apply_clips] no clip files given")
 
 if main_arm.animation_data is None:
     main_arm.animation_data_create()

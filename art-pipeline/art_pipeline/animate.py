@@ -19,19 +19,40 @@ from .cli import ROOT, load_toml
 CLIPS_DIR = ROOT / "clips" / "mixamo"
 
 
+def collect_clips(char_dir: Path, spec: dict) -> list[Path]:
+    """Layered library: shared clips/mixamo/ + characters/<name>/clips/.
+
+    A character file with the same stem overrides the shared one; extras on
+    either side ride along. [animate].exclude in the spec drops shared clips
+    a character shouldn't have.
+    """
+    layered: dict[str, tuple[str, Path]] = {
+        p.stem: ("shared", p) for p in sorted(CLIPS_DIR.glob("*.fbx"))
+    }
+    own_dir = char_dir / "clips"
+    for p in sorted(own_dir.glob("*.fbx")) if own_dir.exists() else []:
+        layered[p.stem] = ("character", p)
+    for name in spec.get("animate", {}).get("exclude", []):
+        layered.pop(name, None)
+    for stem, (source, _) in sorted(layered.items()):
+        print(f"[animate]   {stem:<12} ({source})")
+    return [p for _, p in layered.values()]
+
+
 def run_animate(character: str) -> Path:
     char_dir = ROOT / "characters" / character
+    spec = load_toml(char_dir / "spec.toml")
     pipeline = load_toml(ROOT / "pipeline.toml")
     rigged = char_dir / "build" / f"{character}_rigged.fbx"
     if not rigged.exists():
         raise SystemExit(f"[animate] {rigged} missing — run --stage rig first")
-    clips = sorted(CLIPS_DIR.glob("*.fbx"))
+    clips = collect_clips(char_dir, spec)
     if not clips:
         raise SystemExit(
-            f"[animate] no clips in {CLIPS_DIR} — download Mixamo clips "
-            "(FBX, Without Skin, 30 fps; filename = contract name) first"
+            f"[animate] no clips in {CLIPS_DIR} or {char_dir / 'clips'} — "
+            "download Mixamo clips (FBX, Without Skin, 30 fps; "
+            "filename = contract name) first"
         )
-    print(f"[animate] clips: {[c.stem for c in clips]}")
 
     rig_cfg = pipeline.get("rig", {})
     pixi, manifest = rig_cfg.get("pixi"), rig_cfg.get("unirig_manifest")
@@ -42,7 +63,7 @@ def run_animate(character: str) -> Path:
     script = Path(__file__).parent / "bpy_scripts" / "apply_clips.py"
     r = subprocess.run(
         [pixi, "run", "--manifest-path", manifest, "python", str(script),
-         str(rigged), str(CLIPS_DIR), str(out)],
+         str(rigged), str(out)] + [str(c) for c in clips],
         capture_output=True, text=True, timeout=900,
     )
     for line in (r.stdout + r.stderr).strip().splitlines()[-4:]:
