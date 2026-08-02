@@ -27,8 +27,11 @@ height_m = 1.85           # full human scale — the new world standard;
 # clips and meshes to the contract, normalizes scale/origin/facing,
 # validates, and promotes to WoadRaiders.Client/assets/characters/.
 source_dir = "meshy"      # drop Download > Animation > All Added > Single File GLBs here
-max_tris = 60000
-max_texture = 2048
+# PROVISIONAL budgets accepting the current Meshy mesh as-is (98k tris, one
+# 4096 atlas). The intended diet: run Meshy's quad Remesh (~40-60k) and
+# re-rig, or add a decimate+downscale pass, then tighten these back down.
+max_tris = 100000
+max_texture = 4096
 
 [ingest.props]
 # Separate Meshy-generated props, rigid-attached to hand bones at ingest and

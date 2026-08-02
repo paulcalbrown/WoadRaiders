@@ -1,0 +1,12 @@
+{
+  "source_file": "warrior_animated.glb",
+  "source_sha256": "7bd7530d4a4ffb78501f45f83c93d9af7d6ecdfa70d4bf129dd739370a9d0f37",
+  "ingested": "2026-08-02",
+  "character": "Warrior",
+  "clips": [
+    "Fall",
+    "Attack",
+    "Idle",
+    "Run"
+  ]
+}
