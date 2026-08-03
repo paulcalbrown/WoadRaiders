@@ -317,6 +317,68 @@ def merge_prop(gltf: GLTF2, prop_path: Path, cfg: dict) -> None:
     print(f"[ingest] prop '{cfg['name']}' from {prop_path.name} attached to {bone}")
 
 
+def write_accessor(gltf: GLTF2, idx: int, data: np.ndarray) -> None:
+    """Write float32 values back into a tightly-packed accessor's bytes."""
+    acc = gltf.accessors[idx]
+    bv = gltf.bufferViews[acc.bufferView]
+    n = TYPE_LEN[acc.type]
+    assert acc.componentType == 5126, "write_accessor handles float32 only"
+    itemsize = 4 * n
+    stride = bv.byteStride or itemsize
+    assert stride == itemsize, "write_accessor requires tight packing"
+    base = (bv.byteOffset or 0) + (acc.byteOffset or 0)
+    blob = bytearray(_blob(gltf))
+    raw = data.astype(np.float32).tobytes()
+    blob[base : base + len(raw)] = raw
+    gltf.set_binary_blob(bytes(blob))
+
+
+def flatten_scale(gltf: GLTF2, s: float, lift_y: float) -> None:
+    """Bake a uniform scale into the raw data — no wrapper node, nothing for
+    an importer or renderer to reinterpret. Multiplies vertex positions,
+    node translations, inverse-bind translations and animation translation
+    tracks; every node keeps scale 1. lift_y (post-scale units) grounds feet.
+    """
+    done: set[int] = set()
+    for mesh in gltf.meshes:
+        for prim in mesh.primitives:
+            pos = prim.attributes.POSITION
+            if pos is None or pos in done:
+                continue
+            done.add(pos)
+            data = read_accessor(gltf, pos) * s
+            write_accessor(gltf, pos, data)
+            acc = gltf.accessors[pos]
+            acc.min = data.min(axis=0).tolist()
+            acc.max = data.max(axis=0).tolist()
+    for node in gltf.nodes:
+        if node.translation:
+            node.translation = [v * s for v in node.translation]
+        if node.matrix:
+            m = np.array(node.matrix, dtype=np.float64).reshape(4, 4)
+            m[3, :3] *= s  # column-major flat: translation lives in row 3
+            node.matrix = m.reshape(-1).tolist()
+    for skin in gltf.skins:
+        ibm = read_accessor(gltf, skin.inverseBindMatrices).reshape(-1, 4, 4).copy()
+        ibm[:, 3, :3] *= s  # column-major: per-matrix translation components
+        write_accessor(gltf, skin.inverseBindMatrices, ibm.reshape(-1, 16))
+    for anim in gltf.animations:
+        seen: set[int] = set()
+        for ch in anim.channels:
+            if ch.target.path != "translation":
+                continue
+            out = anim.samplers[ch.sampler].output
+            if out in seen:
+                continue
+            seen.add(out)
+            write_accessor(gltf, out, read_accessor(gltf, out) * s)
+    # Ground: shift the scene roots down/up by lift_y.
+    for root in gltf.scenes[gltf.scene or 0].nodes:
+        node = gltf.nodes[root]
+        t = node.translation or [0.0, 0.0, 0.0]
+        node.translation = [t[0], t[1] + lift_y, t[2]]
+
+
 def normalize(gltf: GLTF2, target_units: float, yaw_deg: float = 0.0) -> float:
     """Wrap the scene so the RENDERED character stands target_units with feet at 0.
 
@@ -330,22 +392,19 @@ def normalize(gltf: GLTF2, target_units: float, yaw_deg: float = 0.0) -> float:
     height = float(hi[1] - lo[1])
     bind_height = float(bhi[1] - blo[1])
     s = target_units / height
-    wrapper = Node(
-        name="IngestRoot",
-        children=list(gltf.scenes[gltf.scene or 0].nodes),
-        scale=[s, s, s],
-        translation=[0.0, -float(lo[1]) * s, 0.0],
-    )
-    if yaw_deg:
-        wrapper.rotation = _euler_quat([0, yaw_deg, 0])
-    gltf.nodes.append(wrapper)
-    gltf.scenes[gltf.scene or 0].nodes = [len(gltf.nodes) - 1]
+    flatten_scale(gltf, s, lift_y=-float(lo[1]) * s)
+
+    # Re-measure after the bake — the file must prove itself.
+    sk2 = skinned_bounds(gltf)
+    if sk2 is not None:
+        lo2, hi2 = sk2
+        print(f"[ingest] normalized: baked x{s:.4f} into raw data -> rendered "
+              f"{float(hi2[1] - lo2[1]):.1f} WORLD units, feet at {float(lo2[1]):.3f} "
+              f"(no scale nodes anywhere)")
     hierarchy_scale = height / bind_height if bind_height > 1e-9 else 1.0
-    print(f"[ingest] normalized: rendered {height:.4f} units (bind {bind_height:.3f}, "
-          f"hierarchy x{hierarchy_scale:.4f}) -> {target_units:.1f} WORLD units "
-          f"(wrapper {s:.4f}), feet at y=0")
-    # Joint-local translations reach world through hierarchy scale x wrapper.
-    return s * hierarchy_scale
+    # Translation tracks were baked to world units in-place, so the remaining
+    # local->world factor is any node-hierarchy scale (identity when flat).
+    return hierarchy_scale
 
 
 def check_run_drift(gltf: GLTF2, height_m: float, scale: float) -> None:
