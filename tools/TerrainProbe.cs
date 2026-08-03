@@ -1,4 +1,4 @@
-// A scripted LiteNetLib probe that verifies the open-realm terrain end to end
+﻿// A scripted LiteNetLib probe that verifies the open-realm terrain end to end
 // against a running dedicated server (see .claude/skills/verify). A .NET 10
 // file-based app:
 //
@@ -49,7 +49,7 @@ listener.PeerConnectedEvent += peer =>
         new JoinRequest
         {
             Name = "TerrainProbe",
-            Class = (byte)CharacterClass.Knight,
+            Class = (byte)CharacterClass.Warrior,
             Mode = (byte)JoinMode.Create,
             Dungeon = (byte)DungeonId.Crag,
             InstanceName = "TerrainProbe's raid",

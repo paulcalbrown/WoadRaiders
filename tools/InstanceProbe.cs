@@ -1,4 +1,4 @@
-// A scripted LiteNetLib probe that verifies dungeon-instance semantics end to
+﻿// A scripted LiteNetLib probe that verifies dungeon-instance semantics end to
 // end against a running dedicated server (see .claude/skills/verify). A .NET 10
 // file-based app:
 //
@@ -204,7 +204,7 @@ sealed class Probe
         Send(MessageType.JoinRequest, new JoinRequest
         {
             Name = $"Probe-{_tag}",
-            Class = (byte)CharacterClass.Knight,
+            Class = (byte)CharacterClass.Warrior,
             Mode = (byte)JoinMode.Create,
             Dungeon = (byte)dungeon,
             InstanceName = instanceName,
@@ -214,7 +214,7 @@ sealed class Probe
         Send(MessageType.JoinRequest, new JoinRequest
         {
             Name = $"Probe-{_tag}",
-            Class = (byte)CharacterClass.Knight,
+            Class = (byte)CharacterClass.Warrior,
             Mode = (byte)JoinMode.Join,
             InstanceId = instanceId,
         });

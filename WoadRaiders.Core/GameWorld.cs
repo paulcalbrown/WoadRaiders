@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace WoadRaiders.Core;
 
@@ -53,7 +53,7 @@ public sealed class GameWorld
 
     // --- players ---
 
-    public PlayerState AddPlayer(int id, string name, CharacterClass cls = CharacterClass.Knight)
+    public PlayerState AddPlayer(int id, string name, CharacterClass cls = CharacterClass.Warrior)
     {
         var player = new PlayerState(id, name, cls) { JoinTick = Tick };
         _players[id] = player;

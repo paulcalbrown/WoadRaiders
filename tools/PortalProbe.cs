@@ -1,4 +1,4 @@
-// A scripted LiteNetLib probe that verifies the boss portal end to end against
+﻿// A scripted LiteNetLib probe that verifies the boss portal end to end against
 // a running dedicated server (see .claude/skills/verify). It needs the tiny
 // boss arena so the fight is seconds, not minutes:
 //
@@ -39,12 +39,12 @@ NetPeer? server = null;
 listener.PeerConnectedEvent += peer =>
 {
     server = peer;
-    Console.WriteLine("[probe] connected — forging a portal-arena instance as a Knight");
+    Console.WriteLine("[probe] connected — forging a portal-arena instance as a Warrior");
     peer.Send(NetProtocol.Frame(MessageType.JoinRequest,
         new JoinRequest
         {
             Name = "PortalProbe",
-            Class = (byte)CharacterClass.Knight,
+            Class = (byte)CharacterClass.Warrior,
             Mode = (byte)JoinMode.Create,
             Dungeon = (byte)DungeonId.Crag, // --map hosts one map; every forge uses it
             InstanceName = "Portal run",

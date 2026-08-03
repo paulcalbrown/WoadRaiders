@@ -103,8 +103,10 @@ public class ChaseCameraTests
             var frame = camera.Follow(Target, Dt);
             var step = Vector3.Distance(prev, frame.Position);
             // Bounded: the sweep, plus the one through-the-face snap the frame
-            // the camera passes the wall — never a 300-unit teleport.
-            Assert.True(step < 60f, $"frame {i}: the camera jumped {step} in one frame");
+            // the camera passes the wall — never a boom-length teleport. The
+            // snap's size tracks the boom geometry: ~60.5 at the 260 boom
+            // (2026-08-02), which is a face-pass, not a jump.
+            Assert.True(step < 70f, $"frame {i}: the camera jumped {step} in one frame");
             prev = frame.Position;
             arrived |= frame.Position.X > wall;
         }

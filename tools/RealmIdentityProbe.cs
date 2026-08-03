@@ -1,4 +1,4 @@
-// Verifies the identity-first join over a real socket, both ways round.
+﻿// Verifies the identity-first join over a real socket, both ways round.
 //
 //   dotnet run tools/RealmIdentityProbe.cs [host]
 //
@@ -105,7 +105,7 @@ return pass ? 0 : 1;
         var join = new JoinRequest
         {
             Name = "Digest",
-            Class = (byte)CharacterClass.Knight,
+            Class = (byte)CharacterClass.Warrior,
             Mode = (byte)JoinMode.Create,
             Dungeon = (byte)DungeonId.Crypt,
             RealmDigest = offered,

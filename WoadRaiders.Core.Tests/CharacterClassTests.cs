@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Numerics;
 using WoadRaiders.Core;
@@ -14,11 +14,11 @@ public class CharacterClassTests
     };
 
     [Fact]
-    public void Knight_archetype_mirrors_the_classic_constants()
+    public void Warrior_archetype_mirrors_the_classic_constants()
     {
         // The knight IS the pre-class player: same numbers, same behavior, so all
         // balance (and every older test) carries over 1:1.
-        var knight = ClassArchetypes.Of(CharacterClass.Knight);
+        var knight = ClassArchetypes.Of(CharacterClass.Warrior);
         Assert.Equal(SimConstants.PlayerMaxHealth, knight.MaxHealth);
         Assert.Equal(SimConstants.PlayerMoveSpeed, knight.MoveSpeed);
         Assert.Equal(SimConstants.PlayerAttackDamage, knight.AttackDamage);
@@ -31,7 +31,7 @@ public class CharacterClassTests
     public void Players_take_their_class_stats()
     {
         var world = new GameWorld();
-        Assert.Equal(SimConstants.PlayerMaxHealth, world.AddPlayer(1, "A").Health, 3); // default = Knight
+        Assert.Equal(SimConstants.PlayerMaxHealth, world.AddPlayer(1, "A").Health, 3); // default = Warrior
         Assert.Equal(ClassArchetypes.Of(CharacterClass.Mage).MaxHealth,
                      world.AddPlayer(2, "B", CharacterClass.Mage).Health, 3);
         Assert.Equal(CharacterClass.Ranger, world.AddPlayer(3, "C", CharacterClass.Ranger).Class);

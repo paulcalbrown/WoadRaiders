@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using WoadRaiders.Core;
 using WoadRaiders.Shared;
 
@@ -18,28 +18,64 @@ public sealed class WorldView
     private const float BoltSmoothing = 30f;   // bolts move fast; ease hard so 20 Hz steps read smoothly
     private const float LootY = 14f;           // gem hover height above its ground point
 
-    // Characters (KayKit models are ~2.47 units tall → ~20x to reach ~49 world units).
+    // KayKit characters MESH-measure ~2.17 raw units (bones stop at the
+    // shoulders; the skull is half the height) → x20 = ~43 world units,
+    // ~1.35 m under the world's 32 units/m. The old "2.47 → 49" figure
+    // measured a bounding box with the whole weapon armory attached.
     private const float CharScale = 20f;
+    private const string AdvDir = "res://addons/kaykit_character_pack_adventures/Characters/gltf";
 
     /// <summary>How each enemy type looks: model, size, swing, and health-bar placement.</summary>
     private readonly record struct EnemyVisual(string SceneFile, float Scale, string AttackClip, float BarHeight, float BarScale);
 
+    // Enemy sizes are declared in METRES (the height-band language) and
+    // converted through the KayKit mesh height: every non-boss enemy stands
+    // UNDER the player (see the static guard); the boss is a 3 m brute.
+    // Bar heights ride just above each skull.
+    private const float UnitsPerMeter = 32f;        // matches pipeline.toml [world]
+    private const float KayKitRawMeshHeight = 2.17f; // measured mesh top, not bones
+    private const float PlayerHeightM = 2.0f;        // the Warrior's spec height_m
+    private static float KayKitScale(float meters) => meters * UnitsPerMeter / KayKitRawMeshHeight;
+
     private static readonly Dictionary<EnemyType, EnemyVisual> EnemyVisuals = new()
     {
-        [EnemyType.Minion] = new("Skeleton_Minion.glb", 20f, "1H_Melee_Attack_Chop", 54f, 1f),
-        [EnemyType.Rogue] = new("Skeleton_Rogue.glb", 20f, "1H_Melee_Attack_Stab", 54f, 1f),
-        [EnemyType.Mage] = new("Skeleton_Mage.glb", 20f, "Spellcast_Shoot", 54f, 1f),
-        [EnemyType.Boss] = new("Skeleton_Warrior.glb", 44f, "2H_Melee_Attack_Chop", 122f, 2f),
+        [EnemyType.Minion] = new("Skeleton_Minion.glb", KayKitScale(1.2f), "1H_Melee_Attack_Chop", 45f, 1f),
+        [EnemyType.Rogue] = new("Skeleton_Rogue.glb", KayKitScale(1.2f), "1H_Melee_Attack_Stab", 45f, 1f),
+        [EnemyType.Mage] = new("Skeleton_Mage.glb", KayKitScale(1.2f), "Spellcast_Shoot", 45f, 1f),
+        [EnemyType.Boss] = new("Skeleton_Warrior.glb", KayKitScale(3.0f), "2H_Melee_Attack_Chop", 122f, 2f),
     };
+
+    static WorldView()
+    {
+        // The law: only the boss out-stands the player. Catches any future
+        // enemy entry that would quietly loom over the hero.
+        foreach (var (type, visual) in EnemyVisuals)
+        {
+            var heightM = visual.Scale * KayKitRawMeshHeight / UnitsPerMeter;
+            if (type != EnemyType.Boss && heightM >= PlayerHeightM)
+                GD.PushWarning($"EnemyVisuals: {type} stands {heightM:F2} m >= player {PlayerHeightM} m");
+        }
+    }
 
     /// <summary>How each player class looks: the KayKit adventurer model and its strike clip.
     /// The Ranger borrows the hooded rogue body — the pack ships no dedicated ranger.</summary>
-    private static readonly Dictionary<CharacterClass, (string SceneFile, string AttackClip)> ClassVisuals = new()
+    // Migrated characters (art-pipeline ingest) are authored in metres and use
+    // the standard clip names at MetersToUnits scale; KayKit holdovers keep
+    // their legacy scale and clip names until each is replaced.
+    // Pipeline-ingested assets are baked to WORLD units in the GLB itself
+    // (spec height_m x the pipeline's meters_to_units; the Warrior ships at
+    // ~59 raw units — head-and-shoulders over the ~49-unit chibi holdovers).
+    // They spawn at scale 1: what the glTF viewer shows is what the game gets.
+    private const float WorldScaleAsset = 1f;
+
+    private readonly record struct ClassVisual(string ScenePath, string AttackClip, float Scale);
+
+    private static readonly Dictionary<CharacterClass, ClassVisual> ClassVisuals = new()
     {
-        [CharacterClass.Knight] = ("Knight.glb", "1H_Melee_Attack_Chop"),
-        [CharacterClass.Rogue] = ("Rogue.glb", "1H_Melee_Attack_Stab"),
-        [CharacterClass.Mage] = ("Mage.glb", "Spellcast_Shoot"),
-        [CharacterClass.Ranger] = ("Rogue_Hooded.glb", "2H_Ranged_Shoot"),
+        [CharacterClass.Warrior] = new("res://assets/characters/Warrior.glb", "Attack", WorldScaleAsset),
+        [CharacterClass.Rogue] = new($"{AdvDir}/Rogue.glb", "1H_Melee_Attack_Stab", CharScale),
+        [CharacterClass.Mage] = new($"{AdvDir}/Mage.glb", "Spellcast_Shoot", CharScale),
+        [CharacterClass.Ranger] = new($"{AdvDir}/Rogue_Hooded.glb", "2H_Ranged_Shoot", CharScale),
     };
 
     // Every character carries a light. Players glow warm (torch-lit raiders);
@@ -144,12 +180,11 @@ public sealed class WorldView
     {
         _parent = parent;
 
-        const string adv = "res://addons/kaykit_character_pack_adventures/Characters/gltf";
         const string weapons = "res://addons/kaykit_character_pack_adventures/Assets/gltf";
         const string skel = "res://addons/kaykit_character_pack_skeletons/Characters/gltf";
         const string dungeon = "res://addons/kaykit_dungeon_remastered/Assets/gltf";
         foreach (var (cls, visual) in ClassVisuals)
-            _classScenes[cls] = GD.Load<PackedScene>($"{adv}/{visual.SceneFile}");
+            _classScenes[cls] = GD.Load<PackedScene>(visual.ScenePath);
         _arrowScene = GD.Load<PackedScene>($"{weapons}/arrow.gltf");
         _goldScene = GD.Load<PackedScene>($"{dungeon}/coin_stack_large.gltf.glb");
         _potionScene = GD.Load<PackedScene>($"{dungeon}/bottle_A_green.gltf.glb");
@@ -166,8 +201,8 @@ public sealed class WorldView
         {
             var feet = new Vector3(p.X, p.Y, p.Z);
             // Tolerate an unknown Class byte the same way as enemy types: fall back
-            // to Knight — never crash the receive path over cosmetics.
-            var cls = p.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)p.Class : CharacterClass.Knight;
+            // to Warrior — never crash the receive path over cosmetics.
+            var cls = p.Class <= (byte)CharacterClass.Ranger ? (CharacterClass)p.Class : CharacterClass.Warrior;
             var isRemote = p.Id != localPlayerId;
 
             // A player's class can change on the same id (the server honors the join
@@ -178,7 +213,7 @@ public sealed class WorldView
 
             if (!_players.Touch(p.Id, out var view))
             {
-                view = CharacterView.Spawn(_parent, _classScenes[cls], feet, CharScale, PlayerLight, cls);
+                view = CharacterView.Spawn(_parent, _classScenes[cls], feet, ClassVisuals[cls].Scale, PlayerLight, cls);
                 view.AttackClip = ClassVisuals[cls].AttackClip;
                 if (isRemote)
                 {

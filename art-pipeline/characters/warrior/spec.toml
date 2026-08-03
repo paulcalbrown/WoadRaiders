@@ -1,0 +1,69 @@
+# The Warrior (working name Torga) — first non-chibi character.
+# Recipe as of 2026-08-01: nano banana authors the anchor; Meshy (web UI,
+# human-operated, the pipeline never spends credits) generates mesh + rig +
+# animations; the ingest stage enforces the game contract. Earlier local
+# TRELLIS.2/Qwen stages are retired — see git history and the design doc.
+
+[character]
+name = "Warrior"
+mesh_prefix = "Warrior"   # every mesh node gets this prefix at ingest
+height_m = 2.0            # heroic-statured human — the hero reads over the
+                          # fodder; the world adjusts to human scale over time
+
+[s1]
+# Authored in nano banana from the friend's sketch (sketch.jpg). Committed
+# inputs: style_anchor.png (the single Meshy input), nano_banana_ref*.png
+# (provenance), back_view.png (optional multi-image refinement, unused).
+
+[rig.rest_pose]
+# Degrees of upward pitch baked into the rest pose after auto-rigging —
+# the Meshy mesh carries a dropped chin, and every retargeted clip
+# inherits the rest posture. Tune by eye in Mixamo, rerun --stage rig.
+"mixamorig:Neck" = 6
+"mixamorig:Head" = 12
+
+[ingest]
+# The pipeline-side stage. Reads the newest GLB from source_dir, renames
+# clips and meshes to the contract, normalizes scale/origin/facing,
+# validates, and promotes to WoadRaiders.Client/assets/characters/.
+source_dir = "meshy"      # drop Download > Animation > All Added > Single File GLBs here
+# Budgets are in TRIANGLES as measured in the GLB. The source is a ~49k-QUAD
+# Meshy remesh, which triangulates to ~98k — so 100k tris IS the intended
+# hero budget (quads x2), not a temporary allowance. 4096 is the hero atlas.
+max_tris = 450000       # TEMP while sword/shield are un-remeshed (331k between them) — Meshy-remesh both to ~10k and restore 120000
+max_texture = 4096
+
+[ingest.props]
+# Separate Meshy-generated props, rigid-attached to hand bones at ingest and
+# merged into the shipped GLB (the KayKit pattern: armory attached,
+# CharacterLoadout toggles visibility). offset/rotation/scale are grip-fit
+# tuning in PRE-BAKE character space (1 m ~ 1.01 units), iterated by render.
+# Solved against the SAMPLED IDLE POSE, not the T-pose (tools/prop_fit_solve.py,
+# 2026-08-02) - a rigid attach only reads right in the pose players see:
+# - Hand frame: +Y fingers, +X character-forward (fist axis), +Z palm normal.
+#   The sword GLB lies diagonal in XZ (grip center 0.614,0,-0.170; grip->tip
+#   u=(-0.953,0,0.304)); grip->tip maps to the fist axis (+X), then the roll
+#   about the blade puts the EDGE-TO-EDGE axis parallel to the forearm in
+#   Idle@0 (closest legal roll; wrist bend makes exact impossible), PLUS
+#   Paul's 2026-08-02 tweaks: +15 deg CCW roll (viewed from the tip), 13 deg
+#   tilt away from the face (idle leans the head toward the sword), and 8 deg
+#   forward pitch realigning the handle with the fist line (tip-to-face
+#   0.23 -> 0.35, edge//forearm 0.92). Knobs: ROLL_DEG/TILT_DEG/FWD_DEG in
+#   tools/prop_fit_solve.py; re-run it for new numbers (verify with
+#   tools/prop_fit_verify.py), don't hand-tune.
+# - Shield: painted face + boss at +Z, handle BAR at -Z, kite point at -Y.
+#   Face out through dorsal -Z; world-down in Idle forearm space is local +X
+#   (0.99,0.08,0.11), so Rz(-90) after the Rx(180) face-flip puts the point
+#   at the ground and the face forward. Dorsal surface is 0.115 above the
+#   bone axis; -0.105 seats the board on it.
+weapon = { file = "sword.glb", bone = "mixamorig:RightHand", name = "Warrior_Weapon", offset = [0.381, 0.14, -0.002], rotation_deg = [-97.8, -2.1, -154.2], scale = 0.61 }
+shield = { file = "shield.glb", bone = "mixamorig:LeftForeArm", name = "Warrior_Shield", offset = [0.0, 0.153, -0.105], rotation_deg = [180.0, 0.0, -90.0], scale = 0.45 }
+
+[ingest.clips]
+# Meshy library clip name (right) -> standard contract name (left). Fill
+# the right-hand values with the exact names shown in Meshy's Animate
+# panel; ingest errors (listing what it found) on any mismatch.
+Idle = ""                 # e.g. "Standing Idle"
+Run = ""                  # pick an IN-PLACE run (preview for root motion)
+Fall = ""                 # e.g. "Falling Idle" — the mid-air loop
+Attack = ""               # e.g. a one-handed sword chop

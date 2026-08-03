@@ -1,0 +1,20 @@
+# Machine-level pipeline settings (paths/ports, not character data).
+# Character data lives in characters/<name>/spec.toml.
+
+[world]
+# The game's meters-to-world-units constant. Ingest bakes final WORLD height
+# into the GLB's raw units (spec height_m x this), so shipped assets need no
+# game-side scaling — what a glTF viewer shows is what the game renders.
+meters_to_units = 32
+
+[comfy]
+url = "http://127.0.0.1:8188"
+# Used only as a fallback to locate outputs if the HTTP history API
+# doesn't describe the exported GLB. Forward slashes are fine on Windows.
+root = "C:/AI/ComfyUI_windows_portable"
+
+[rig]
+# The UniRig comfy-env ships Blender-as-module; the rest-pose correction
+# runs inside it (pixi handles the env's DLL activation).
+pixi = "C:/Users/Paul/.pixi/bin/pixi.exe"
+unirig_manifest = "C:/Users/Paul/AppData/Local/Programs/comfy-env/envs/unirig-nodes/pixi.toml"

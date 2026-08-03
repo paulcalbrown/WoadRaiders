@@ -1,4 +1,4 @@
-// A scripted LiteNetLib probe that verifies the Crypt — the first INDOOR,
+﻿// A scripted LiteNetLib probe that verifies the Crypt — the first INDOOR,
 // DESCENDING realm — end to end against a running dedicated server (see
 // .claude/skills/verify). The mirror of TerrainProbe (the Crag climbs; the
 // Crypt sinks). A .NET 10 file-based app:
@@ -50,7 +50,7 @@ listener.PeerConnectedEvent += peer =>
         new JoinRequest
         {
             Name = "CryptProbe",
-            Class = (byte)CharacterClass.Knight,
+            Class = (byte)CharacterClass.Warrior,
             Mode = (byte)JoinMode.Create,
             Dungeon = (byte)DungeonId.Crypt,
             InstanceName = "CryptProbe's raid",

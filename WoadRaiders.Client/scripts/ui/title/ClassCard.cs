@@ -25,12 +25,16 @@ public partial class ClassCard : Button
     private const float SpeedCap = 300f;
     private const float DamageCap = 36f;
 
-    private static readonly Dictionary<CharacterClass, (string SceneFile, string Role)> Flavor = new()
+    private const string KayKit = "res://addons/kaykit_character_pack_adventures/Characters/gltf";
+
+    // ModelHeight (world units, unscaled) frames the preview camera: migrated
+    // characters are authored in metres, KayKit chibis stand ~1.4 with hats.
+    private static readonly Dictionary<CharacterClass, (string ScenePath, string Role, float ModelHeight)> Flavor = new()
     {
-        [CharacterClass.Knight] = ("Knight.glb", "Shield-sworn line-holder"),
-        [CharacterClass.Rogue] = ("Rogue.glb", "Knife-quick shadow"),
-        [CharacterClass.Mage] = ("Mage.glb", "Wielder of the sickly fire"),
-        [CharacterClass.Ranger] = ("Rogue_Hooded.glb", "Cold eye, colder bolt"),
+        [CharacterClass.Warrior] = ("res://assets/characters/Warrior.glb", "Shield-sworn line-holder", 64f),
+        [CharacterClass.Rogue] = (KayKit + "/Rogue.glb", "Knife-quick shadow", 2.5f),
+        [CharacterClass.Mage] = (KayKit + "/Mage.glb", "Wielder of the sickly fire", 2.5f),
+        [CharacterClass.Ranger] = (KayKit + "/Rogue_Hooded.glb", "Cold eye, colder bolt", 2.5f),
     };
 
     private float _highlight;
@@ -139,17 +143,20 @@ public partial class ClassCard : Button
         AddChild(viewport);
 
         _turntable = new Node3D();
-        var model = GD.Load<PackedScene>(
-            $"res://addons/kaykit_character_pack_adventures/Characters/gltf/{Flavor[Class].SceneFile}")
-            .Instantiate<Node3D>();
+        var model = GD.Load<PackedScene>(Flavor[Class].ScenePath).Instantiate<Node3D>();
         CharacterLoadout.Apply(model, Class); // just the class's primary weapon, not the whole rack
         _turntable.AddChild(model);
         viewport.AddChild(_turntable);
         model.FindDescendant<AnimationPlayer>()?.Play("Idle");
 
-        var camera = new Camera3D { Position = new Vector3(0f, 1.25f, 2.9f) };
+        // Frame by declared model height so a full-size human and a chibi both
+        // fill the card the same way. With the default 75° vertical FOV the
+        // visible height at distance d is ~1.53*d; aim for the figure filling
+        // ~75% of the frame: d ≈ h / (1.53 * 0.75).
+        var h = Flavor[Class].ModelHeight;
+        var camera = new Camera3D { Position = new Vector3(0f, 0.58f * h, 0.92f * h) };
         viewport.AddChild(camera);
-        camera.LookAt(new Vector3(0f, 1.0f, 0f));
+        camera.LookAt(new Vector3(0f, 0.5f * h, 0f));
 
         // A warm key light plus a cold woad fill — the game's torch-against-night palette.
         var key = new DirectionalLight3D { LightColor = new Color(1f, 0.85f, 0.65f), LightEnergy = 1.6f };

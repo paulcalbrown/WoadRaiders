@@ -1,4 +1,4 @@
-namespace WoadRaiders.Core;
+﻿namespace WoadRaiders.Core;
 
 /// <summary>
 /// The client's replica of its own server-owned state: collected items, equipped
@@ -17,7 +17,7 @@ public sealed class ClientState
     public IReadOnlyList<Item> Inventory => _items;
 
     /// <summary>The class this client raids as; drives the displayed base stats.</summary>
-    public CharacterClass Class { get; set; } = CharacterClass.Knight;
+    public CharacterClass Class { get; set; } = CharacterClass.Warrior;
 
     public int WeaponId { get; private set; }
     public int ArmorId { get; private set; }
