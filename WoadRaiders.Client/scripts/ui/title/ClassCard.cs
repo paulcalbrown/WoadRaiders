@@ -31,7 +31,7 @@ public partial class ClassCard : Button
     // characters are authored in metres, KayKit chibis stand ~1.4 with hats.
     private static readonly Dictionary<CharacterClass, (string ScenePath, string Role, float ModelHeight)> Flavor = new()
     {
-        [CharacterClass.Warrior] = ("res://assets/characters/Warrior.glb", "Shield-sworn line-holder", 59.2f),
+        [CharacterClass.Warrior] = ("res://assets/characters/Warrior.glb", "Shield-sworn line-holder", 64f),
         [CharacterClass.Rogue] = (KayKit + "/Rogue.glb", "Knife-quick shadow", 2.5f),
         [CharacterClass.Mage] = (KayKit + "/Mage.glb", "Wielder of the sickly fire", 2.5f),
         [CharacterClass.Ranger] = (KayKit + "/Rogue_Hooded.glb", "Cold eye, colder bolt", 2.5f),

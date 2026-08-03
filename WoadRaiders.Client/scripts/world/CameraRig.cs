@@ -19,10 +19,11 @@ public partial class CameraRig : Camera3D
     /// <summary>The rig's starting heading: facing +X, the way every realm's route leads.</summary>
     public const float DefaultYaw = ChaseCamera.DefaultYaw;
 
-    // 62 pairs with the solver's OpenBoomLength 360 (was 55 with 430): the
-    // raider frames almost identically, but the camera rides nearer for the
-    // parallax and fits where the longer boom had to reel.
-    private const float FieldOfView = 62f;
+    // 56 pairs with the solver's OpenBoomLength 260 (the 2026-08-02 close-up
+    // for the full-size Warrior era; the 62/360 and 55/430 pairings framed the
+    // wider chibi battlefield). Narrower glass + shorter boom ≈ +35% character
+    // on screen versus the 62/300 step before it.
+    private const float FieldOfView = 56f;
 
     private readonly ChaseCamera _solver = new();
 

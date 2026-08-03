@@ -29,20 +29,33 @@ public sealed class WorldView
     private readonly record struct EnemyVisual(string SceneFile, float Scale, string AttackClip, float BarHeight, float BarScale);
 
     // Enemy sizes are declared in METRES (the height-band language) and
-    // converted through the KayKit mesh height: fodder minions are small
-    // 1.2 m critters under the 1.85 m Warrior; specialists a notch bigger;
-    // the boss a 3 m brute. Bar heights ride just above each skull.
+    // converted through the KayKit mesh height: every non-boss enemy stands
+    // UNDER the player (see the static guard); the boss is a 3 m brute.
+    // Bar heights ride just above each skull.
     private const float UnitsPerMeter = 32f;        // matches pipeline.toml [world]
     private const float KayKitRawMeshHeight = 2.17f; // measured mesh top, not bones
+    private const float PlayerHeightM = 2.0f;        // the Warrior's spec height_m
     private static float KayKitScale(float meters) => meters * UnitsPerMeter / KayKitRawMeshHeight;
 
     private static readonly Dictionary<EnemyType, EnemyVisual> EnemyVisuals = new()
     {
         [EnemyType.Minion] = new("Skeleton_Minion.glb", KayKitScale(1.2f), "1H_Melee_Attack_Chop", 45f, 1f),
-        [EnemyType.Rogue] = new("Skeleton_Rogue.glb", KayKitScale(1.35f), "1H_Melee_Attack_Stab", 54f, 1f),
-        [EnemyType.Mage] = new("Skeleton_Mage.glb", KayKitScale(1.35f), "Spellcast_Shoot", 54f, 1f),
+        [EnemyType.Rogue] = new("Skeleton_Rogue.glb", KayKitScale(1.5f), "1H_Melee_Attack_Stab", 54f, 1f),
+        [EnemyType.Mage] = new("Skeleton_Mage.glb", KayKitScale(1.5f), "Spellcast_Shoot", 54f, 1f),
         [EnemyType.Boss] = new("Skeleton_Warrior.glb", KayKitScale(3.0f), "2H_Melee_Attack_Chop", 122f, 2f),
     };
+
+    static WorldView()
+    {
+        // The law: only the boss out-stands the player. Catches any future
+        // enemy entry that would quietly loom over the hero.
+        foreach (var (type, visual) in EnemyVisuals)
+        {
+            var heightM = visual.Scale * KayKitRawMeshHeight / UnitsPerMeter;
+            if (type != EnemyType.Boss && heightM >= PlayerHeightM)
+                GD.PushWarning($"EnemyVisuals: {type} stands {heightM:F2} m >= player {PlayerHeightM} m");
+        }
+    }
 
     /// <summary>How each player class looks: the KayKit adventurer model and its strike clip.
     /// The Ranger borrows the hooded rogue body — the pack ships no dedicated ranger.</summary>

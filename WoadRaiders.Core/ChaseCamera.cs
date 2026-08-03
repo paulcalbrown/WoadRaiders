@@ -80,14 +80,15 @@ public sealed class ChaseCamera
     // 360 (from 430) pairs with the client's FOV 62 (from 55) to keep the
     // framed battlefield nearly unchanged while adding parallax and giving
     // walls fewer chances to stand between the lens and the raider.
-    // 300/210 (from 360/250, 2026-08-02): the full-size Warrior era pulls the
-    // lens ~17% closer so a 1.85 m human fills the frame the way the chibi
-    // cast used to — shortening only loosens the ceiling law, so no re-measure.
+    // 260/180 (via 300/210 from 360/250, 2026-08-02): the full-size Warrior
+    // era pulls the lens close so a ~2 m human owns the frame; paired with
+    // the client's FOV 56. Shortening only loosens the ceiling law, so no
+    // re-measure needed.
     public const float OpenPitchDegrees = 40f;
-    public const float OpenBoomLength = 300f;
+    public const float OpenBoomLength = 260f;
     public const float CeilingClearance = 25f;  // the rig stays this far under the raider's roof
     private const float RoofedPitchDegrees = 25f;
-    private const float RoofedBoomLength = 210f;
+    private const float RoofedBoomLength = 180f;
 
     private const int FitSteps = 8;             // how finely the fit is searched
     private const float FitTightenRate = 6f;    // re-pose for a tighter space, smoothly...

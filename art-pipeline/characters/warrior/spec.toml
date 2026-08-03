@@ -7,8 +7,8 @@
 [character]
 name = "Warrior"
 mesh_prefix = "Warrior"   # every mesh node gets this prefix at ingest
-height_m = 1.85           # full human scale — the new world standard;
-                          # other characters and realms adjust to fit over time
+height_m = 2.0            # heroic-statured human — the hero reads over the
+                          # fodder; the world adjusts to human scale over time
 
 [s1]
 # Authored in nano banana from the friend's sketch (sketch.jpg). Committed
