@@ -18,7 +18,10 @@ public sealed class WorldView
     private const float BoltSmoothing = 30f;   // bolts move fast; ease hard so 20 Hz steps read smoothly
     private const float LootY = 14f;           // gem hover height above its ground point
 
-    // Characters (KayKit models are ~2.47 units tall → ~20x to reach ~49 world units).
+    // KayKit characters MESH-measure ~2.17 raw units (bones stop at the
+    // shoulders; the skull is half the height) → x20 = ~43 world units,
+    // ~1.35 m under the world's 32 units/m. The old "2.47 → 49" figure
+    // measured a bounding box with the whole weapon armory attached.
     private const float CharScale = 20f;
     private const string AdvDir = "res://addons/kaykit_character_pack_adventures/Characters/gltf";
 

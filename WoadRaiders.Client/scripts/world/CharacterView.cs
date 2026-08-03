@@ -126,18 +126,6 @@ public partial class CharacterView : Node3D
             view._anim.Play(AnimIdle);
             view._clip = AnimIdle;
         }
-
-        // TEMP size diagnostics — remove once the Warrior scale mystery closes.
-        var skel = model.FindDescendant<Skeleton3D>();
-        if (skel is not null)
-        {
-            float top = 0f;
-            for (int i = 0; i < skel.GetBoneCount(); i++)
-                top = Mathf.Max(top, skel.GetBoneGlobalRest(i).Origin.Y);
-            var worldScale = skel.GlobalTransform.Basis.Scale.Y;
-            GD.Print($"[size] {scene.ResourcePath}: boneTop={top:F3} skelWorldScale={worldScale:F3} " +
-                     $"=> rendered height ~{top * worldScale:F1} world units (requested scale {scale})");
-        }
         return view;
     }
 
