@@ -40,8 +40,8 @@ public sealed class WorldView
     private static readonly Dictionary<EnemyType, EnemyVisual> EnemyVisuals = new()
     {
         [EnemyType.Minion] = new("Skeleton_Minion.glb", KayKitScale(1.2f), "1H_Melee_Attack_Chop", 45f, 1f),
-        [EnemyType.Rogue] = new("Skeleton_Rogue.glb", KayKitScale(1.5f), "1H_Melee_Attack_Stab", 54f, 1f),
-        [EnemyType.Mage] = new("Skeleton_Mage.glb", KayKitScale(1.5f), "Spellcast_Shoot", 54f, 1f),
+        [EnemyType.Rogue] = new("Skeleton_Rogue.glb", KayKitScale(1.2f), "1H_Melee_Attack_Stab", 45f, 1f),
+        [EnemyType.Mage] = new("Skeleton_Mage.glb", KayKitScale(1.2f), "Spellcast_Shoot", 45f, 1f),
         [EnemyType.Boss] = new("Skeleton_Warrior.glb", KayKitScale(3.0f), "2H_Melee_Attack_Chop", 122f, 2f),
     };
 

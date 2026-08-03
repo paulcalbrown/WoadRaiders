@@ -84,10 +84,13 @@ public sealed class ChaseCamera
     // era pulls the lens close so a ~2 m human owns the frame; paired with
     // the client's FOV 56. Shortening only loosens the ceiling law, so no
     // re-measure needed.
-    public const float OpenPitchDegrees = 40f;
+    // Pitch 33/21 (from 40/25, 2026-08-02): more over-the-shoulder, less
+    // top-down — the camera rides lower behind the raider, which also only
+    // loosens the ceiling law (height = boom * sin(pitch)).
+    public const float OpenPitchDegrees = 33f;
     public const float OpenBoomLength = 260f;
     public const float CeilingClearance = 25f;  // the rig stays this far under the raider's roof
-    private const float RoofedPitchDegrees = 25f;
+    private const float RoofedPitchDegrees = 21f;
     private const float RoofedBoomLength = 180f;
 
     private const int FitSteps = 8;             // how finely the fit is searched
