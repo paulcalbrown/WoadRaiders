@@ -1,0 +1,27 @@
+WoadRaiders
+
+Copyright (c) 2026 Paul Brown. All rights reserved.
+
+This repository is made publicly viewable for reference only. No license is
+granted to any of its contents except as stated below.
+
+Without the copyright holder's prior written permission, you may not use,
+copy, modify, merge, publish, distribute, sublicense, or sell any part of
+this repository, and you may not build, package, or publish the game or any
+derivative work from it. Viewing the source on GitHub and forking within
+GitHub, as permitted by the GitHub Terms of Service, are acknowledged; those
+terms grant no other rights.
+
+THE CONTENTS OF THIS REPOSITORY ARE PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE CONTENTS
+OF THIS REPOSITORY.
+
+Third-party content is excluded from the terms above and remains under its
+own license:
+
+- Vendored art assets (KayKit, Kenney, Poly Pizza, Poly Haven, ambientCG,
+  and others) are inventoried in docs/ASSETS.md; each asset directory ships
+  the license text it was obtained under (predominantly CC0).
+- Software dependencies (Godot, LiteNetLib, NuGet and Python packages)
+  remain under their respective open-source licenses.

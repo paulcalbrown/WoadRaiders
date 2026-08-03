@@ -422,3 +422,11 @@ end-to-end against a running server — no Godot needed. The Godot-side pieces (
 realm designs + `RealmScene`/`RealmSceneBuilder`, `bake_realm.gd` — baking any scene to
 server geometry via the C# `RealmBaker`, `build_realm_scene.gd`,
 scene measurement) live in `WoadRaiders.Client/`.
+
+## License
+
+Proprietary — copyright © 2026 Paul Brown, all rights reserved. The source is
+public for reference only; no rights are granted to use, copy, modify, or
+redistribute it, or to publish builds of the game. See [LICENSE](LICENSE).
+Vendored third-party assets and dependencies keep their own licenses
+(inventoried in [docs/ASSETS.md](docs/ASSETS.md), predominantly CC0).
