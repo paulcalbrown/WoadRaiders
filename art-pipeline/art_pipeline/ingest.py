@@ -457,12 +457,13 @@ def run_ingest(character: str, dry_run: bool = False, out: Path | None = None) -
     pipeline = load_toml(ROOT / "pipeline.toml")
     ing = spec["ingest"]
     # The local rig+animate path pre-names clips; it takes precedence over
-    # a raw inbox GLB (the Meshy-animated path) when both exist.
+    # a raw inbox GLB (the Meshy-animated path) when both exist. Props always
+    # load from the inbox regardless of which character source wins.
+    src_dir = char_dir / ing["source_dir"]
     animated = char_dir / "build" / f"{character}_animated.glb"
     if animated.exists():
         src = animated
     else:
-        src_dir = char_dir / ing["source_dir"]
         prop_files = {p["file"] for p in ing.get("props", {}).values()}
         candidates = [
             p for p in src_dir.glob("*.glb") if p.name not in prop_files
