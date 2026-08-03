@@ -28,12 +28,20 @@ public sealed class WorldView
     /// <summary>How each enemy type looks: model, size, swing, and health-bar placement.</summary>
     private readonly record struct EnemyVisual(string SceneFile, float Scale, string AttackClip, float BarHeight, float BarScale);
 
+    // Enemy sizes are declared in METRES (the height-band language) and
+    // converted through the KayKit mesh height: fodder minions are small
+    // 1.2 m critters under the 1.85 m Warrior; specialists a notch bigger;
+    // the boss a 3 m brute. Bar heights ride just above each skull.
+    private const float UnitsPerMeter = 32f;        // matches pipeline.toml [world]
+    private const float KayKitRawMeshHeight = 2.17f; // measured mesh top, not bones
+    private static float KayKitScale(float meters) => meters * UnitsPerMeter / KayKitRawMeshHeight;
+
     private static readonly Dictionary<EnemyType, EnemyVisual> EnemyVisuals = new()
     {
-        [EnemyType.Minion] = new("Skeleton_Minion.glb", 20f, "1H_Melee_Attack_Chop", 54f, 1f),
-        [EnemyType.Rogue] = new("Skeleton_Rogue.glb", 20f, "1H_Melee_Attack_Stab", 54f, 1f),
-        [EnemyType.Mage] = new("Skeleton_Mage.glb", 20f, "Spellcast_Shoot", 54f, 1f),
-        [EnemyType.Boss] = new("Skeleton_Warrior.glb", 44f, "2H_Melee_Attack_Chop", 122f, 2f),
+        [EnemyType.Minion] = new("Skeleton_Minion.glb", KayKitScale(1.2f), "1H_Melee_Attack_Chop", 45f, 1f),
+        [EnemyType.Rogue] = new("Skeleton_Rogue.glb", KayKitScale(1.35f), "1H_Melee_Attack_Stab", 54f, 1f),
+        [EnemyType.Mage] = new("Skeleton_Mage.glb", KayKitScale(1.35f), "Spellcast_Shoot", 54f, 1f),
+        [EnemyType.Boss] = new("Skeleton_Warrior.glb", KayKitScale(3.0f), "2H_Melee_Attack_Chop", 122f, 2f),
     };
 
     /// <summary>How each player class looks: the KayKit adventurer model and its strike clip.
